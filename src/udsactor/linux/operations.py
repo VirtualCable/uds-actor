@@ -205,7 +205,7 @@ def joinDomain(name: str, custom: typing.Optional[typing.Mapping[str, typing.Any
 
     if server_software == 'ipa':
         try:
-            hostname = getComputerName() + domain[domain.index('.'):]
+            hostname = f'{getComputerName().lower()}.{domain}'
             command = f'hostnamectl set-hostname {hostname}'
             subprocess.run(command, shell=True)
         except Exception as e:
