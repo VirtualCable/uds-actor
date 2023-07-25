@@ -187,11 +187,12 @@ def renameComputer(newName: str) -> bool:
     rename(newName)
     return True  # Always reboot right now. Not much slower but much more convenient
 
+
 def joinDomain(name: str, custom: typing.Optional[typing.Mapping[str, typing.Any]] = None):
     if not custom:
         logger.error('Error joining domain: no custom data provided')
         return
-    
+
     # Read parameters from custom data
     domain: str = custom.get('domain', '')
     ou: str = custom.get('ou', '')
@@ -218,7 +219,7 @@ def joinDomain(name: str, custom: typing.Optional[typing.Mapping[str, typing.Any
             command += f'--server-software={server_software} '
         if membership_software and membership_software != 'automatically':
             command += f'--membership-software={membership_software} '
-        if ou and server_software !='ipa':
+        if ou and server_software != 'ipa':
             command += f'--computer-ou="{ou}" '
         if ssl == 'y':
             command += '--use-ldaps '
@@ -229,13 +230,14 @@ def joinDomain(name: str, custom: typing.Optional[typing.Mapping[str, typing.Any
     except Exception as e:
         logger.error(f'Error join machine to domain {name}: {e}')
 
+
 def leaveDomain(
-        domain: str,
-        account: str,
-        password: str,
-        client_software: str,
-        server_software: str,
-    ) -> None:
+    domain: str,
+    account: str,
+    password: str,
+    client_software: str,
+    server_software: str,
+) -> None:
     if server_software == 'ipa':
         try:
             command = f'hostnamectl set-hostname {getComputerName()}'
@@ -252,6 +254,7 @@ def leaveDomain(
         subprocess.run(command, input=password.encode(), shell=True)
     except Exception as e:
         logger.error(f'Error leave machine from domain {domain}: {e}')
+
 
 def changeUserPassword(
     user: str, oldPassword: str, newPassword: str
@@ -296,3 +299,13 @@ def getSessionType() -> str:
 
 def forceTimeSync() -> None:
     return
+
+
+def protectFileForOwnerOnly(filepath: str) -> None:
+    '''
+    Protects a file so only owner can read/write
+    '''
+    try:
+        os.chmod(filepath, 0o600)
+    except Exception:
+        pass

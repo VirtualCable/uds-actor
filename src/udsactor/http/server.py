@@ -38,6 +38,7 @@ import typing
 from ..log import logger
 from .. import certs
 from .. import rest
+from .. import platform
 
 from .public import PublicProvider
 from .local import LocalProvider
@@ -181,7 +182,10 @@ class HTTPServerThread(threading.Thread):
 
         self._certFile, password = certs.saveCertificate(
             self._service._certificate
-        )  # pylint: disable=protected-access
+        )
+
+        # Ensure that only owner can read this file
+        platform.operations.protectFileForOwnerOnly(self._certFile)
 
         self._server = http.server.HTTPServer(
             ('0.0.0.0', rest.LISTEN_PORT), HTTPServerHandler

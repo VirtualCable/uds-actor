@@ -41,6 +41,7 @@ import win32net
 import win32security
 import win32api
 import win32con
+import ntsecuritycon
 
 from .. import types
 from ..log import logger
@@ -272,7 +273,7 @@ def getCurrentUser() -> str:
     '''
     Returns current logged in username
     '''
-    return os.environ['USERNAME']
+    return win32api.GetUserName()
 
 
 def getSessionType() -> str:
@@ -303,3 +304,20 @@ def forceTimeSync() -> None:
         subprocess.call([r'c:\WINDOWS\System32\w32tm.exe', ' /resync'])  # , '/rediscover'])
     except Exception as e:
         logger.error('Error invoking time sync command: %s', e)
+
+
+def protectFileForOwnerOnly(filepath: str) -> None:
+    '''
+    Protects a file so only owner can access it on windows
+    '''
+    try:
+        user, domain, _type = win32security.LookupAccountName('', getCurrentUser())
+
+        secDescriptor = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
+        dACL = secDescriptor.GetSecurityDescriptorDacl()
+        dACL.AddAccessAllowedAce(win32security.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user)
+        secDescriptor.SetSecurityDescriptorDacl(1, dACL, 0)
+        win32security.SetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION, secDescriptor)
+
+    except Exception as e:
+        logger.error('Error protecting file %s: %s', filepath, e)

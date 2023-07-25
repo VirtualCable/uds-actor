@@ -60,7 +60,7 @@ def getComputerName() -> str:
 
 
 def getNetworkInfo() -> typing.Iterator[types.InterfaceInfoType]:
-    ifdata: typing.List['psutil._common.snicaddr']
+    ifdata: typing.List['psutil._common.snicaddr']  # type: ignore
     for ifname, ifdata in psutil.net_if_addrs().items():
         name, ip, mac = '', '', ''
         # Get IP address, interface name and MAC address whenever possible
@@ -183,3 +183,12 @@ def getSessionType() -> str:
 
 def forceTimeSync() -> None:
     return
+
+def protectFileForOwnerOnly(filepath: str) -> None:
+    '''
+    Protects a file so only owner can read/write
+    '''
+    try:
+        os.chmod(filepath, 0o600)
+    except Exception:
+        pass
