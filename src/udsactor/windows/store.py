@@ -29,6 +29,7 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 # pylint: disable=invalid-name
+import typing
 import pickle
 
 import winreg as wreg
@@ -36,8 +37,8 @@ import win32security
 
 from .. import types
 
-PATH = 'Software\\UDSActor'
-BASEKEY = wreg.HKEY_LOCAL_MACHINE
+PATH: typing.Final[str] = 'Software\\UDSActor'
+BASEKEY: typing.Final[str] = wreg.HKEY_LOCAL_MACHINE
 
 def fixRegistryPermissions(handle) -> None:
     # Fix permissions so users can't read this key

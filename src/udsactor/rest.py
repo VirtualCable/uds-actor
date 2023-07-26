@@ -231,7 +231,7 @@ class UDSServerApi(UDSApi):
             'pre_command': preCommand,
             'run_once_command': runOnceCommand,
             'post_command': postCommand,
-            'log_level': logLevel,
+            'log_level': (logLevel*10000) + 20000,
         }
 
         # First, try to login to REST api
