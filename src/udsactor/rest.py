@@ -479,7 +479,7 @@ class UDSClientApi(UDSApi, metaclass=tools.Singleton):
         self._session_id = res.session_id or ''
         return res
 
-    def logout(self, username: str, sessionType: typing.Optional[str]) -> None:
+    def logout(self, username: str, sessionType: typing.Optional[str] = None) -> None:
         payLoad = {
             'username': username,
             'session_type': sessionType or UNKNOWN,
