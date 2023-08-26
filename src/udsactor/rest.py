@@ -43,13 +43,25 @@ from udsactor import types, tools
 from udsactor.version import VERSION, BUILD
 
 # Default public listen port
-LISTEN_PORT = 43910
+LISTEN_PORT: typing.Final[int] = 43910
 
 # Default timeout
-TIMEOUT = 5  # 5 seconds is more than enought
+TIMEOUT: typing.Final[int] = 5  # 5 seconds is more than enought
 
 # Constants
-UNKNOWN = 'unknown'
+UNKNOWN: typing.Final[str] = 'unknown'
+
+SECURE_CIPHERS: typing.Final[str] = (
+    'TLS_AES_256_GCM_SHA384'
+    ':TLS_CHACHA20_POLY1305_SHA256'
+    ':TLS_AES_128_GCM_SHA256'
+    ':ECDHE-RSA-AES256-GCM-SHA384'
+    ':ECDHE-RSA-AES128-GCM-SHA256'
+    ':ECDHE-RSA-CHACHA20-POLY1305'
+    ':ECDHE-ECDSA-AES128-GCM-SHA256'
+    ':ECDHE-ECDSA-AES256-GCM-SHA384'
+    ':ECDHE-ECDSA-CHACHA20-POLY1305'
+)
 
 
 class RESTError(Exception):
@@ -116,7 +128,8 @@ class UDSApi:  # pylint: disable=too-few-public-methods
             else ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
         )
         # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
-        context.minimum_version = ssl.TLSVersion.TLSv1_3
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.set_ciphers(SECURE_CIPHERS)
 
         # Configure session security
         class UDSHTTPAdapter(requests.adapters.HTTPAdapter):
