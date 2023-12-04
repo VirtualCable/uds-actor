@@ -39,7 +39,7 @@ if typing.TYPE_CHECKING:
     from . import types
 
 
-def saveCertificate(certInfo: 'types.CertificateInfoType') -> typing.Tuple[str, str]:
+def saveCertificate(certInfo: 'types.CertificateInfoType') -> tuple[str, str]:
     """
     Returns CertificateFile, Password tuple generated from certInfo
     """

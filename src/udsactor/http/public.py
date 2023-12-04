@@ -42,7 +42,7 @@ if typing.TYPE_CHECKING:
 class PublicProvider(handler.Handler):
     def post_logout(self) -> typing.Any:
         logger.debug('Sending LOGOFF to clients')
-        self._service._clientsPool.logout()  # pylint: disable=protected-access
+        self._service._clientsPool.logout()
         return 'ok'
 
     # Alias
@@ -52,9 +52,7 @@ class PublicProvider(handler.Handler):
         logger.debug('Sending MESSAGE to clients')
         if 'message' not in self._params:
             raise Exception('Invalid message parameters')
-        self._service._clientsPool.message(
-            self._params['message']
-        )  # pylint: disable=protected-access
+        self._service._clientsPool.message(self._params['message'])
         return 'ok'
 
     def post_script(self) -> typing.Any:
@@ -63,9 +61,7 @@ class PublicProvider(handler.Handler):
             raise Exception('Invalid script parameters')
         if self._params.get('user', False):
             logger.debug('Sending SCRIPT to client')
-            self._service._clientsPool.executeScript(
-                self._params['script']
-            )  # pylint: disable=protected-access
+            self._service._clientsPool.executeScript(self._params['script'])
         else:
             # Execute script at server space, that is, here
             # as a parallel thread
@@ -90,9 +86,7 @@ class PublicProvider(handler.Handler):
         return 'UDS Actor Secure Server'
 
     def get_screenshot(self) -> typing.Any:
-        return (
-            self._service._clientsPool.screenshot()
-        )  # pylint: disable=protected-access
+        return self._service._clientsPool.screenshot()  # pylint: disable=protected-access
 
     def get_uuid(self) -> typing.Any:
         if self._service.isManaged():

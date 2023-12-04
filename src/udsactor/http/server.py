@@ -86,7 +86,7 @@ class HTTPServerHandler(http.server.BaseHTTPRequestHandler):
 
         logger.debug('Path: %s, ip: %s, params: %s', path, self.client_address, params)
 
-        handlerType: typing.Optional[typing.Type['Handler']] = None
+        handlerType: typing.Optional[type['Handler']] = None
 
         if (
             len(path) == 3 and path[0] == 'actor' and path[1] == self._service._secret

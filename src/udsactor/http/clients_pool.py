@@ -37,14 +37,14 @@ from udsactor import tools, types
 from udsactor.log import logger
 
 # For avoid proxy on localhost connections
-NO_PROXY: typing.Dict[str, str] = {
+NO_PROXY: dict[str, str] = {
     'http': '',
     'https': '',
 }
 
 
 class UDSActorClientPool(metaclass=tools.Singleton):
-    _clients: typing.List[types.ClientInfo]
+    _clients: list[types.ClientInfo]
 
     def __init__(self) -> None:
         self._clients = []
@@ -55,12 +55,8 @@ class UDSActorClientPool(metaclass=tools.Singleton):
         method: str,
         data: typing.MutableMapping[str, str],
         timeout: int = 2,
-    ) -> typing.List[
-        typing.Tuple[types.ClientInfo, typing.Optional[requests.Response]]
-    ]:
-        result: typing.List[
-            typing.Tuple[types.ClientInfo, typing.Optional[requests.Response]]
-        ] = []
+    ) -> list[tuple[types.ClientInfo, typing.Optional[requests.Response]]]:
+        result: list[tuple[types.ClientInfo, typing.Optional[requests.Response]]] = []
         for client in self._clients:
             # Skip if session id is provided but does not match
             if session_id and client.session_id != session_id:
@@ -90,7 +86,7 @@ class UDSActorClientPool(metaclass=tools.Singleton):
         return result
 
     @property
-    def clients(self) -> typing.List[types.ClientInfo]:
+    def clients(self) -> list[types.ClientInfo]:
         return self._clients
 
     def register(self, client_url: str) -> None:
@@ -120,13 +116,13 @@ class UDSActorClientPool(metaclass=tools.Singleton):
                 self._clients.pop(i)
                 return
 
-    def executeScript(self, session_id: typing.Optional[str], script: str) -> None:
+    def executeScript(self, script: str, session_id: typing.Optional[str] = None) -> None:
         self._post(session_id, 'script', {'script': script}, timeout=30)
 
-    def logout(self, session_id: typing.Optional[str]) -> None:
+    def logout(self, session_id: typing.Optional[str] = None) -> None:
         self._post(session_id, 'logout', {})
 
-    def message(self, session_id: typing.Optional[str], message: str) -> None:
+    def message(self, message: str, session_id: typing.Optional[str] = None) -> None:
         self._post(session_id, 'message', {'message': message})
 
     def lost_clients(
@@ -139,7 +135,7 @@ class UDSActorClientPool(metaclass=tools.Singleton):
                 yield i[0]
 
     def screenshot(
-        self, session_id: typing.Optional[str]
+        self, session_id: typing.Optional[str] = None
     ) -> typing.Optional[str]:  # Screenshot are returned as base64
         for client, r in self._post(session_id, 'screenshot', {}, timeout=3):
             if not r:

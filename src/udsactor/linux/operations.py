@@ -39,6 +39,7 @@ import subprocess  # nosec
 import struct
 import array
 import typing
+import collections.abc
 
 from .. import types
 
@@ -83,7 +84,7 @@ def _getIpAddr(ifname: str) -> typing.Optional[str]:
         return None
 
 
-def _getInterfaces() -> typing.List[str]:
+def _getInterfaces() -> list[str]:
     '''
     Returns a list of interfaces names coded in utf-8
     '''
@@ -113,7 +114,7 @@ def _getInterfaces() -> typing.List[str]:
 
 def _getIpAndMac(
     ifname: str,
-) -> typing.Tuple[typing.Optional[str], typing.Optional[str]]:
+) -> tuple[typing.Optional[str], typing.Optional[str]]:
     ip, mac = _getIpAddr(ifname), _getMacAddr(ifname)
     return (ip, mac)
 
@@ -188,7 +189,7 @@ def renameComputer(newName: str) -> bool:
     return True  # Always reboot right now. Not much slower but much more convenient
 
 
-def joinDomain(name: str, custom: typing.Optional[typing.Mapping[str, typing.Any]] = None):
+def joinDomain(name: str, custom: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None):
     if not custom:
         logger.error('Error joining domain: no custom data provided')
         return

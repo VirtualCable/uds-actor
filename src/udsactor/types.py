@@ -1,4 +1,5 @@
 import typing
+import collections.abc
 
 MANAGED = 'managed'
 UNMANAGED = 'unmanaged'
@@ -19,7 +20,7 @@ class AuthenticatorType(typing.NamedTuple):
 class ActorOsConfigurationType(typing.NamedTuple):
     action: str
     name: str
-    custom: typing.Optional[typing.Mapping[str, typing.Any]]
+    custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
 
 class ActorDataConfigurationType(typing.NamedTuple):
     unique_id: typing.Optional[str] = None
@@ -41,7 +42,7 @@ class ActorConfigurationType(typing.NamedTuple):
 
     config: typing.Optional[ActorDataConfigurationType] = None
 
-    data: typing.Optional[typing.Dict[str, typing.Any]] = None
+    data: typing.Optional[dict[str, typing.Any]] = None
 
 class InitializationResultType(typing.NamedTuple):
     own_token: typing.Optional[str] = None

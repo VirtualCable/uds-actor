@@ -96,7 +96,7 @@ def getDomainName() -> str:
     return domain
 
 
-def getWindowsVersion() -> typing.Tuple[int, int, int, int, str]:
+def getWindowsVersion() -> tuple[int, int, int, int, str]:
     return win32api.GetVersionEx()
 
 

@@ -33,6 +33,7 @@
 import signal
 import copy
 import typing
+import collections.abc
 
 from . import daemon
 from . import operations
@@ -64,7 +65,7 @@ class UDSActorSvc(daemon.Daemon, CommonService):
         return self._sensibleDataCleanable
 
     def joinDomain(  # pylint: disable=unused-argument, too-many-arguments
-        self, name: str, custom: typing.Mapping[str, typing.Any]
+        self, name: str, custom: collections.abc.Mapping[str, typing.Any]
     ) -> None:
     
         self._sensibleDataCleanable = custom.get('isPersistent', False)

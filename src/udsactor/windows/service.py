@@ -31,6 +31,7 @@
 # pylint: disable=invalid-name
 import struct
 import typing
+import collections.abc
 
 import win32serviceutil
 import win32service
@@ -127,7 +128,7 @@ class UDSActorSvc(win32serviceutil.ServiceFramework, CommonService):
             logger.info('Rebooting computer for activating new name {}'.format(name))
             self.reboot()
 
-    def joinDomain(self, name: str, custom: typing.Mapping[str, typing.Any]) -> None:
+    def joinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> None:
         versionData = operations.getWindowsVersion()
         versionInt = versionData[0] * 10 + versionData[1]
 

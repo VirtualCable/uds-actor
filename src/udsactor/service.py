@@ -36,6 +36,7 @@ import time
 import secrets
 import subprocess
 import typing
+import collections.abc
 
 from udsactor import platform
 from udsactor import rest
@@ -64,7 +65,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
     _initialized: bool = False
     _cfg: types.ActorConfigurationType
     _api: rest.UDSServerApi
-    _interfaces: typing.List[types.InterfaceInfoType]
+    _interfaces: list[types.InterfaceInfoType]
     _secret: str
     _certificate: types.CertificateInfoType
     _http: typing.Optional[server.HTTPServerThread]
@@ -119,7 +120,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         )  # Only "unmanaged" hosts are unmanaged, the rest are "managed"
 
     def serviceInterfaceInfo(
-        self, interfaces: typing.Optional[typing.List[types.InterfaceInfoType]] = None
+        self, interfaces: typing.Optional[list[types.InterfaceInfoType]] = None
     ) -> typing.Optional[types.InterfaceInfoType]:
         """
         returns the inteface with unique_id mac or first interface or None if no interfaces...
@@ -224,7 +225,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
             try:
                 if self._cfg.config and self._cfg.config.os:
                     osData = self._cfg.config.os
-                    custom: typing.Mapping[str, typing.Any] = osData.custom or {}
+                    custom: collections.abc.Mapping[str, typing.Any] = osData.custom or {}
                     # Needs UDS Server >= 4.0 to work
                     if osData.action == 'rename':
                         self.rename(
@@ -444,7 +445,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         if platform.operations.renameComputer(name):
             self.reboot()
 
-    def joinDomain(self, name: str, custom: typing.Mapping[str, typing.Any]) -> None:
+    def joinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> None:
         '''
         Invoked when broker requests a "domain" action
         default does nothing

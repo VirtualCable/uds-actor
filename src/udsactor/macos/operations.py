@@ -60,7 +60,7 @@ def getComputerName() -> str:
 
 
 def getNetworkInfo() -> typing.Iterator[types.InterfaceInfoType]:
-    ifdata: typing.List['psutil._common.snicaddr']  # type: ignore
+    ifdata: list['psutil._common.snicaddr']  # type: ignore
     for ifname, ifdata in psutil.net_if_addrs().items():
         name, ip, mac = '', '', ''
         # Get IP address, interface name and MAC address whenever possible

@@ -30,11 +30,12 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 import typing
+import collections.abc
 
 from .. import operations
 from ...log import logger
 
-renamers: typing.MutableMapping[str, typing.Callable[[str], bool]] = {}
+renamers: typing.MutableMapping[str, collections.abc.Callable[[str], bool]] = {}
 
 # Renamers now are for IPv4 only addresses
 def rename(newName: str) -> bool:

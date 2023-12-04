@@ -30,6 +30,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 import typing
+import collections.abc
 import signal
 
 from ..log import logger
@@ -47,14 +48,7 @@ class UDSActorSvc(CommonService):
     def markForExit(self, signum, frame) -> None:  # pylint: disable=unused-argument
         self._isAlive = False
 
-    def joinDomain(  # pylint: disable=unused-argument, too-many-arguments
-            self,
-            name: str,
-            domain: str,
-            ou: str,
-            account: str,
-            password: str
-        ) -> None:
+    def joinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> None:
         pass  # Not implemented for unmanaged machines
 
     def rename(

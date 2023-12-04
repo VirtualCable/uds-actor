@@ -32,17 +32,18 @@ import threading
 import ipaddress
 import time
 import typing
+import collections.abc
 import functools
 
 if typing.TYPE_CHECKING:
     from udsactor.types import InterfaceInfoType
 
 # Simple cache for n seconds (default = 30) decorator
-def cache(seconds: int = 30) -> typing.Callable:
+def cache(seconds: int = 30) -> collections.abc.Callable:
     '''
     Simple cache for n seconds (default = 30) decorator
     '''
-    def decorator(func) -> typing.Callable:
+    def decorator(func) -> collections.abc.Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> typing.Any:
             if not hasattr(wrapper, 'cache'):
@@ -120,7 +121,7 @@ def strToNoIPV4Network(
 
 def validNetworkCards(
     net: typing.Optional[str], cards: typing.Iterable['InterfaceInfoType']
-) -> typing.List['InterfaceInfoType']:
+) -> list['InterfaceInfoType']:
     try:
         subnet = strToNoIPV4Network(net)
     except Exception as e:
