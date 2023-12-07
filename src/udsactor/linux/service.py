@@ -31,7 +31,6 @@
 @author: Alexander Burmatov,  thatman at altlinux dot org
 '''
 import signal
-import copy
 import typing
 import collections.abc
 
@@ -48,7 +47,6 @@ except ImportError:  # Platform may not include prctl, so in case it's not avail
         pass
 
 class UDSActorSvc(daemon.Daemon, CommonService):
-    _sensibleDataCleanable: bool = False
 
     def __init__(self) -> None:
         daemon.Daemon.__init__(self, '/run/udsactor.pid')
@@ -61,36 +59,14 @@ class UDSActorSvc(daemon.Daemon, CommonService):
     def markForExit(self, signum, frame) -> None:  # pylint: disable=unused-argument
         self._isAlive = False
 
-    def canCleanSensibleData(self) -> bool:
-        return self._sensibleDataCleanable
-
     def joinDomain(  # pylint: disable=unused-argument, too-many-arguments
         self, name: str, custom: collections.abc.Mapping[str, typing.Any]
     ) -> None:
     
-        self._sensibleDataCleanable = custom.get('isPersistent', False)
-
         self.rename(name)
 
         logger.debug('Starting joining domain %s with name %s', custom.get('domain', ''), name)
-        operations.joinDomain(name, custom)
-
-    def finish(self) -> None:
-        try:
-            if self._cfg.config and self._cfg.config.os and self._cfg.config.os.custom:
-                osData = self._cfg.config.os
-                custom = self._cfg.config.os.custom
-                if osData.action == 'rename_ad' and custom.get('isPersistent', False):
-                    operations.leaveDomain(
-                        custom.get('ad', ''),
-                        custom.get('username', ''),
-                        custom.get('password', ''),
-                        custom.get('clientSoftware', ''),
-                        custom.get('serverSoftware', ''),
-                    )
-        except Exception as e:
-            logger.error(f'Got exception operating machine: {e}')
-        super().finish()
+        operations.joinDomain(custom)
 
     def run(self) -> None:
         logger.debug('Running Daemon: {}'.format(self._isAlive))

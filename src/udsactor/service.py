@@ -141,9 +141,6 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         logger.info('Rebooting...')
         self._rebootRequested = True
 
-    def canCleanSensibleData(self) -> bool:
-        return True
-
     def setReady(self) -> None:
         if not self._isAlive or not self.isManaged():
             return
@@ -191,11 +188,10 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         if not self._isAlive:
             return
 
-        # Cleans sensible data
         if self._cfg.config:
-            if self.canCleanSensibleData():
-                self._cfg = self._cfg._replace(config=self._cfg.config._replace(os=None), data=None)
-                platform.store.writeConfig(self._cfg)
+            self._cfg = self._cfg._replace(config=self._cfg.config._replace(os=None), data=None)
+            platform.store.writeConfig(self._cfg)
+            
 
         logger.info('Service ready')
 

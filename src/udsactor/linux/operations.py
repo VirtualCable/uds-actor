@@ -189,7 +189,7 @@ def renameComputer(newName: str) -> bool:
     return True  # Always reboot right now. Not much slower but much more convenient
 
 
-def joinDomain(name: str, custom: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None):
+def joinDomain(custom: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None):
     if not custom:
         logger.error('Error joining domain: no custom data provided')
         return
@@ -229,32 +229,42 @@ def joinDomain(name: str, custom: typing.Optional[collections.abc.Mapping[str, t
         command += domain
         subprocess.run(command, input=password.encode(), shell=True)
     except Exception as e:
-        logger.error(f'Error join machine to domain {name}: {e}')
+        logger.error(f'Error join machine to domain {domain}: {e}')
 
 
-def leaveDomain(
-    domain: str,
-    account: str,
-    password: str,
-    client_software: str,
-    server_software: str,
-) -> None:
-    if server_software == 'ipa':
-        try:
-            command = f'hostnamectl set-hostname {getComputerName()}'
-            subprocess.run(command, shell=True)
-        except Exception as e:
-            logger.error(f'Error set hostname for leave freeeipa domain: {e}')
-    try:
-        command = f'realm leave -U {account} '
-        if client_software and client_software != 'automatically':
-            command += f'--client-software={client_software} '
-        if server_software:
-            command += f'--server-software={server_software} '
-        command += domain
-        subprocess.run(command, input=password.encode(), shell=True)
-    except Exception as e:
-        logger.error(f'Error leave machine from domain {domain}: {e}')
+# Commented right now
+# Machines can be "hard deleted", and so
+# we cannot ensure that leaveDomain will be invoked
+# Also, we need "sensible" data to be kept on machine
+# And this is not convenient
+# Leaved the code here, but commented
+# Best place to remove, is on OsManager, on UDS Broker, 
+# using whatever method is needed to remove the machine from domain
+# (for example, using a script that removes the machine from domain, invoked remotely
+# or better, accesing ldap and removing the machine from there)
+# def leaveDomain(
+#     domain: str,
+#     account: str,
+#     password: str,
+#     client_software: str,
+#     server_software: str,
+# ) -> None:
+#     if server_software == 'ipa':
+#         try:
+#             command = f'hostnamectl set-hostname {getComputerName()}'
+#             subprocess.run(command, shell=True)
+#         except Exception as e:
+#             logger.error(f'Error set hostname for leave freeeipa domain: {e}')
+#     try:
+#         command = f'realm leave -U {account} '
+#         if client_software and client_software != 'automatically':
+#             command += f'--client-software={client_software} '
+#         if server_software:
+#             command += f'--server-software={server_software} '
+#         command += domain
+#         subprocess.run(command, input=password.encode(), shell=True)
+#     except Exception as e:
+#         logger.error(f'Error leave machine from domain {domain}: {e}')
 
 
 def changeUserPassword(
