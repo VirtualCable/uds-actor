@@ -41,9 +41,9 @@ from ..log import logger
 from ..service import CommonService
 
 try:
-    from prctl import set_proctitle  # type: ignore
+    from setproctitle import setproctitle  # type: ignore
 except ImportError:  # Platform may not include prctl, so in case it's not available, we let the "name" as is
-    def set_proctitle(_):
+    def setproctitle(title: str) -> None:
         pass
 
 class UDSActorSvc(daemon.Daemon, CommonService):
@@ -70,7 +70,7 @@ class UDSActorSvc(daemon.Daemon, CommonService):
 
     def run(self) -> None:
         logger.debug('Running Daemon: {}'.format(self._isAlive))
-        set_proctitle('UDSActorDaemon')
+        setproctitle('UDSActorDaemon')
 
         # Linux daemon will continue running unless something is requested to
         # Unmanaged services does not initializes "on start", but rather when user logs in (because userservice does not exists "as such" before that)

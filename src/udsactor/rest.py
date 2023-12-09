@@ -307,7 +307,7 @@ class UDSServerApi(UDSApi):
         #        ou=os.get('ou'),
         # So update custom data with this info
         custom = os.get('custom', {})
-        for i in ('username', 'password', 'new_password', 'ad', 'ou'):
+        for i in ('username', 'password', 'new_password', 'domain', 'ou'):
             # ad is converted to domain
             if i not in os:
                 continue  # Skip if not present on os, do not overwrite custom
