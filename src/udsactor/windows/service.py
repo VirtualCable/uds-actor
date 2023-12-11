@@ -48,7 +48,7 @@ from ..service import CommonService
 
 from ..log import logger
 
-REMOTE_USERS_SID = 'S-1-5-32-555'  # Well nown sid for remote desktop users
+REMOTE_USERS_SID: typing.Final[str] = 'S-1-5-32-555'  # Well nown sid for remote desktop users
 
 
 class UDSActorSvc(win32serviceutil.ServiceFramework, CommonService):

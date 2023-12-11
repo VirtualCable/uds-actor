@@ -315,7 +315,7 @@ class UDSServerApi(UDSApi):
             custom[name] = os[i]  # os[i] is present, so force it on custom
 
         return types.InitializationResultType(
-            own_token=r['own_token'],
+            token=r['token'],
             unique_id=r['unique_id'].lower() if r['unique_id'] else None,
             os=types.ActorOsConfigurationType(
                 action=os['action'],
@@ -324,7 +324,6 @@ class UDSServerApi(UDSApi):
             )
             if r['os']
             else None,
-            alias_token=r.get('alias_token'),  # Possible alias for unmanaged
         )
 
     def ready(

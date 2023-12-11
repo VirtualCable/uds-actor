@@ -299,7 +299,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
                     initResult: types.InitializationResultType = self._api.initialize(
                         self._cfg.master_token, self._interfaces, self._cfg.actorType
                     )
-                    if not initResult.own_token:  # Not managed
+                    if not initResult.token:  # Not managed
                         logger.debug(
                             'This host is not managed by UDS Broker (ids: {})'.format(self._interfaces)
                         )
@@ -308,12 +308,12 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
                     # Only removes master token for managed machines (will need it on next client execution)
                     # For unmanaged, if alias is present, replace master token with it
                     master_token = (
-                        None if self.isManaged() else (initResult.alias_token or self._cfg.master_token)
+                        None if self.isManaged() else (initResult.token or self._cfg.master_token)
                     )
                     # Replace master token with alias token if present
                     self._cfg = self._cfg._replace(
                         master_token=master_token,
-                        own_token=initResult.own_token,
+                        own_token=initResult.token,
                         config=types.ActorDataConfigurationType(
                             unique_id=initResult.unique_id, os=initResult.os
                         ),
