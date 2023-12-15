@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2019-2023 Virtual Cable S.L.U.
+# Copyright (c) 2023 Virtual Cable S.L.U.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
@@ -26,190 +27,170 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
-@author: Adolfo Gómez, dkmaster at dkmon dot com
-@author: Alexander Burmatov,  thatman at altlinux dot org
+Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
-# pylint: disable=invalid-name
-import warnings
+import asyncio
 import json
-import ssl
 import logging
+import ssl
 import typing
+import collections.abc
+import warnings
 
-import requests
-import requests.adapters
+import aiohttp
+import aiohttp.client_exceptions
 
-from udsactor import types, tools
-from udsactor.version import VERSION, BUILD
+from . import consts, exceptions, types
 
-# Default public listen port
-LISTEN_PORT: typing.Final[int] = 43910
+logger = logging.getLogger(__name__)
 
-# Default timeout
-TIMEOUT: typing.Final[int] = 5  # 5 seconds is more than enought
-
-# Constants
-UNKNOWN: typing.Final[str] = 'unknown'
-
-SECURE_CIPHERS: typing.Final[str] = (
-    'TLS_AES_256_GCM_SHA384'
-    ':TLS_CHACHA20_POLY1305_SHA256'
-    ':TLS_AES_128_GCM_SHA256'
-    ':ECDHE-RSA-AES256-GCM-SHA384'
-    ':ECDHE-RSA-AES128-GCM-SHA256'
-    ':ECDHE-RSA-CHACHA20-POLY1305'
-    ':ECDHE-ECDSA-AES128-GCM-SHA256'
-    ':ECDHE-ECDSA-AES256-GCM-SHA384'
-    ':ECDHE-ECDSA-CHACHA20-POLY1305'
-)
-
-
-class RESTError(Exception):
-    ERRCODE = 0
-
-
-class RESTConnectionError(RESTError):
-    ERRCODE = -1
-
-
-# Errors ""raised"" from broker
-class RESTInvalidKeyError(RESTError):
-    ERRCODE = 1
-
-
-class RESTUnmanagedHostError(RESTError):
-    ERRCODE = 2
-
-
-class RESTUserServiceNotFoundError(RESTError):
-    ERRCODE = 3
-
-
-class RESTOsManagerError(RESTError):
-    ERRCODE = 4
-
-
-# For avoid proxy on localhost connections
-NO_PROXY = {
-    'http': None,
-    'https': None,
-}
-
-UDS_BASE_URL = 'https://{}/uds/rest/'
 
 #
-# Basic UDS Api
+# Basic UDS Api, needed for our purposes
 #
-class UDSApi:  # pylint: disable=too-few-public-methods
+class BrokerREST:  # pylint: disable=too-few-public-methods
     """
     Base for remote api accesses
     """
 
-    _host: str = ''
-    _validateCert: bool = True
-    _url: str = ''
-    _session: 'requests.Session'
+    _host: str
+    _validateCert: bool
+    _url: str
+    _context: 'ssl.SSLContext'
+    _token: str | None = None
 
-    def __init__(self, host: str, validateCert: bool) -> None:
+    def __init__(self, host: str, validateCert: bool, token: str | None = None) -> None:
         self._host = host
         self._validateCert = validateCert
-        self._url = UDS_BASE_URL.format(self._host)
-        # Disable logging requests messages except for errors, ...
-        logging.getLogger('request').setLevel(logging.CRITICAL)
-        logging.getLogger('urllib3').setLevel(logging.ERROR)
-        try:
-            warnings.simplefilter('ignore')  # Disables all warnings
-        except Exception:  # nosec: not interested in exceptions
-            pass
+        self._url = f'https://{self._host}/uds/rest/'
+        self._token = token
+        # try:
+        #     warnings.simplefilter("ignore")  # Disables all warnings
+        # except Exception:
+        #     pass
 
-        context = (
+        self._context = (
             ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
             if validateCert
             else ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
         )
         # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.set_ciphers(SECURE_CIPHERS)
-
-        # Configure session security
-        class UDSHTTPAdapter(requests.adapters.HTTPAdapter):
-            def init_poolmanager(self, *args, **kwargs) -> None:
-                kwargs["ssl_context"] = context
-
-                return super().init_poolmanager(*args, **kwargs)
-            
-            def cert_verify(self, conn, url, verify, cert):  # pylint: disable=unused-argument
-                # Overridden to do nothing
-                return super().cert_verify(conn, url, validateCert, cert)
-
-        self._session = requests.Session()
-        self._session.mount("https://", UDSHTTPAdapter())
+        self._context.minimum_version = ssl.TLSVersion.TLSv1_2
+        self._context.set_ciphers(consts.SECURE_CIPHERS)
 
     @property
     def _headers(self) -> typing.MutableMapping[str, str]:
         return {
             'Content-Type': 'application/json',
-            'User-Agent': 'UDS Actor v{}/{}'.format(VERSION, BUILD),
+            'User-Agent': 'UDS AppServer v{}'.format(consts.VERSION),
         }
 
-    def _api_url(self, method: str) -> str:
-        raise NotImplementedError
+    @property
+    def token(self) -> str:
+        if not self._token:
+            raise exceptions.RESTError('Token not provided')
 
-    def _doPost(
-        self,
-        method: str,  # i.e. 'initialize', 'ready', ....
-        payLoad: typing.MutableMapping[str, typing.Any],
-        headers: typing.Optional[typing.MutableMapping[str, str]] = None,
-        disableProxy: bool = False,
-    ) -> typing.Any:
-        headers = headers or self._headers
-        try:
-            result = self._session.post(
-                self._api_url(method),
-                data=json.dumps(payLoad),
-                headers=headers,
-                # verify=self._validateCert, Not needed, already in session
-                timeout=TIMEOUT,
-                proxies=NO_PROXY  # type: ignore
-                if disableProxy
-                else None,  # if not proxies wanted, enforce it
-            )
+        return self._token
 
-            if result.ok:
-                j = result.json()
-                if not j.get('error', None):
-                    return j['result']
-        except requests.ConnectionError as e:
-            raise RESTConnectionError(str(e))
-        except Exception as e:
-            raise RESTError(str(e))
+    @token.setter
+    def token(self, value: str | None) -> None:
+        self._token = value
 
-        try:
-            data = result.json()
-        except Exception:
-            data = result.content.decode()
-
-        raise RESTError(data)
-
-
-#
-# UDS Broker API access
-#
-class UDSServerApi(UDSApi):
-    def _api_url(self, method: str) -> str:
+    def _urlFor(self, api: types.ApiType, method: str) -> str:
+        if api == types.ApiType.AUTH:
+            return self._url + 'auth/' + method
+        # Actor v3
         return self._url + 'actor/v3/' + method
 
-    def enumerateAuthenticators(self) -> typing.Iterable[types.AuthenticatorType]:
+    async def _doPost(
+        self,
+        api: types.ApiType,
+        method: str,  # i.e. 'initialize', 'ready', ....
+        payLoad: collections.abc.Mapping[str, typing.Any],
+        headers: typing.Optional[collections.abc.Mapping[str, str]] = None,
+        checkError: bool = True,
+        returnRaw: bool = False,
+    ) -> typing.Any:
+        headers = headers or self._headers
+        result = None
+        data = ''
+        async with aiohttp.ClientSession() as session:
+            try:
+                result = await session.post(
+                    self._urlFor(api, method),
+                    data=json.dumps(payLoad),
+                    headers=headers,
+                    ssl=self._context,
+                    timeout=consts.TIMEOUT,
+                )
+                if result.ok:
+                    j = await result.json()
+                    if checkError and j.get('error', None):
+                        raise exceptions.RESTError(j['error'])
+                    if returnRaw:
+                        return j
+                    return j['result']
+            except aiohttp.client_exceptions.ClientConnectorError as e:
+                raise exceptions.RESTConnectionError(str(e))
+            except TimeoutError as e:
+                data = f'Timeout processing request to {self._host}'
+            except Exception as e:
+                data = str(e)
+
+            # Error, get it back
+            if result and not data:
+                try:
+                    data = await result.json()
+                except Exception:
+                    data = await result.text()
+
+            raise exceptions.RESTError(data)
+
+    async def _doGet(
+        self,
+        api: types.ApiType,
+        method: str,  # i.e. 'initialize', 'ready', ....
+        headers: typing.Optional[collections.abc.Mapping[str, str]] = None,
+        checkError: bool = True,
+        returnRaw: bool = False,
+    ) -> typing.Any:
+        headers = headers or self._headers
+        result = None
+        data = ''
+        async with aiohttp.ClientSession() as session:
+            try:
+                result = await session.get(
+                    self._urlFor(api, method),
+                    headers=headers,
+                    ssl=self._context,
+                    timeout=consts.TIMEOUT,
+                )
+                if result.ok:
+                    j = await result.json()
+                    if checkError and j.get('error', None):
+                        raise exceptions.RESTError(j['error'])
+                    if returnRaw:
+                        return j
+                    return j['result']
+            except aiohttp.client_exceptions.ClientConnectorError as e:
+                raise exceptions.RESTConnectionError(str(e))
+            except Exception as e:
+                data = str(e)
+
+            # Error, get it back
+            if result and not data:
+                try:
+                    data = await result.json()
+                except Exception:
+                    data = await result.text()
+
+            raise exceptions.RESTError(data)
+
+    async def enumerateAuthenticators(self) -> list[types.Authenticator]:
         try:
-            result = self._session.get(
-                self._url + 'auth/auths',
-                headers=self._headers,
-                # verify=self._validateCert,
-                timeout=4,
-            )
-            if result.ok:
-                for v in sorted(result.json(), key=lambda x: x['priority']):
-                    yield types.AuthenticatorType(
+            return sorted(
+                [
+                    types.Authenticator(
                         authId=v['authId'],
                         authSmallName=v['authSmallName'],
                         auth=v['auth'],
@@ -217,10 +198,38 @@ class UDSServerApi(UDSApi):
                         priority=v['priority'],
                         isCustom=v['isCustom'],
                     )
-        except Exception as e:
-            pass
+                    for v in sorted(
+                        await self._doGet(types.ApiType.AUTH, 'auths', checkError=False, returnRaw=True),
+                        key=lambda x: x['auth'],
+                    )
+                ],
+                key=lambda x: x.auth.lower(),
+            )
+        except Exception:
+            raise  # To be "pass" in future, if cannot enumerate, it is not a problem
 
-    def register(
+    async def login(self, auth: str, username: str, password: str) -> typing.MutableMapping[str, str]:
+        """
+        Raises an exception if could not login, or returns the "authorization token"
+
+        Args:
+            auth: Authenticator to use
+            username: Username to use
+            password: Password to use on login
+        """
+        try:
+            result = await self._doPost(
+                types.ApiType.AUTH,
+                'login',
+                {'auth': auth, 'username': username, 'password': password},
+                returnRaw=True,
+            )
+
+            return {'X-Auth-Token': result['token']}
+        except Exception:
+            raise exceptions.RESTError('Invalid credentials')
+
+    async def register(
         self,
         auth: str,
         username: str,
@@ -235,6 +244,18 @@ class UDSServerApi(UDSApi):
     ) -> str:
         """
         Raises an exception if could not register, or registers and returns the "authorization token"
+
+        Args:
+            auth: Authenticator to use
+            username: Username to use
+            password: Password to use on login
+            hostname: Hostname of this machine
+            ip: IP of this machine
+            mac: Mac of this machine
+            preCommand: Command to execute before a new connection
+            runOnceCommand: Command to execute only once
+            postCommand: Command to execute after machine is configured
+            logLevel: Log level to use
         """
         data = {
             'username': username + '@' + auth,
@@ -244,57 +265,55 @@ class UDSServerApi(UDSApi):
             'pre_command': preCommand,
             'run_once_command': runOnceCommand,
             'post_command': postCommand,
-            'log_level': (logLevel*10000) + 20000,
+            'log_level': (logLevel * 10000) + 20000,
         }
 
         # First, try to login to REST api
-        try:
-            # First, try to login
-            authInfo = {'auth': auth, 'username': username, 'password': password}
-            headers = self._headers
-            result = self._session.post(
-                self._url + 'auth/login',
-                data=json.dumps(authInfo),
-                headers=headers,
-                # verify=self._validateCert,
-            )
-            if not result.ok or result.json()['result'] == 'error':
-                raise Exception()  # Invalid credentials
+        headers = await self.login(auth, username, password)
+        return await self._doPost(
+            types.ApiType.ACTORV3,
+            'register',
+            payLoad=data,
+            headers=headers,
+        )
 
-            headers['X-Auth-Token'] = result.json()['token']
+    async def test(self, type: types.ActorType) -> bool:
+        """Test if token is valid
 
-            result = self._session.post(
-                self._api_url('register'),
-                data=json.dumps(data),
-                headers=headers,
-                # verify=self._validateCert,
-            )
-            if result.ok:
-                return result.json()['result']
-        except requests.ConnectionError as e:
-            raise RESTConnectionError(e)
-        except RESTError:
-            raise
-        except Exception as e:
-            raise RESTError('Invalid credentials')
+        Args:
+            token: Token to test
 
-        raise RESTError(result.content.decode())
+        Returns:
+            True if token is valid, False otherwise
+        """
+        return (
+            await self._doPost(types.ApiType.ACTORV3, 'test', payLoad={'token': self.token, 'type': type})
+        ) == 'ok'
 
-    def initialize(
+    # The flow for initialization of an actor is:
+    # * Actor is started
+    # * Actor gets interfaces
+    # * Actor calls initialize with the interfaces
+    # * Actor gets a token and a unique_id
+    # * Actor calls ready with the token, ip and port
+    # * Actor gets a certificate
+    # * Actor starts webserver
+    # * User logins
+    # ....
+    async def initialize(
         self,
-        token: str,
-        interfaces: typing.Iterable[types.InterfaceInfoType],
+        interfaces: typing.Iterable[types.InterfaceInfo],
         actor_type: typing.Optional[str],
-    ) -> types.InitializationResultType:
+    ) -> types.InitializationResult:
         # Generate id list from netork cards
         payload = {
-            'type': actor_type or types.MANAGED,
-            'token': token,
-            'version': VERSION,
-            'build': BUILD,
+            'type': actor_type or types.ActorType.MANAGED,
+            'token': self.token,
+            'version': consts.VERSION,
+            'build': consts.BUILD,
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
         }
-        r = self._doPost('initialize', payload)
+        r: typing.Dict[str, typing.Any] = await self._doPost(types.ApiType.ACTORV3, 'initialize', payload)
         os = r['os']
         # * TO BE REMOVED ON FUTURE VERSIONS *
         # To keep compatibility, store old values on custom data
@@ -314,10 +333,10 @@ class UDSServerApi(UDSApi):
             name = 'domain' if i == 'ad' else i
             custom[name] = os[i]  # os[i] is present, so force it on custom
 
-        return types.InitializationResultType(
+        return types.InitializationResult(
             token=r['token'],
             unique_id=r['unique_id'].lower() if r['unique_id'] else None,
-            os=types.ActorOsConfigurationType(
+            os=types.ActorOsConfiguration(
                 action=os['action'],
                 name=os['name'],
                 custom=os.get('custom'),
@@ -326,179 +345,234 @@ class UDSServerApi(UDSApi):
             else None,
         )
 
-    def ready(
-        self, own_token: str, secret: str, ip: str, port: int
-    ) -> types.CertificateInfoType:
-        payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
-        result = self._doPost('ready', payload)
 
-        return types.CertificateInfoType(
-            private_key=result['private_key'],
-            server_certificate=result['server_certificate'],
-            password=result['password'],
-            ciphers=result.get('ciphers', ''),
-        )
 
-    def notifyIpChange(
-        self, own_token: str, secret: str, ip: str, port: int
-    ) -> types.CertificateInfoType:
-        payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
-        result = self._doPost('ipchange', payload)
-
-        return types.CertificateInfoType(
-            private_key=result['private_key'],
-            server_certificate=result['server_certificate'],
-            password=result['password'],
-            ciphers=result.get('ciphers', ''),
-        )
-
-    def notifyUnmanagedCallback(
+    # The flow for initialization of an unmanaged actor is:
+    # * Actor is started
+    # * Actor gets interfaces
+    # * Actor calls initialize_unmanaged with the interfaces, secret and port
+    # * Actor gets the certificate
+    # * Actor starts webserver
+    # * User logins
+    # * NOW the initialize is called, (Now we have an userService assigned, not before)
+    # ....
+    async def initialize_unmanaged(
         self,
-        master_token: str,
         secret: str,
-        interfaces: typing.Iterable[types.InterfaceInfoType],
+        interfaces: typing.Iterable[types.InterfaceInfo],
         port: int,
-    ) -> types.CertificateInfoType:
+    ) -> types.CertificateInfo:
         payload = {
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
-            'token': master_token,
+            'token': self.token,
             'secret': secret,
             'port': port,
         }
-        result = self._doPost('unmanaged', payload)
+        result = await self._doPost(types.ApiType.ACTORV3, 'unmanaged', payload)
 
-        return types.CertificateInfoType(
-            private_key=result['private_key'],
-            server_certificate=result['server_certificate'],
-            password=result['password'],
-            ciphers=result.get('ciphers', ''),
-        )
+        return types.CertificateInfo.fromDict(result)
 
-    def login(
+    async def ready(self, secret: str, ip: str, port: int) -> types.CertificateInfo:
+        payload = {'token': self.token, 'secret': secret, 'ip': ip, 'port': port}
+        result = await self._doPost(types.ApiType.ACTORV3, 'ready', payload)
+
+        return types.CertificateInfo.fromDict(result)
+
+    async def notify_new_ip(self, secret: str, ip: str, port: int) -> types.CertificateInfo:
+        payload = {'token': self.token, 'secret': secret, 'ip': ip, 'port': port}
+        result = await self._doPost(types.ApiType.ACTORV3, 'ipchange', payload)
+
+        return types.CertificateInfo.fromDict(result)
+
+    async def notify_login(
         self,
-        actor_type: typing.Optional[str],
-        token: str,
+        actor_type: str,
         username: str,
         session_type: str,
-        interfaces: typing.Iterable[types.InterfaceInfoType],
-        secret: typing.Optional[str],
-    ) -> types.LoginResultInfoType:
-        if not token:
-            return types.LoginResultInfoType(
-                ip='0.0.0.0', hostname=UNKNOWN, dead_line=None, max_idle=None, session_id=None
-            )
+    ) -> types.LoginResultInfo:
         payload = {
-            'type': actor_type or types.MANAGED,
-            'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
-            'token': token,
+            'type': actor_type,
+            'token': self.token,
             'username': username,
             'session_type': session_type,
-            'secret': secret or '',
         }
-        result = self._doPost('login', payload)
-        return types.LoginResultInfoType(
-            ip=result['ip'],
-            hostname=result['hostname'],
-            dead_line=result['dead_line'],
-            max_idle=result['max_idle'],
-            session_id=result.get('session_id', ''),
-        )
+        result = await self._doPost(types.ApiType.ACTORV3, 'login', payload)
+        return types.LoginResultInfo.fromDict(result)
 
-    def logout(
+    async def notify_logout(
         self,
-        actor_type: typing.Optional[str],
-        token: str,
+        actor_type: str,
         username: str,
         session_id: str,
         session_type: str,
-        interfaces: typing.Iterable[types.InterfaceInfoType],
-        secret: typing.Optional[str],
     ) -> typing.Optional[str]:
-        if not token:
-            return None
         payload = {
-            'type': actor_type or types.MANAGED,
-            'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
-            'token': token,
+            'type': actor_type,
+            'token': self.token,
             'username': username,
             'session_type': session_type,
             'session_id': session_id,
-            'secret': secret or '',
         }
-        return self._doPost('logout', payload)  # Can be 'ok' or 'notified'
+        return await self._doPost(types.ApiType.ACTORV3, 'logout', payload)  # Can be 'ok' or 'notified'
 
-    def log(self, own_token: str, level: int, message: str) -> None:
-        if not own_token:
-            return
-        payLoad = {'token': own_token, 'level': level, 'message': message}
-        self._doPost('log', payLoad)  # Ignores result...
+    async def log(self, level: types.LogLevel, message: str) -> None:
+        """Sends a log message to UDS Server
 
-    def test(self, master_token: str, actorType: typing.Optional[str]) -> bool:
+        Args:
+            token: Token to use
+            level: Level of log message
+            message: Message to send
+            user_service: If present, the uuid of the user service that is sending the message
+        """
         payLoad = {
-            'type': actorType or types.MANAGED,
-            'token': master_token,
+            'token': self.token,
+            'level': level.value,
+            'message': message,
         }
-        return self._doPost('test', payLoad) == 'ok'
+        await self._doPost(
+            types.ApiType.ACTORV3,
+            'log',
+            payLoad=payLoad,
+        )
+
+    # Helper to execute async rest in sync mode
+    # For use with configurator
+    @staticmethod
+    def sync(
+        f: collections.abc.Callable[..., typing.Any], *args: typing.Any, **kwargs: typing.Any
+    ) -> typing.Any:
+        try:
+            loop = asyncio.get_event_loop()  # Get or create event loop
+            return loop.run_until_complete(f(*args, **kwargs))
+        except Exception as e:
+            logger.error('Exception on sync: %s', e)
+            raise
 
 
-class UDSClientApi(UDSApi, metaclass=tools.Singleton):
+#
+# Client Connection to APP Server using REST and asyncio
+#
+class PrivateREST:  # pylint: disable=too-few-public-methods
+    """
+    Base for remote api accesses
+    """
+
     _session_id: str = ''
-    _callback_url: str = ''
+    _session_type: str = ''
 
-    def __init__(self) -> None:
-        super().__init__('127.0.0.1:{}'.format(LISTEN_PORT), False)
+    _url: str
+    _context: 'ssl.SSLContext'
 
-        # Replace base url
-        self._url = "https://{}/ui/".format(self._host)
+    def __init__(self, ipv6: bool = False) -> None:
+        self._url = f'https://{"127.0.0.1" if not ipv6 else "[::1]"}:{consts.LISTEN_PORT}{consts.BASE_PRIVATE_REST_PATH}/'
 
-    def _api_url(self, method: str) -> str:
+        self._context = ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
+
+        # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
+        self._context.minimum_version = ssl.TLSVersion.TLSv1_2  # Local connection, no need for more
+
+    @property
+    def _headers(self) -> typing.MutableMapping[str, str]:
+        return {
+            'Content-Type': 'application/json',
+            'User-Agent': 'UDS Actor Client v{}'.format(consts.VERSION),
+        }
+
+    def _urlFor(self, method: str) -> str:
         return self._url + method
 
-    def post(
+    async def _doPost(
         self,
         method: str,  # i.e. 'initialize', 'ready', ....
-        payLoad: typing.MutableMapping[str, typing.Any],
+        payLoad: collections.abc.Mapping[str, typing.Any],
+        headers: typing.Optional[collections.abc.Mapping[str, str]] = None,
     ) -> typing.Any:
-        return self._doPost(method=method, payLoad=payLoad, disableProxy=True)
+        headers = headers or self._headers
+        result = None
+        data = ''
+        async with aiohttp.ClientSession() as session:
+            try:
+                result = await session.post(
+                    self._urlFor(method),
+                    data=json.dumps(payLoad),
+                    headers=headers,
+                    ssl=self._context,
+                    timeout=consts.TIMEOUT,
+                )
+                if result.ok:
+                    j = await result.json()
+                    return j
+            except aiohttp.client_exceptions.ClientConnectorError as e:
+                raise exceptions.RESTConnectionError(str(e))
+            except Exception as e:
+                data = str(e)
 
-    def register(self, callback_url: str) -> None:
-        self._callback_url = callback_url
-        payLoad = {'callback_url': callback_url}
-        self.post('register', payLoad)
+            # Error, get it back
+            if result and not data:
+                try:
+                    data = await result.json()
+                except Exception:
+                    data = await result.text()
 
-    def unregister(self, callback_url: str) -> None:
-        payLoad = {'callback_url': callback_url}
-        self.post('unregister', payLoad)
-        self._callback_url = ''
+            raise exceptions.RESTError(data)
 
-    def login(
+    async def communicate(
+        self, processor: collections.abc.Callable[[str], collections.abc.Awaitable[None]]
+    ) -> None:
+        """Communicates with server using websocket
+        This method will call processor for each message received from server
+
+        Args:
+            processor: A callable that will receive the message as a string
+
+        Note:
+            This method will not return until cancelled, or "exceptione.RequesStop" is raised
+            from the processor callable.
+
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(self._urlFor('ws')) as ws:
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            await processor(msg.data)
+                        elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                            await processor('close')
+            # Note that if server closes connections, but we have not "cancelled" this task, it will retry
+            # forever, so we need to sleep a bit before retrying also
+        except exceptions.RequestStop:
+            logger.info('RequestStop received, stopping')
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error('Exception on websocket: %s', e)
+            await asyncio.sleep(2)
+
+    async def user_login(
         self, username: str, sessionType: typing.Optional[str] = None
-    ) -> types.LoginResultInfoType:
-        payLoad = {
+    ) -> types.LoginResultInfo:
+        self._session_type = sessionType or consts.UNKNOWN
+        payload = {
             'username': username,
-            'session_type': sessionType or UNKNOWN,
-            'callback_url': self._callback_url,  # So we identify ourselves
+            'session_type': self._session_type,
         }
-        result = self.post('login', payLoad)
-        res = types.LoginResultInfoType(
-            ip=result['ip'],
-            hostname=result['hostname'],
-            dead_line=result['dead_line'],
-            max_idle=result['max_idle'],
-            session_id=result['session_id'],
-        )
-        # Store session id for future use
-        self._session_id = res.session_id or ''
-        return res
+        result = await self._doPost('user_login', payload)
 
-    def logout(self, username: str, sessionType: typing.Optional[str] = None) -> None:
-        payLoad = {
+        try:
+            res = types.LoginResultInfo.fromDict(result)
+            self._session_id = res.session_id or ''
+            return res
+        except Exception:
+            raise Exception('Invalid ticket received from UDS Broker.')
+
+    async def user_logout(self, username: str, session_id: str) -> None:
+        payload = {
             'username': username,
-            'session_type': sessionType or UNKNOWN,
-            'callback_url': self._callback_url,  # So we identify ourselves
+            'session_type': self._session_type or consts.UNKNOWN,
             'session_id': self._session_id,  # We now know the session id, provided on login
         }
-        self.post('logout', payLoad)
+        await self._doPost('user_logout', payload)  # Can be 'ok' or 'notified'
 
-    def ping(self) -> bool:
-        return self.post('ping', {}) == 'pong'
+    async def log(self, level: types.LogLevel, message: str, userservice_uuid: str | None = None) -> None:
+        payLoad = {'userservice_uuid': userservice_uuid, 'level': level.value, 'message': message}
+        await self._doPost('log', payLoad)  # Ignores result...

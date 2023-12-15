@@ -1,119 +1,208 @@
-# -*- coding: utf-8 -*-
-#
-# Copyright (c) 2014-2019 Virtual Cable S.L.
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without modification,
-# are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright notice,
-#      this list of conditions and the following disclaimer.
-#    * Redistributions in binary form must reproduce the above copyright notice,
-#      this list of conditions and the following disclaimer in the documentation
-#      and/or other materials provided with the distribution.
-#    * Neither the name of Virtual Cable S.L. nor the names of its contributors
-#      may be used to endorse or promote products derived from this software
-#      without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-'''
-@author: Adolfo Gómez, dkmaster at dkmon dot com
-'''
-# pylint: disable=invalid-name
-import traceback
-import sys
+import asyncio
+import logging
+import logging.handlers
+import os
+import tempfile
 import typing
+import collections.abc
 
-if sys.platform == 'win32':
-    from .windows.log import LocalLogger
-elif sys.platform == 'darwin':
-    from .macos.log import LocalLogger
-else:
-    from .linux.log import LocalLogger
+from . import consts, platform, types, utils, rest
 
-# Not imported at runtime, just for type checking
-if typing.TYPE_CHECKING:
-    from . import rest
 
-# Valid logging levels, from UDS Broker (uds.core.utils.log)
-from .loglevel import OTHER, DEBUG, INFO, WARN, ERROR, FATAL
+class UDSBrokerLogger(metaclass=utils.Singleton):
+    """
+    Logger that will log to remote log if we are a service
+    """
 
-class Logger:
-    remoteLogger: typing.Optional['rest.UDSServerApi']
-    own_token: str
-    logLevel: int
-    localLogger: LocalLogger
+    # Note, once initialized api, it will remain the same for all instances
+    # Even if RemoteLogger is reinstanced
+    api: 'rest.BrokerREST | rest.PrivateREST |None'
+    def_userservice_uuid: "str | None"
+    log_queue: asyncio.Queue
+    # flag to indicate we are emitting a log message
+    # This is used to avoid circular logging
+    emitting: bool
 
     def __init__(self) -> None:
-        self.logLevel = INFO
-        self.localLogger = LocalLogger()
-        self.remoteLogger = None
-        self.own_token = ''  # nosec: This is no password at all
+        self.api = None
+        self.log_queue = asyncio.Queue()
+        self.def_userservice_uuid = None
+        self.emitting = False
 
-    def setLevel(self, level: typing.Union[str, int]) -> None:
-        '''
-        Sets log level filter (minimum level required for a log message to be processed)
-        :param level: Any message with a level below this will be filtered out
-        '''
-        self.logLevel = int(level)  # Ensures level is an integer or fails
+    @staticmethod
+    def manager() -> 'UDSBrokerLogger':
+        """
+        Returns the singleton instance of this class
+        """
+        return UDSBrokerLogger()
 
-    def setRemoteLogger(self, remoteLogger: 'rest.UDSServerApi', own_token: str) -> None:
-        self.remoteLogger = remoteLogger
-        self.own_token = own_token
+    async def _log(self, level: int, message: str, userservice_uuid: str | None = None) -> None:
+        """
+        Logs a message to remote log
+        """
+        if self.api:
+            self.emitting = True
+            await self.api.log(
+                level=types.LogLevel.fromPython(level), message=message
+            )
+            self.emitting = False
 
-    def enableServiceLogger(self):
-        if self.localLogger.windows:
-            self.localLogger.serviceLogger = True
+    @staticmethod
+    def setDefaults(userservice_uuid: str | None = None) -> None:
+        """
+        Sets the default userservice_uuid to be used in all log calls
+        """
+        UDSBrokerLogger.manager().def_userservice_uuid = userservice_uuid
 
-    def log(self, level: typing.Union[str, int], message: str, *args) -> None:
-        level = int(level)
-        if level < self.logLevel:  # Skip not wanted messages
-            return
+    @staticmethod
+    async def waitAndSendLogs(forever: bool = True) -> None:
+        """
+        Waits for log messages and logs them
 
-        msg = message % args
-        # If remote logger is available, notify message to it (except DEBUG messages OFC)
+        Will stop when cancelled
+        """
+        async def process_log(level: int, message: str, userservice_uuid: str | None = None) -> None:
+            await UDSBrokerLogger.manager()._log(
+                level, message, userservice_uuid or UDSBrokerLogger.manager().def_userservice_uuid
+            )
+        if forever:
+            while True:
+                try:
+                    level, message, userservice_uuid = await UDSBrokerLogger.manager().log_queue.get()
+                    await process_log(level, message, userservice_uuid)
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    pass
+        else:
+            try:
+                while True:
+                    level, message, userservice_uuid = UDSBrokerLogger.manager().log_queue.get_nowait()
+                    await process_log(level, message, userservice_uuid)
+            except asyncio.QueueEmpty:
+                pass
+
+    @staticmethod
+    def log(level: int, message: str, userservice_uuid: str | None = None) -> None:
+        """
+        Logs a message to remote log, using the default userservice_uuid if not specified
+        """
         try:
-            if self.remoteLogger and level >= DEBUG:
-                self.remoteLogger.log(self.own_token, level, msg)
-        except Exception as e:
-            self.localLogger.log(DEBUG, 'Log to broker: {}'.format(e))
-
-        self.localLogger.log(level, msg)
-
-    def debug(self, message: str, *args) -> None:
-        self.log(DEBUG, message, *args)
-
-    def warn(self, message: str, *args) -> None:
-        self.log(WARN, message, *args)
-
-    def info(self, message: str, *args) -> None:
-        self.log(INFO, message, *args)
-
-    def error(self, message: str, *args) -> None:
-        self.log(ERROR, message, *args)
-
-    def fatal(self, message: str, *args) -> None:
-        self.log(FATAL, message, *args)
-
-    def exception(self) -> None:
-        try:
-            tb = traceback.format_exc()
+            if not UDSBrokerLogger.manager().emitting:
+                UDSBrokerLogger.manager().log_queue.put_nowait((level, message, userservice_uuid))
+            # If emitting, we are in a log call, so we cannot log again
         except Exception:
-            tb = '(could not get traceback!)'
-
-        self.log(DEBUG, tb)
-
-    def flush(self) -> None:
-        pass
+            pass  # Eat exception, we are not interested in it
 
 
-logger = Logger()
+def setup_log(
+    *,
+    filename: str | None = None,
+    level: str | None = None,
+    type: typing.Literal['service', 'config', 'client', 'initial'] = 'initial',
+    cfg: types.ActorConfiguration | None = None
+) -> None:
+    """
+    Sets up the logging system
+
+    Args:
+        filename: Log file name (defaults to $TEMP/rdsserver.log)
+        level: Log level (defaults to INFO)
+        type: Type of log (service, config, client, initial)
+          - service: We are a service, so we will log to windows event log
+          - config: We are a config tool, so we will not log to remote log
+          - client: We are a client, so we will log to remote log (in fact, remote "local" log)
+          - initial: We are initializing, so we will not log to remote log
+        cfg: Configuration to use
+
+    Returns:
+        None
+    """
+    filename = filename or os.path.join(
+        tempfile.gettempdir(), ('udsappserver.log' if type == 'server' else 'udsapp.log')
+    )
+
+    new_handlers: list[logging.Handler] = [
+        logging.handlers.RotatingFileHandler(filename, maxBytes=1024 * 1024 * 10, backupCount=5),
+    ]
+
+    # If is a service, add service logger
+    if type == 'service':
+        logger = platform.Platform.platform().logger
+        if logger:
+            new_handlers.append(logger)
+        if cfg:
+            setup_remotelog(cfg)
+            new_handlers.append(UDSRemoteLogHandler(remote_logger=UDSBrokerLogger.manager()))
+    elif type == 'client':
+        setup_remotelog(None)
+        new_handlers.append(UDSRemoteLogHandler(remote_logger=UDSBrokerLogger.manager()))
+    else:
+        pass  # For config or initially, there is no remote log
+
+    # If debug feature requested, set level to debug, else to info
+    level = (level or 'INFO') if not consts.DEBUG else 'DEBUG'
+    levels = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL,
+    }
+
+    print('Logging to {}'.format(filename))
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)s %(message)s',
+        level=levels.get(level, logging.INFO),
+        handlers=new_handlers,
+        force=True,  # Force to use our handlers
+    )
+
+
+def setup_remotelog(cfg: typing.Optional[types.ActorConfiguration]) -> None:
+    """
+    Sets up the remote logging system
+
+    Args:
+        cfg: Configuration to use
+
+    Returns:
+        None
+    """
+    if cfg:
+        UDSBrokerLogger.manager().api = rest.BrokerREST(cfg.host, cfg.validateCertificate, cfg.token)
+    else:
+        UDSBrokerLogger.manager().api = rest.PrivateREST()
+
+
+class UDSRemoteLogHandler(logging.Handler):
+    """
+    Custom log handler for UDS that will log to windows event log if we are a service
+    """
+
+    _remote_logger: 'UDSBrokerLogger'
+
+    def __init__(self, remote_logger: 'UDSBrokerLogger') -> None:
+        super().__init__()
+        self._remote_logger = remote_logger
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # To avoid circular imports and loading manager before apps are ready
+        # pylint: disable=import-outside-toplevel
+
+        msg = record.getMessage()
+        try:
+            self._remote_logger.log(
+                level=record.levelno,
+                message=msg,
+            )
+        except Exception:
+            pass
+
+    def __eq__(self, other: object) -> bool:
+        """Equality operator.
+        Used for testing purposes.
+        """
+        if not isinstance(other, UDSRemoteLogHandler):
+            return False
+        return True  # RemoteLogger is a singleton, so it will always be the same
