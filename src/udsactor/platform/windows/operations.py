@@ -285,7 +285,11 @@ class WindowsOperations(Operations):
         try:
             # subprocess.call([r'c:\WINDOWS\System32\w32tm.exe', ' /resync'])  # , '/rediscover'])
             p = await asyncio.create_subprocess_exec(
-                r'c:\WINDOWS\System32\w32tm.exe', '/resync', stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                r'c:\WINDOWS\System32\w32tm.exe',
+                '/resync',
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
             )  # , '/rediscover'])
             await p.wait()
         except Exception as e:

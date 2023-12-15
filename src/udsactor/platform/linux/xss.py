@@ -121,11 +121,18 @@ async def initIdleDuration(atLeastSeconds: int) -> None:
     if atLeastSeconds:
         try:
             p = await asyncio.create_subprocess_exec(
-                '/usr/bin/xset', 's', '{}'.format(atLeastSeconds + 30)
+                '/usr/bin/xset', 's', '{}'.format(atLeastSeconds + 30),
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
             )
             await p.wait()
+            # This may not be supported, but we try it anyway
             p = await asyncio.create_subprocess_exec(
-                '/usr/bin/xset', 'dpms', '0', '0', '0'
+                '/usr/bin/xset', 'dpms', '0', '0', '0',
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
             )
             await p.wait()
         except Exception as e:
