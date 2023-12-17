@@ -11,16 +11,16 @@ import collections.abc
 
 from unittest import IsolatedAsyncioTestCase
 
-from udsactor import platform, types, consts
+from udsactor import native, types, consts
 
 from .utils.tools import rnd_string_for_test
 
 
 class TestOperations(IsolatedAsyncioTestCase):
-    operations: 'platform.abc.Operations'
+    operations: 'native.abc.Operations'
 
     def setUp(self) -> None:
-        self.operations = platform.Platform.platform().operations
+        self.operations = native.Manager.instance().operations
 
     async def test_user_is_admin(self) -> None:
         self.assertIn(await self.operations.IsUserAnAdmin(), (True, False))

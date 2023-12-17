@@ -40,7 +40,7 @@ import logging
 import threading
 import asyncio
 
-from udsactor import types, comms, managed, unmanaged, rest, platform, server_msg_processor as msg_processor, log
+from udsactor import globals, types, managed, unmanaged, rest, native, server_msg_processor as msg_processor, log
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,8 @@ if typing.TYPE_CHECKING:
 # Actor server runs on its own thread, so we can use asyncio.run() to run the main task
 # And keep the service running until the main finishes (or the service is stopped)
 class UDSActorServer(threading.Thread):
+    stopEvent: typing.ClassVar[threading.Event] = threading.Event()
+    
     def __init__(self) -> None:
         super().__init__()
 
@@ -58,11 +60,11 @@ class UDSActorServer(threading.Thread):
         # Run the mainAsyncTask, and store the task to check if it has finished
         task = asyncio.create_task(self.main())
 
-        while not comms.stopEvent.is_set():
+        while not UDSActorServer.stopEvent.is_set():
             await asyncio.sleep(1)
             # Check if the task has finished
             if task.done():
-                comms.stopEvent.set()
+                UDSActorServer.stopEvent.set()
 
                 # Try to get result of main task
                 try:
@@ -104,11 +106,11 @@ class UDSActorServer(threading.Thread):
         logger.debug('Stopping UDSActorServer')
 
         # Ensure service knows that we are done. (an unhanded exception could have stoppped our loop without setting the event)
-        if not comms.stopEvent.is_set():
-            comms.stopEvent.set()  # Ensure stopEvent is set
+        if not UDSActorServer.stopEvent.is_set():
+            UDSActorServer.stopEvent.set()  # Ensure stopEvent is set
 
     async def main(self) -> None:
-        cfg = await platform.Platform.platform().config
+        cfg = await native.Manager.instance().config
 
         # Not configured, simply stop
         if not cfg.is_empty():
@@ -134,7 +136,7 @@ class UDSActorServer(threading.Thread):
         # First, wait for interfaces to be available BEFORE trying to initialize anything
         logger.info('Waiting for network connectivity')
         while True:
-            interfaces = await platform.Platform.platform().operations.validNetworkCards()
+            interfaces = await native.Manager.instance().operations.validNetworkCards()
             if len(interfaces) > 0:
                 break
 

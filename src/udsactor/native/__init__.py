@@ -36,7 +36,7 @@ from . import abc
 from udsactor import utils, types
 
 
-class Platform(metaclass=utils.Singleton):
+class Manager(metaclass=utils.Singleton):
     cfgManager: abc.ConfigReader
     operations: abc.Operations
     runner: abc.Runner
@@ -66,8 +66,8 @@ class Platform(metaclass=utils.Singleton):
             raise Exception('Unsupported platform')
 
     @staticmethod
-    def platform() -> 'Platform':
-        return Platform()  # As singleton, this will always return the same instance
+    def instance() -> 'Manager':
+        return Manager()  # As singleton, this will always return the same instance
 
     @property
     async def config(self) -> types.ActorConfiguration:

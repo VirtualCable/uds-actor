@@ -12,7 +12,7 @@ import aiohttp.web
 
 from ...routes import routes
 
-from udsactor import types, platform, consts
+from udsactor import types, native, consts
 from udsactor.webserver.utils import response
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ import logging
 import collections.abc
 
 from udsactor import types, utils, rest
-from udsactor.platform import Platform
+from udsactor.native import Manager
 
 if typing.TYPE_CHECKING:
     from udsactor.server import UDSActorServer
@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 class ActorProcessor(abc.ABC):
-    platform: 'Platform'
+    platform: 'Manager'
     _cfg: typing.Optional['types.ActorConfiguration']
     _api: typing.Optional['rest.BrokerREST']
 
     def __init__(self) -> None:
-        self.platform = Platform.platform()
+        self.platform = Manager.instance()
         self._cfg = None
         self._api = None
 

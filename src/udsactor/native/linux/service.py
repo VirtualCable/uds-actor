@@ -4,7 +4,7 @@ import asyncio
 import sys
 import signal
 
-
+from udsactor import consts, rest, native
 from .server import LinuxUDSActorServer
 from ..abc import Runner
 
@@ -27,9 +27,14 @@ async def login(username: str) -> None:
     Logs in a user
     """
     logger.debug('Logging in user %s', username)
-    # client: rest.UDSClientApi = rest.UDSClientApi()
-    # r = client.login(username, platform.operations.getSessionType())
-    # print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
+    client = rest.PrivateREST()
+    r = await client.user_login(
+        username=username, sessionType=await native.Manager.instance().operations.getSessionType()
+    )
+    print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
+    # Store session id on /tmp/udsactor.session file, so it can be used by logout if present
+    with open(consts.CLIENT_SESSION_ID_FILE, 'w', encoding='utf8') as f:
+        f.write(r.session_id or '')
 
 
 async def logout(username: str) -> None:
@@ -37,8 +42,12 @@ async def logout(username: str) -> None:
     Logs out a user
     """
     logger.debug('Logging out user %s', username)
-    # client: rest.UDSClientApi = rest.UDSClientApi()
-    # client.logout(username, platform.operations.getSessionType())
+    client = rest.PrivateREST()
+    # Try to get session id from /tmp/udsactor.session file
+    with open(consts.CLIENT_SESSION_ID_FILE, 'r', encoding='utf8') as f:
+        session_id = f.read()
+    await client.user_logout(username=username, session_id=session_id)
+
 
 class LinuxRunner(Runner):
     def run(self) -> None:

@@ -8,7 +8,7 @@ import typing
 import asyncio
 import logging
 
-from udsactor import log, platform, webserver
+from udsactor import log, native, webserver
 
 logger = logging.getLogger(__name__)
 

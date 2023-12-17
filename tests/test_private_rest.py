@@ -8,7 +8,7 @@ import asyncio
 from unittest import mock
 
 
-from udsactor import rest, managed, comms
+from udsactor import rest, managed, consts
 
 from .utils import rest_server, fixtures, fake_uds_server, exclusive_tests
 

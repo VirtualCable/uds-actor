@@ -12,7 +12,7 @@ import collections.abc
 import aiohttp
 import aiohttp.web
 
-from udsactor import consts, rest, types, cert, comms, server_msg_processor
+from udsactor import consts, globals, rest, types, cert, server_msg_processor
 
 # To ensure loading and registering of methods, they have decorators
 # that register themselfs on "routes" for aiohttp web server
@@ -54,7 +54,7 @@ async def security_checks(
     # where AUTH_TOKEN is the auth token to be checked
     try:
         received_token = request.path.split('/')[2]
-        if received_token != comms.secret:
+        if received_token != globals.secret:
             raise Exception('Invalid token')
     except Exception:
         raise aiohttp.web.HTTPForbidden()
@@ -99,7 +99,7 @@ async def server(
     await runner.setup()
     site = aiohttp.web.TCPSite(
         runner=runner,
-        host=cfg.listen_address,
+        host='0.0.0.0',  # Listen on all interfaces, localhost included
         port=consts.LISTEN_PORT,
         ssl_context=ssl_context,
         reuse_address=True,

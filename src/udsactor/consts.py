@@ -73,6 +73,9 @@ UNKNOWN: typing.Final[str] = 'unknown'
 BASE_PUBLIC_REST_PATH: typing.Final[str] = '/actor'
 
 
+CLIENT_SESSION_ID_FILE: typing.Final[str] = '/tmp/udsactor.session'
+
+
 # For composing paths for public rest
 def PUBLIC_REST_PATH(method: str) -> str:
     return f'{BASE_PUBLIC_REST_PATH}/{{auth_token}}/{method}'
@@ -119,4 +122,3 @@ SECURE_CIPHERS: typing.Final[str] = (
     ':ECDHE-ECDSA-AES256-GCM-SHA384'
     ':ECDHE-ECDSA-CHACHA20-POLY1305'
 )
-

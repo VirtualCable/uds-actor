@@ -118,11 +118,6 @@ class ActorConfiguration(typing.NamedTuple):
 
     data: typing.Optional[dict[str, typing.Any]] = None
 
-    @property
-    def listen_address(self) -> str:
-        # If listen_address is ::, will only listen on ipv6
-        return '0.0.0.0'  # Currently, listens on all interfaces, ipv4 and ipv6
-
     def is_empty(self) -> bool:
         return not bool(self.host) or not bool(self.token)
 

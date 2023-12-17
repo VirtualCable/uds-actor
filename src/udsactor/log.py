@@ -6,7 +6,7 @@ import tempfile
 import typing
 import collections.abc
 
-from . import consts, platform, types, utils, rest
+from . import consts, native, types, utils, rest
 
 
 class UDSBrokerLogger(metaclass=utils.Singleton):
@@ -128,7 +128,7 @@ def setup_log(
 
     # If is a service, add service logger
     if type == 'service':
-        logger = platform.Platform.platform().logger
+        logger = native.Manager.instance().logger
         if logger:
             new_handlers.append(logger)
         if cfg:

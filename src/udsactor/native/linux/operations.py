@@ -50,7 +50,7 @@ except ImportError:  # Platform may not include prctl, so in case it's not avail
 
 
 from udsactor import types
-from udsactor.platform.abc import Operations
+from udsactor.native.abc import Operations
 
 from .renamer import rename
 from . import xss

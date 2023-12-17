@@ -20,7 +20,7 @@ from udsactor import (
     types,
     consts,
     webserver,
-    platform,
+    native,
     server as server_module,
     managed,
     unmanaged,
@@ -30,7 +30,7 @@ from . import fixtures
 from .cert import generate_cert
 
 
-class NoReaderWriter(platform.abc.ConfigReader):
+class NoReaderWriter(native.abc.ConfigReader):
     cfg: types.ActorConfiguration
 
     def __init__(self, cfg: types.ActorConfiguration):
@@ -53,7 +53,7 @@ async def setup(
     cfg = fixtures.configuration(token, udsserver_port)
 
     # Override "save" config, platform provided config, etc..
-    p = platform.Platform.platform()
+    p = native.Manager.instance()
     # Ensure own is used
     p.cfgManager = NoReaderWriter(cfg)
     p.cfg = None  # Cleans up cfg
