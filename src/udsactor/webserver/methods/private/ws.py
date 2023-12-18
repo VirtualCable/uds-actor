@@ -32,7 +32,7 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     outgoingQueue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
     ).incomingQueue  # Our outgoing queue is the incoming queue of the processor
-    
+
     incomingQueue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
     ).outgoingQueue  # Our incoming queue is the outgoing queue of the processor
@@ -44,7 +44,11 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     ws = aiohttp.web.WebSocketResponse()
     await ws.prepare(request)
     logger.debug('Websocket connection ready')
-
+    
+    # helper to send Ok message
+    async def send_ok():
+        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.OK).asDict())
+        
     # Process incomming messages and also process messages from queue
     async def process_queue():
         while True:
@@ -54,21 +58,36 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
             await ws.send_json(msg.asDict())
 
     async def process_ws():
-        async for msg in ws:
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                data = msg.json()
-                message = types.UDSMessage(**data)
-                if message.msg_type == types.UDSMessageType.CLOSE:
-                    # Close connection, notify logout
-                    await outgoingQueue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT))
-                    await ws.close()
-                elif message.msg_type == types.UDSMessageType.PING:
-                    await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).asDict())
-                else:
-                    # Log strange messages
-                    logger.warning('Unknown message received: %s', message)
-            elif msg.type == aiohttp.WSMsgType.ERROR:
-                logger.error('ws connection closed with exception %s', ws.exception())
+        try:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = msg.json()
+                    message = types.UDSMessage(**data)
+                    if message.msg_type == types.UDSMessageType.CLOSE:
+                        # Close connection, respond to it an notify logout to outgoing queue
+                        await send_ok()
+                        await outgoingQueue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT))
+                        await ws.close()
+                    elif message.msg_type == types.UDSMessageType.PING:
+                        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).asDict())
+                    elif message.msg_type == types.UDSMessageType.LOG:
+                        await send_ok()
+                        await outgoingQueue.put(message)
+                    elif message.msg_type == types.UDSMessageType.LOGIN:
+                        await send_ok()
+                        await outgoingQueue.put(message)
+                    elif message.msg_type == types.UDSMessageType.LOGOUT:
+                        await send_ok()
+                        await outgoingQueue.put(message)
+                    else:
+                        # Log strange messages
+                        logger.warning('Unknown message received: %s', message)
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    logger.error('ws connection closed with exception %s', ws.exception())
+        except asyncio.CancelledError:
+            logger.debug('Websocket connection cancelled')
+        except Exception as e:
+            logger.exception('Exception on websocket connection: %s', e)
 
     # Start tasks, and wait for them to finish (first one to finish will close the connection)
     await asyncio.gather(process_queue(), process_ws())

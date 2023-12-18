@@ -44,14 +44,15 @@ class LogLevel(enum.IntEnum):
 
 
 class UDSMessageType(enum.StrEnum):
-    MESSAGE = 'message'
-    SCREENSHOT = 'screenshot'
-    LOGIN = 'login'
-    LOGOUT = 'logout'
-    CLOSE = 'close'
-    PING = 'ping'
-    PONG = 'pong'
-    LOG = 'log'
+    MESSAGE = 'message'  # Data is the message to be shown (str), response is an Ok Message
+    SCREENSHOT = 'screenshot'  # Data is the screenshot (bytes, png or jpeg) or None depending if it is for the server of for the client
+    LOGIN = 'login'  # Data is either a dict of {'username': str, 'session_type': str} or a LoginResultInfo, depending if it is for the server of for the client
+    LOGOUT = 'logout'  # Data is either a dict of {'username': str, 'session_type': str, 'session_id': str} or an Ok Message, depending if it is for the server of for the client
+    CLOSE = 'close'  # No data, response is an Ok Message
+    PING = 'ping'  # No data, response is a Pong Message
+    PONG = 'pong'  # No data, only used in response to a ping
+    LOG = 'log'  # Data is a dict of {'level': int, 'message': str}, response is an Ok Message
+    OK = 'ok'  # No data, This is a response to a message that does not need a response :)
 
 
 class UDSMessage(typing.NamedTuple):
@@ -149,7 +150,7 @@ class LoginResultInfo(typing.NamedTuple):
     @property
     def is_logged_in(self) -> bool:
         return bool(self.session_id)
-    
+
     @property
     def is_empty(self) -> bool:
         return not bool(self.ip) and not bool(self.hostname)
@@ -171,7 +172,6 @@ class LoginResultInfo(typing.NamedTuple):
 
     def asDict(self) -> dict[str, typing.Any]:
         return self._asdict()
-    
 
 
 class ClientInfo(typing.NamedTuple):

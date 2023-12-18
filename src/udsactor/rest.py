@@ -345,8 +345,6 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             else None,
         )
 
-
-
     # The flow for initialization of an unmanaged actor is:
     # * Actor is started
     # * Actor gets interfaces
@@ -456,6 +454,8 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
     Base for remote api accesses
     """
 
+    _queue: asyncio.Queue[types.UDSMessage]
+
     _session_id: str = ''
     _session_type: str = ''
 
@@ -463,6 +463,8 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
     _context: 'ssl.SSLContext'
 
     def __init__(self, ipv6: bool = False) -> None:
+        self._queue = asyncio.Queue()
+
         self._url = f'https://{"127.0.0.1" if not ipv6 else "[::1]"}:{consts.LISTEN_PORT}{consts.BASE_PRIVATE_REST_PATH}/'
 
         self._context = ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
@@ -516,36 +518,50 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
             raise exceptions.RESTError(data)
 
     async def communicate(
-        self, processor: collections.abc.Callable[[str], collections.abc.Awaitable[None]]
+        self, processor: collections.abc.Callable[[types.UDSMessage], collections.abc.Awaitable[None]]
     ) -> None:
         """Communicates with server using websocket
         This method will call processor for each message received from server
 
         Args:
-            processor: A callable that will receive the message as a string
+            processor: An async callable that will receive the message as a string, and returns nothing
 
         Note:
             This method will not return until cancelled, or "exceptione.RequesStop" is raised
             from the processor callable.
-
         """
+
+        async def process_incoming(ws: aiohttp.ClientWebSocketResponse) -> None:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    await processor(types.UDSMessage(**msg.json()))
+                elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                    await processor(types.UDSMessage(msg_type=types.UDSMessageType.CLOSE))
+
+        async def proces_outgoing(ws: aiohttp.ClientWebSocketResponse) -> None:
+            while True:
+                msg = await self._queue.get()
+                if msg is None:
+                    break
+                await ws.send_json(msg.asDict())
+
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(self._urlFor('ws')) as ws:
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            await processor(msg.data)
-                        elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
-                            await processor('close')
+                async with session.ws_connect(self._urlFor('ws'), ssl=self._context) as ws:
+                    await asyncio.gather(process_incoming(ws), proces_outgoing(ws))
             # Note that if server closes connections, but we have not "cancelled" this task, it will retry
             # forever, so we need to sleep a bit before retrying also
         except exceptions.RequestStop:
+            # Stop requested, fine...
             logger.info('RequestStop received, stopping')
         except asyncio.CancelledError:
+            # Cancel received, propagate it (fine also :)
             raise
         except Exception as e:
-            logger.error('Exception on websocket: %s', e)
-            await asyncio.sleep(2)
+            raise  # Not expected, so raise it
+            
+    async def send_message(self, msg: types.UDSMessage) -> None:
+        await self._queue.put(msg)
 
     async def user_login(
         self, username: str, sessionType: typing.Optional[str] = None

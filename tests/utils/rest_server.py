@@ -30,6 +30,12 @@ from . import fixtures
 from .cert import generate_cert
 
 
+class SetupResult(typing.NamedTuple):
+    client: aiohttp.ClientSession
+    msg_server: server_msg_processor.MessagesProcessor
+    actor_server: server_module.UDSActorServer
+
+
 class NoReaderWriter(native.abc.ConfigReader):
     cfg: types.ActorConfiguration
 
@@ -49,7 +55,7 @@ class NoReaderWriter(native.abc.ConfigReader):
 @contextlib.asynccontextmanager
 async def setup(
     udsserver_port: int = 8443, token: str | None = None, for_unmanaged: bool = False
-) -> collections.abc.AsyncGenerator[aiohttp.ClientSession, None]:
+) -> collections.abc.AsyncGenerator[SetupResult, None]:
     cfg = fixtures.configuration(token, udsserver_port)
 
     # Override "save" config, platform provided config, etc..
@@ -87,7 +93,7 @@ async def setup(
     # Create aiohttp client
     client = aiohttp.ClientSession(headers={'Content-Type': 'application/json'})
     try:
-        yield client
+        yield SetupResult(client=client, msg_server=msgServer, actor_server=server)
     finally:
         try:
             web_task.cancel()

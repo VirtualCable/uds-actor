@@ -21,7 +21,7 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
     async def test_information(self) -> None:
         return
         async with rest_server.setup(token=fake_uds_server.TOKEN) as conn:
-            async with conn.get('/information') as resp:
+            async with conn.client.get('/information') as resp:
                 self.assertEqual(resp.status, 200)
                 data = await resp.json()
                 # Ensure repsonse is an string, contains consts.VERSION and UDS
