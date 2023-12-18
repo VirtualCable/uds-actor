@@ -386,7 +386,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         actor_type: str,
         username: str,
         session_type: str,
-    ) -> types.LoginResultInfo:
+    ) -> types.LoginResponse:
         payload = {
             'type': actor_type,
             'token': self.token,
@@ -394,7 +394,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'session_type': session_type,
         }
         result = await self._doPost(types.ApiType.ACTORV3, 'login', payload)
-        return types.LoginResultInfo.fromDict(result)
+        return types.LoginResponse.fromDict(result)
 
     async def notify_logout(
         self,
@@ -565,7 +565,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
 
     async def user_login(
         self, username: str, sessionType: typing.Optional[str] = None
-    ) -> types.LoginResultInfo:
+    ) -> types.LoginResponse:
         self._session_type = sessionType or consts.UNKNOWN
         payload = {
             'username': username,
@@ -574,7 +574,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
         result = await self._doPost('user_login', payload)
 
         try:
-            res = types.LoginResultInfo.fromDict(result)
+            res = types.LoginResponse.fromDict(result)
             self._session_id = res.session_id or ''
             return res
         except Exception:

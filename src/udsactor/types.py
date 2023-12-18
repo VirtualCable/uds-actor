@@ -119,7 +119,8 @@ class ActorConfiguration(typing.NamedTuple):
 
     data: typing.Optional[dict[str, typing.Any]] = None
 
-    def is_empty(self) -> bool:
+    @property
+    def is_null(self) -> bool:
         return not bool(self.host) or not bool(self.token)
 
     def asDict(self) -> dict[str, typing.Any]:
@@ -129,6 +130,9 @@ class ActorConfiguration(typing.NamedTuple):
 
     @staticmethod
     def fromDict(data: dict[str, typing.Any]) -> 'ActorConfiguration':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            raise Exception('Invalid data')
+        
         cfg = data.copy()
         cfg['config'] = ActorDataConfiguration(**cfg['config']) if cfg['config'] else None
         return ActorConfiguration(**cfg)
@@ -140,7 +144,30 @@ class InitializationResult(typing.NamedTuple):
     os: typing.Optional[ActorOsConfiguration] = None
 
 
-class LoginResultInfo(typing.NamedTuple):
+class LoginRequest(typing.NamedTuple):
+    # {'username': '1234', 'session_type': 'test'}
+    username: str
+    session_type: str
+
+    @staticmethod
+    def null() -> 'LoginRequest':
+        return LoginRequest(username='', session_type='')
+
+    @staticmethod
+    def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LoginRequest':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return LoginRequest.null()
+
+        return LoginRequest(
+            username=data.get('username', ''),
+            session_type=data.get('session_type', ''),
+        )
+
+    def asDict(self) -> dict[str, typing.Any]:
+        return self._asdict()
+
+
+class LoginResponse(typing.NamedTuple):
     ip: str
     hostname: str
     dead_line: typing.Optional[int]
@@ -152,22 +179,75 @@ class LoginResultInfo(typing.NamedTuple):
         return bool(self.session_id)
 
     @property
-    def is_empty(self) -> bool:
+    def is_null(self) -> bool:
         return not bool(self.ip) and not bool(self.hostname)
 
     @staticmethod
-    def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LoginResultInfo':
-        if not data:
-            return LoginResultInfo(
-                ip='0.0.0.0', hostname=consts.UNKNOWN, dead_line=None, max_idle=None, session_id=None
-            )
+    def null() -> 'LoginResponse':
+        return LoginResponse(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
 
-        return LoginResultInfo(
+    @staticmethod
+    def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LoginResponse':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return LoginResponse.null()
+
+        return LoginResponse(
             ip=data.get('ip', ''),
             hostname=data.get('hostname', ''),
             dead_line=data.get('dead_line', None),
             max_idle=data.get('max_idle', None),
             session_id=data.get('session_id', None),
+        )
+
+    def asDict(self) -> dict[str, typing.Any]:
+        return self._asdict()
+
+
+class LogoutRequest(typing.NamedTuple):
+    # {'username': '1234', 'session_type': 'test', 'session_id': 'test'}
+    username: str
+    session_type: str
+    session_id: str
+
+    @staticmethod
+    def null() -> 'LogoutRequest':
+        return LogoutRequest(username='', session_type='', session_id='')
+
+    @staticmethod
+    def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LogoutRequest':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return LogoutRequest.null()
+
+        return LogoutRequest(
+            username=data.get('username', ''),
+            session_type=data.get('session_type', ''),
+            session_id=data.get('session_id', ''),
+        )
+
+    def asDict(self) -> dict[str, typing.Any]:
+        return self._asdict()
+
+
+# No logout response, just an OK message
+
+
+class LogRequest(typing.NamedTuple):
+    # {'level': 'INFO', 'message': 'test'}
+    level: LogLevel
+    message: str
+
+    @staticmethod
+    def null() -> 'LogRequest':
+        return LogRequest(level=LogLevel.OTHER, message='')
+
+    @staticmethod
+    def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LogRequest':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return LogRequest.null()
+
+        return LogRequest(
+            level=LogLevel.fromStr(data.get('level', LogLevel.OTHER.name)),
+            message=data.get('message', ''),
         )
 
     def asDict(self) -> dict[str, typing.Any]:
@@ -190,7 +270,7 @@ class CertificateInfo(typing.NamedTuple):
 
     @staticmethod
     def fromDict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'CertificateInfo':
-        if not data:
+        if not data or not isinstance(data, collections.abc.Mapping):
             return CertificateInfo(key='', certificate='', password='', ciphers=None)
 
         return CertificateInfo(

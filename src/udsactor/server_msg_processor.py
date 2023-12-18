@@ -55,31 +55,34 @@ class MessagesProcessor:
 
         self.logged_in = False
 
-    async def process(self, proc: typing.Awaitable[typing.Any], msg: types.UDSMessage) -> None:
-        try:
-            result = await proc
-        except Exception as e:
-            if msg.callback:
-                await msg.callback(None, e)
-        else:
-            if msg.callback:
-                await msg.callback(result, None)
-
     async def login(self, msg: types.UDSMessage) -> None:
-        self.logged_in = True
-        await self.process(self.actor.login(msg.data['username'], msg.data['session_type']), msg)
+        try:
+            self.logged_in = True
+            await self.outgoingQueue.put(
+                types.UDSMessage(
+                    msg_type=types.UDSMessageType.LOGIN,
+                    data=(await self.actor.login(msg.data['username'], msg.data['session_type'])).asDict(),
+                )
+            )
+        except Exception:
+            logger.exception('Exception on login')
+            await self.outgoingQueue.put(
+                types.UDSMessage(msg_type=types.UDSMessageType.LOGIN, data=types.LoginResponse.null().asDict())
+            )
 
     async def logout(self, msg: types.UDSMessage) -> None:
-        if not self.logged_in:
-            return
-
-        self.logged_in = False
-        await self.process(
-            self.actor.logout(msg.data['username'], msg.data['session_type'], msg.data['session_id']), msg
-        )
+        try:
+            req = types.LogoutRequest.fromDict(msg.data)
+            await self.actor.logout(req.username, req.session_type, req.session_id)
+        except Exception as e:
+            logger.exception('Exception on logout')
 
     async def log(self, msg: types.UDSMessage) -> None:
-        await self.process(self.actor.log(msg.data['level'], msg.data['message']), msg)
+        try:
+            req = types.LogRequest.fromDict(msg.data)
+            await self.actor.log(req.level, req.message)
+        except Exception:
+            logger.exception('Exception on log')
 
     async def processMessage(self, msg: types.UDSMessage) -> None:
         processors: dict[types.UDSMessageType, typing.Callable[[types.UDSMessage], typing.Awaitable[None]]] = {

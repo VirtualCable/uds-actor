@@ -203,7 +203,7 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
                     username='test',
                     session_type='test_session_type',
                 )
-                self.assertIsInstance(resp, types.LoginResultInfo)
+                self.assertIsInstance(resp, types.LoginResponse)
                 self.assertIsNotNone(resp)
                 self.assertEqual(resp.ip, '0.1.2.3')
                 self.assertEqual(resp.hostname, 'test_hostname')

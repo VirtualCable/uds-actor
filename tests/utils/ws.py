@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class WSConnectionResult(typing.NamedTuple):
     private: rest.PrivateREST
-    server: fake_uds_server.FakeUDSRestServer
-    conn: rest_server.SetupResult
+    broker_server: fake_uds_server.FakeUDSRestServer
+    local_server: rest_server.SetupResult
     # List of exceptions
     excpts: list[Exception]
     task: asyncio.Task[None]
@@ -31,7 +31,7 @@ async def ws_connection(
 
     priv = rest.PrivateREST(ipv6=False)
     async with fake_uds_server.fake_uds_rest_server() as server:
-        async with rest_server.setup(udsserver_port=server.port, token=fake_uds_server.TOKEN) as conn:
+        async with rest_server.setup(udsserver_port=server.port, token=fake_uds_server.TOKEN) as local_server:
 
             async def inner_process(msg: types.UDSMessage) -> None:
                 try:
@@ -49,4 +49,5 @@ async def ws_connection(
                     excpts.append(asyncio.TimeoutError())
 
             task = asyncio.create_task(timeout_task_runner())
-            yield WSConnectionResult(private=priv, server=server, conn=conn, excpts=excpts, task=task)
+            
+            yield WSConnectionResult(private=priv, broker_server=server, local_server=local_server, excpts=excpts, task=task)

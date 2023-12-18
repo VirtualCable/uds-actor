@@ -35,7 +35,7 @@ async def login(request: aiohttp.web.Request) -> aiohttp.web.Response:
     data = await request.json()
     
     processed: asyncio.Event = asyncio.Event()
-    data_received: typing.Optional[types.LoginResultInfo] = None
+    data_received: typing.Optional[types.LoginResponse] = None
     except_received: typing.Optional[Exception] = None
     
     async def callback(data: typing.Any, ex: typing.Optional[Exception]) -> None:

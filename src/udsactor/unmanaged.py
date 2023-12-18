@@ -90,7 +90,7 @@ class UnmanagedActorProcessor(ActorProcessor):
         # Setup remote logging now that we have a valid token
         log.setup_log(type='service', cfg=cfg)
 
-    async def login(self, username: str, sessionType: str) -> types.LoginResultInfo:
+    async def login(self, username: str, sessionType: str) -> types.LoginResponse:
         cfg = await self.platform.config
         api = await self.api
 
@@ -98,7 +98,7 @@ class UnmanagedActorProcessor(ActorProcessor):
         # This will setup our token and other things
         await self.initialize_flow_for_unmanaged()
 
-        result = types.LoginResultInfo(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
+        result = types.LoginResponse(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
         try:
             result = await api.notify_login(
                 actor_type=types.ActorType.UNMANAGED, username=username, session_type=sessionType

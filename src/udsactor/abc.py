@@ -52,7 +52,7 @@ class ActorProcessor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def login(self, username: str, sessionType: str) -> types.LoginResultInfo:
+    async def login(self, username: str, sessionType: str) -> types.LoginResponse:
         pass
 
     @abc.abstractmethod

@@ -65,19 +65,16 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
                     message = types.UDSMessage(**data)
                     if message.msg_type == types.UDSMessageType.CLOSE:
                         # Close connection, respond to it an notify logout to outgoing queue
-                        await send_ok()
-                        await outgoingQueue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT))
+                        await outgoingQueue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT, data={}))
                         await ws.close()
                     elif message.msg_type == types.UDSMessageType.PING:
+                        # Put a pong message in the queue
                         await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).asDict())
                     elif message.msg_type == types.UDSMessageType.LOG:
-                        await send_ok()
                         await outgoingQueue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGIN:
-                        await send_ok()
                         await outgoingQueue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGOUT:
-                        await send_ok()
                         await outgoingQueue.put(message)
                     else:
                         # Log strange messages

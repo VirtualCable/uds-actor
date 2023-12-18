@@ -109,7 +109,7 @@ class UDSActorServer(threading.Thread):
         cfg = await native.Manager.instance().config
 
         # Not configured, simply stop
-        if not cfg.is_empty():
+        if not cfg.is_null:
             logger.info('UDS Actor is not configured. stopping service')
             return
 

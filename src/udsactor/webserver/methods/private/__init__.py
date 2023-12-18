@@ -5,4 +5,4 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
 # Ensure registers routes loading modules
-from . import login, logout, log, ws
+from . import ws

@@ -201,11 +201,11 @@ class ManagedActorProcessor(ActorProcessor):
 
         return certificate
 
-    async def login(self, username: str, sessionType: str) -> types.LoginResultInfo:
+    async def login(self, username: str, sessionType: str) -> types.LoginResponse:
         cfg = await self.config
         api = await self.api
 
-        result = types.LoginResultInfo(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
+        result = types.LoginResponse(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
         try:
             result = await api.notify_login(
                 actor_type=cfg.actorType or types.ActorType.MANAGED, username=username, session_type=sessionType
