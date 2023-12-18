@@ -44,7 +44,6 @@ import win32security  # type: ignore
 import win32net  # type: ignore
 import win32event  # type: ignore
 
-from udsactor import globals
 from .server import WindowsUDSActorServer
 from ..abc import Runner
 

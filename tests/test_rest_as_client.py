@@ -35,7 +35,7 @@ import collections.abc
 
 from unittest import IsolatedAsyncioTestCase
 
-from udsactor import rest, types
+from udsactor import consts, rest, types
 
 from .utils import fake_uds_server
 
@@ -139,7 +139,7 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
             rest_api = rest.BrokerREST(server.host, False, token=fake_uds_server.TOKEN)
             # Log returns nothing
             resp = await rest_api.initialize_unmanaged(
-                secret='test_secret', interfaces=TEST_INTERFACES, port=1212
+                interfaces=TEST_INTERFACES, port=1212
             )
             self.assertIsInstance(resp, types.CertificateInfo)
             self.assertIsNotNone(resp)
@@ -152,14 +152,14 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
             self.assertEqual(server.requests[0][0], '/uds/rest/actor/v3/unmanaged')
             js = server.requests[0][1]['json']
             self.assertEqual(js['token'], fake_uds_server.TOKEN)
-            self.assertEqual(js['secret'], 'test_secret')
+            self.assertEqual(js['secret'], consts.OWN_AUTH_TOKEN)
             self.assertEqual(js['port'], 1212)
 
     async def test_ready(self) -> None:
         async with fake_uds_server.fake_uds_rest_server() as server:
             rest_api = rest.BrokerREST(server.host, False, token=fake_uds_server.TOKEN)
             # Login event returns types.LoginResult
-            resp = await rest_api.ready(secret='test_secret', ip='0.1.2.3', port=1212)
+            resp = await rest_api.ready(ip='0.1.2.3', port=1212)
             self.assertIsInstance(resp, types.CertificateInfo)
             self.assertIsNotNone(resp)
             self.assertEqual(resp.certificate, 'test_certificate')
@@ -171,14 +171,14 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
             self.assertEqual(server.requests[0][0], '/uds/rest/actor/v3/ready')
             self.assertEqual(
                 server.requests[0][1]['json'],
-                {'token': fake_uds_server.TOKEN, 'secret': 'test_secret', 'ip': '0.1.2.3', 'port': 1212},
+                {'token': fake_uds_server.TOKEN, 'secret': consts.OWN_AUTH_TOKEN, 'ip': '0.1.2.3', 'port': 1212},
             )
 
     async def test_notify_new_ip(self) -> None:
         async with fake_uds_server.fake_uds_rest_server() as server:
             rest_api = rest.BrokerREST(server.host, False, token=fake_uds_server.TOKEN)
             # Login event returns types.LoginResult
-            resp = await rest_api.notify_new_ip(secret='test_secret', ip='0.1.2.3', port=1212)
+            resp = await rest_api.notify_new_ip(ip='0.1.2.3', port=1212)
             self.assertIsInstance(resp, types.CertificateInfo)
             self.assertIsNotNone(resp)
             self.assertEqual(resp.certificate, 'test_certificate')
@@ -190,7 +190,7 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
             self.assertEqual(server.requests[0][0], '/uds/rest/actor/v3/ipchange')
             self.assertEqual(
                 server.requests[0][1]['json'],
-                {'token': fake_uds_server.TOKEN, 'secret': 'test_secret', 'ip': '0.1.2.3', 'port': 1212},
+                {'token': fake_uds_server.TOKEN, 'secret': consts.OWN_AUTH_TOKEN, 'ip': '0.1.2.3', 'port': 1212},
             )
 
     async def test_notify_login(self) -> None:

@@ -30,17 +30,13 @@
 '''
 # pylint: disable=invalid-name
 
-import socket
-import time
-import secrets
-import subprocess
 import typing
 import collections.abc
 import logging
 import threading
 import asyncio
 
-from udsactor import globals, types, managed, unmanaged, rest, native, server_msg_processor as msg_processor, log
+from udsactor import types, managed, unmanaged, rest, native, server_msg_processor as msg_processor, log
 
 logger = logging.getLogger(__name__)
 

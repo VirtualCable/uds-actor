@@ -33,7 +33,7 @@ import typing
 import os
 import tempfile
 import platform
-
+import secrets
 
 def _featureRequested(env_var: str) -> bool:
     env_var_name = env_var.upper().replace('-', '_')
@@ -122,3 +122,9 @@ SECURE_CIPHERS: typing.Final[str] = (
     ':ECDHE-ECDSA-AES256-GCM-SHA384'
     ':ECDHE-ECDSA-CHACHA20-POLY1305'
 )
+
+# Secret used to authenticate messages from UDS Broker
+# It will change every time the actor is restarted
+# (and notifys the broker of the change)
+OWN_AUTH_TOKEN: typing.Final[str] = secrets.token_urlsafe(33)
+

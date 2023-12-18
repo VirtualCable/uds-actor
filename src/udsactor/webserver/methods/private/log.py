@@ -11,7 +11,7 @@ import asyncio
 import aiohttp
 import aiohttp.web
 
-from udsactor import consts, globals, types
+from udsactor import consts, types
 
 from ...routes import routes
 from ...keys import MSGS_QUEUE_KEY

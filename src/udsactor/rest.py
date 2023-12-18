@@ -358,28 +358,27 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     # ....
     async def initialize_unmanaged(
         self,
-        secret: str,
         interfaces: typing.Iterable[types.InterfaceInfo],
         port: int,
     ) -> types.CertificateInfo:
         payload = {
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
             'token': self.token,
-            'secret': secret,
+            'secret': consts.OWN_AUTH_TOKEN,
             'port': port,
         }
         result = await self._doPost(types.ApiType.ACTORV3, 'unmanaged', payload)
 
         return types.CertificateInfo.fromDict(result)
 
-    async def ready(self, secret: str, ip: str, port: int) -> types.CertificateInfo:
-        payload = {'token': self.token, 'secret': secret, 'ip': ip, 'port': port}
+    async def ready(self, ip: str, port: int) -> types.CertificateInfo:
+        payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
         result = await self._doPost(types.ApiType.ACTORV3, 'ready', payload)
 
         return types.CertificateInfo.fromDict(result)
 
-    async def notify_new_ip(self, secret: str, ip: str, port: int) -> types.CertificateInfo:
-        payload = {'token': self.token, 'secret': secret, 'ip': ip, 'port': port}
+    async def notify_new_ip(self, ip: str, port: int) -> types.CertificateInfo:
+        payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
         result = await self._doPost(types.ApiType.ACTORV3, 'ipchange', payload)
 
         return types.CertificateInfo.fromDict(result)

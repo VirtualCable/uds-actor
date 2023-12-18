@@ -32,7 +32,7 @@ import asyncio
 import typing
 import logging
 
-from udsactor import globals, types, consts, log, exceptions, utils
+from udsactor import types, consts, log, exceptions, utils
 from udsactor.abc import ActorProcessor
 
 
@@ -176,7 +176,6 @@ class ManagedActorProcessor(ActorProcessor):
         while True:
             try:
                 certificate = await api.ready(
-                    globals.secret,
                     serviceInterface.ip,
                     consts.LISTEN_PORT,
                 )

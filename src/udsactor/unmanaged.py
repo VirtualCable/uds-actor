@@ -32,7 +32,7 @@ import asyncio
 import typing
 import logging
 
-from udsactor import globals, types, consts, log, exceptions, utils
+from udsactor import types, consts, log, exceptions, utils
 from udsactor.abc import ActorProcessor
 
 
@@ -53,7 +53,7 @@ class UnmanagedActorProcessor(ActorProcessor):
         api = await self.api
 
         # Unmanaged actor simply gets a "registered" certificate to start local swebserver
-        return await api.initialize_unmanaged(globals.secret, interfaces, consts.LISTEN_PORT)
+        return await api.initialize_unmanaged(interfaces, consts.LISTEN_PORT)
 
     async def initialize_flow_for_unmanaged(self) -> None:
         cfg = await self.platform.config

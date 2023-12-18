@@ -32,6 +32,8 @@ import socket
 import logging
 import random
 
+from udsactor import consts
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,3 +52,5 @@ def get_free_port(ipv6: bool = False) -> int:
 def rnd_string_for_test(length: int = 32) -> str:
     return ''.join(random.choice('0123456789ABCDEF') for i in range(length))  # nosec: testing purposes only
 
+def public_rest_path(method: str) -> str:
+    return consts.PUBLIC_REST_PATH(method).replace('{auth_token}', consts.OWN_AUTH_TOKEN)
