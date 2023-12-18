@@ -48,14 +48,14 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
             self.emitting = False
 
     @staticmethod
-    def setDefaults(userservice_uuid: str | None = None) -> None:
+    def set_defaults(userservice_uuid: str | None = None) -> None:
         """
         Sets the default userservice_uuid to be used in all log calls
         """
         UDSBrokerLogger.manager().def_userservice_uuid = userservice_uuid
 
     @staticmethod
-    async def waitAndSendLogs(forever: bool = True) -> None:
+    async def wait_and_send_logs(forever: bool = True) -> None:
         """
         Waits for log messages and logs them
 

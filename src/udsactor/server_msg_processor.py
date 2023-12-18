@@ -31,6 +31,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 import asyncio
 import typing
+import collections.abc
 import logging
 
 from udsactor import types, managed, unmanaged, rest
@@ -43,49 +44,61 @@ if typing.TYPE_CHECKING:
 
 class MessagesProcessor:
     actor: 'ActorProcessor'
-    incomingQueue: asyncio.Queue[types.UDSMessage]
-    outgoingQueue: asyncio.Queue[types.UDSMessage]
+    incoming_queue: asyncio.Queue[types.UDSMessage]
+    outgoing_queue: asyncio.Queue[types.UDSMessage]
 
     logged_in: bool
 
     def __init__(self, actor: 'ActorProcessor') -> None:
         self.actor = actor
-        self.incomingQueue = asyncio.Queue()
-        self.outgoingQueue = asyncio.Queue()
+        self.incoming_queue = asyncio.Queue()
+        self.outgoing_queue = asyncio.Queue()
 
         self.logged_in = False
 
     async def login(self, msg: types.UDSMessage) -> None:
         try:
             self.logged_in = True
-            await self.outgoingQueue.put(
+            await self.outgoing_queue.put(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGIN,
-                    data=(await self.actor.login(msg.data['username'], msg.data['session_type'])).asDict(),
+                    data=(
+                        await self.actor.login(
+                            username=msg.data['username'], session_type=msg.data['session_type']
+                        )
+                    ).asDict(),
                 )
             )
         except Exception:
             logger.exception('Exception on login')
-            await self.outgoingQueue.put(
+            await self.outgoing_queue.put(
                 types.UDSMessage(msg_type=types.UDSMessageType.LOGIN, data=types.LoginResponse.null().asDict())
             )
 
     async def logout(self, msg: types.UDSMessage) -> None:
+        if self.logged_in is False:
+            return
         try:
             req = types.LogoutRequest.fromDict(msg.data)
-            await self.actor.logout(req.username, req.session_type, req.session_id)
+            await self.actor.logout(
+                username=req.username, session_type=req.session_type, session_id=req.session_id
+            )
         except Exception as e:
             logger.exception('Exception on logout')
+        finally:
+            self.logged_in = False
 
     async def log(self, msg: types.UDSMessage) -> None:
         try:
             req = types.LogRequest.fromDict(msg.data)
-            await self.actor.log(req.level, req.message)
+            await self.actor.log(level=req.level, message=req.message)
         except Exception:
             logger.exception('Exception on log')
 
-    async def processMessage(self, msg: types.UDSMessage) -> None:
-        processors: dict[types.UDSMessageType, typing.Callable[[types.UDSMessage], typing.Awaitable[None]]] = {
+    async def process_message(self, msg: types.UDSMessage) -> None:
+        processors: dict[
+            types.UDSMessageType, typing.Callable[[types.UDSMessage], collections.abc.Awaitable[None]]
+        ] = {
             types.UDSMessageType.LOGIN: self.login,
             types.UDSMessageType.LOGOUT: self.logout,
             types.UDSMessageType.CLOSE: self.logout,
@@ -102,6 +115,6 @@ class MessagesProcessor:
 
     async def run(self) -> None:
         while True:
-            msg = await self.incomingQueue.get()
-            await self.processMessage(msg)
-            self.incomingQueue.task_done()  # Allow join to work
+            msg = await self.incoming_queue.get()
+            await self.process_message(msg)
+            self.incoming_queue.task_done()  # Allow join to work

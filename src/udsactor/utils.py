@@ -44,7 +44,7 @@ def random_string(length: int = 32) -> str:
     return ''.join(random.SystemRandom().choices(string.ascii_letters + string.digits, k=length))
 
 
-def ensureTicketIsOk(ticketId: str) -> str:
+def ensure_ticket_is_ok(ticketId: str) -> str:
     """Ensures that ticket is ok, and returns it if so"""
     if len(ticketId) != 40 or re.match(r'^[a-zA-Z0-9]+$', ticketId) is None:
         raise Exception('Invalid ticket: {}'.format(ticketId))
@@ -158,8 +158,8 @@ class ByPassCache(Exception):
 def async_lru_cache(
     maxsize: int = 128,
     maxduration: typing.Optional[types.CacheDuration] = None,
-    ignore_args: typing.Optional[typing.Iterable[int]] = None,
-    ignore_kwargs: typing.Optional[typing.Iterable[str]] = None,
+    ignore_args: typing.Optional[collections.abc.Iterable[int]] = None,
+    ignore_kwargs: typing.Optional[collections.abc.Iterable[str]] = None,
 ):
     """
     Least-recently-used cache decorator for async functions.

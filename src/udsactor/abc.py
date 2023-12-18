@@ -40,21 +40,21 @@ class ActorProcessor(abc.ABC):
             self._api = rest.BrokerREST(cfg.host, cfg.validateCertificate, cfg.token)
         return self._api
 
-    async def log(self, level: types.LogLevel, msg: str) -> None:
+    async def log(self, *, level: types.LogLevel, message: str) -> None:
         """
         Logs the requested message on this platform
         USed to redirect client logs to server
         """
-        logger.log(level.asPython(), 'SESSION: %s', msg)
+        logger.log(level.asPython(), 'SESSION: %s', message)
 
     @abc.abstractmethod
-    async def initialize(self, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:
+    async def initialize(self, *, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:
         pass
 
     @abc.abstractmethod
-    async def login(self, username: str, sessionType: str) -> types.LoginResponse:
+    async def login(self, *, username: str, session_type: str) -> types.LoginResponse:
         pass
 
     @abc.abstractmethod
-    async def logout(self, username: str, session_type: str, session_id: str) -> None:
+    async def logout(self, *, username: str, session_type: str, session_id: str) -> None:
         pass

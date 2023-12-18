@@ -69,7 +69,7 @@ class UDSActorService(win32serviceutil.ServiceFramework):
         # Before we do anything, tell the SCM we are starting the stop process.
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
 
-        WindowsUDSActorServer.stopEvent.set()
+        WindowsUDSActorServer.stop_event.set()
 
     SvcShutdown = SvcStop
 
@@ -94,7 +94,7 @@ class UDSActorService(win32serviceutil.ServiceFramework):
             # While hWaitStop hasn't been set by SvcStop, we loop and do stuff.
             while True:
                 # Wait for service stop signal, if timeout, loop again
-                if WindowsUDSActorServer.stopEvent.wait(0.1) == True:
+                if WindowsUDSActorServer.stop_event.wait(0.1) == True:
                     break
 
                 # Processes pending messages

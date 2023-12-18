@@ -47,8 +47,8 @@ if typing.TYPE_CHECKING:
 # Actor server runs on its own thread, so we can use asyncio.run() to run the main task
 # And keep the service running until the main finishes (or the service is stopped)
 class UDSActorServer(threading.Thread):
-    stopEvent: typing.ClassVar[threading.Event] = threading.Event()
-    
+    stop_event: typing.ClassVar[threading.Event] = threading.Event()
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -56,11 +56,11 @@ class UDSActorServer(threading.Thread):
         # Run the mainAsyncTask, and store the task to check if it has finished
         task = asyncio.create_task(self.main())
 
-        while not UDSActorServer.stopEvent.is_set():
+        while not UDSActorServer.stop_event.is_set():
             await asyncio.sleep(1)
             # Check if the task has finished
             if task.done():
-                UDSActorServer.stopEvent.set()
+                UDSActorServer.stop_event.set()
 
                 # Try to get result of main task
                 try:
@@ -102,8 +102,8 @@ class UDSActorServer(threading.Thread):
         logger.debug('Stopping UDSActorServer')
 
         # Ensure service knows that we are done. (an unhanded exception could have stoppped our loop without setting the event)
-        if not UDSActorServer.stopEvent.is_set():
-            UDSActorServer.stopEvent.set()  # Ensure stopEvent is set
+        if not UDSActorServer.stop_event.is_set():
+            UDSActorServer.stop_event.set()  # Ensure stopEvent is set
 
     async def main(self) -> None:
         cfg = await native.Manager.instance().config
@@ -121,10 +121,10 @@ class UDSActorServer(threading.Thread):
             actor = unmanaged.UnmanagedActorProcessor()
 
         # Keep reference to tasks so we can cancel them on exit (and avoid garbage collection of them)
-        backTasks: typing.Final[list[asyncio.Task]] = [
+        back_tasks: typing.Final[list[asyncio.Task]] = [
             # asyncio.create_task(platform.events.sensEventsProcessor(cfg)),  # Add events processor task
             # asyncio.create_task(platform.events.statsNotifier(cfg)),  # Add stats notifier task
-            asyncio.create_task(log.UDSBrokerLogger.waitAndSendLogs()),  # Add log sender task
+            asyncio.create_task(log.UDSBrokerLogger.wait_and_send_logs()),  # Add log sender task
             asyncio.create_task(
                 msg_processor.MessagesProcessor(actor=actor).run()
             ),  # Add message processor task
@@ -138,15 +138,15 @@ class UDSActorServer(threading.Thread):
 
         logger.info('Detected network interfaces: %s', interfaces)
 
-        certInfo: typing.Optional[types.CertificateInfo] = await actor.initialize(interfaces)
+        certInfo: typing.Optional[types.CertificateInfo] = await actor.initialize(interfaces=interfaces)
 
         # Create the webserver and run until cancelled
         try:
             # await webserver.server(cfg)  # Run web server, if it fails, stop full service
             pass
         except asyncio.CancelledError:
-            for task in backTasks:
+            for task in back_tasks:
                 task.cancel()
 
             # Wait for all tasks to finish after cancellation
-            await asyncio.gather(*backTasks, return_exceptions=True)
+            await asyncio.gather(*back_tasks, return_exceptions=True)

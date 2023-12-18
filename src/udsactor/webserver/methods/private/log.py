@@ -28,7 +28,7 @@ async def log(request: aiohttp.web.Request) -> aiohttp.web.Response:
 
     outgoingQueue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
-    ).incomingQueue  # Our outgoing queue is the incoming queue of the processor
+    ).incoming_queue  # Our outgoing queue is the incoming queue of the processor
 
     data = await request.json()
 

@@ -57,7 +57,7 @@ class UDSMessageType(enum.StrEnum):
 
 class UDSMessage(typing.NamedTuple):
     msg_type: UDSMessageType
-    data: typing.Any = None
+    data: dict[str, typing.Any] = {}
     # Async callback, if any, to be called when message is processed
     callback: typing.Optional[
         typing.Callable[[typing.Any, typing.Optional[Exception]], typing.Coroutine]
@@ -132,7 +132,7 @@ class ActorConfiguration(typing.NamedTuple):
     def fromDict(data: dict[str, typing.Any]) -> 'ActorConfiguration':
         if not data or not isinstance(data, collections.abc.Mapping):
             raise Exception('Invalid data')
-        
+
         cfg = data.copy()
         cfg['config'] = ActorDataConfiguration(**cfg['config']) if cfg['config'] else None
         return ActorConfiguration(**cfg)
@@ -206,8 +206,8 @@ class LoginResponse(typing.NamedTuple):
 class LogoutRequest(typing.NamedTuple):
     # {'username': '1234', 'session_type': 'test', 'session_id': 'test'}
     username: str
-    session_type: str
     session_id: str
+    session_type: str = ''
 
     @staticmethod
     def null() -> 'LogoutRequest':

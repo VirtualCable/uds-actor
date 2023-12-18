@@ -96,13 +96,13 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     def token(self, value: str | None) -> None:
         self._token = value
 
-    def _urlFor(self, api: types.ApiType, method: str) -> str:
+    def _url_for(self, api: types.ApiType, method: str) -> str:
         if api == types.ApiType.AUTH:
             return self._url + 'auth/' + method
         # Actor v3
         return self._url + 'actor/v3/' + method
 
-    async def _doPost(
+    async def _do_post(
         self,
         api: types.ApiType,
         method: str,  # i.e. 'initialize', 'ready', ....
@@ -117,7 +117,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         async with aiohttp.ClientSession() as session:
             try:
                 result = await session.post(
-                    self._urlFor(api, method),
+                    self._url_for(api, method),
                     data=json.dumps(payLoad),
                     headers=headers,
                     ssl=self._context,
@@ -146,13 +146,13 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
 
             raise exceptions.RESTError(data)
 
-    async def _doGet(
+    async def _do_get(
         self,
         api: types.ApiType,
         method: str,  # i.e. 'initialize', 'ready', ....
         headers: typing.Optional[collections.abc.Mapping[str, str]] = None,
-        checkError: bool = True,
-        returnRaw: bool = False,
+        check_error: bool = True,
+        return_raw: bool = False,
     ) -> typing.Any:
         headers = headers or self._headers
         result = None
@@ -160,16 +160,16 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         async with aiohttp.ClientSession() as session:
             try:
                 result = await session.get(
-                    self._urlFor(api, method),
+                    self._url_for(api, method),
                     headers=headers,
                     ssl=self._context,
                     timeout=consts.TIMEOUT,
                 )
                 if result.ok:
                     j = await result.json()
-                    if checkError and j.get('error', None):
+                    if check_error and j.get('error', None):
                         raise exceptions.RESTError(j['error'])
-                    if returnRaw:
+                    if return_raw:
                         return j
                     return j['result']
             except aiohttp.client_exceptions.ClientConnectorError as e:
@@ -186,7 +186,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
 
             raise exceptions.RESTError(data)
 
-    async def enumerateAuthenticators(self) -> list[types.Authenticator]:
+    async def enumerate_authenticators(self) -> list[types.Authenticator]:
         try:
             return sorted(
                 [
@@ -199,7 +199,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
                         isCustom=v['isCustom'],
                     )
                     for v in sorted(
-                        await self._doGet(types.ApiType.AUTH, 'auths', checkError=False, returnRaw=True),
+                        await self._do_get(types.ApiType.AUTH, 'auths', check_error=False, return_raw=True),
                         key=lambda x: x['auth'],
                     )
                 ],
@@ -218,7 +218,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             password: Password to use on login
         """
         try:
-            result = await self._doPost(
+            result = await self._do_post(
                 types.ApiType.AUTH,
                 'login',
                 {'auth': auth, 'username': username, 'password': password},
@@ -270,7 +270,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
 
         # First, try to login to REST api
         headers = await self.login(auth, username, password)
-        return await self._doPost(
+        return await self._do_post(
             types.ApiType.ACTORV3,
             'register',
             payLoad=data,
@@ -287,7 +287,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             True if token is valid, False otherwise
         """
         return (
-            await self._doPost(types.ApiType.ACTORV3, 'test', payLoad={'token': self.token, 'type': type})
+            await self._do_post(types.ApiType.ACTORV3, 'test', payLoad={'token': self.token, 'type': type})
         ) == 'ok'
 
     # The flow for initialization of an actor is:
@@ -302,7 +302,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     # ....
     async def initialize(
         self,
-        interfaces: typing.Iterable[types.InterfaceInfo],
+        interfaces: collections.abc.Iterable[types.InterfaceInfo],
         actor_type: typing.Optional[str],
     ) -> types.InitializationResult:
         # Generate id list from netork cards
@@ -313,7 +313,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'build': consts.BUILD,
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
         }
-        r: typing.Dict[str, typing.Any] = await self._doPost(types.ApiType.ACTORV3, 'initialize', payload)
+        r: dict[str, typing.Any] = await self._do_post(types.ApiType.ACTORV3, 'initialize', payload)
         os = r['os']
         # * TO BE REMOVED ON FUTURE VERSIONS *
         # To keep compatibility, store old values on custom data
@@ -356,7 +356,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     # ....
     async def initialize_unmanaged(
         self,
-        interfaces: typing.Iterable[types.InterfaceInfo],
+        interfaces: collections.abc.Iterable[types.InterfaceInfo],
         port: int,
     ) -> types.CertificateInfo:
         payload = {
@@ -365,19 +365,19 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'secret': consts.OWN_AUTH_TOKEN,
             'port': port,
         }
-        result = await self._doPost(types.ApiType.ACTORV3, 'unmanaged', payload)
+        result = await self._do_post(types.ApiType.ACTORV3, 'unmanaged', payload)
 
         return types.CertificateInfo.fromDict(result)
 
     async def ready(self, ip: str, port: int) -> types.CertificateInfo:
         payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
-        result = await self._doPost(types.ApiType.ACTORV3, 'ready', payload)
+        result = await self._do_post(types.ApiType.ACTORV3, 'ready', payload)
 
         return types.CertificateInfo.fromDict(result)
 
     async def notify_new_ip(self, ip: str, port: int) -> types.CertificateInfo:
         payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
-        result = await self._doPost(types.ApiType.ACTORV3, 'ipchange', payload)
+        result = await self._do_post(types.ApiType.ACTORV3, 'ipchange', payload)
 
         return types.CertificateInfo.fromDict(result)
 
@@ -393,7 +393,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'username': username,
             'session_type': session_type,
         }
-        result = await self._doPost(types.ApiType.ACTORV3, 'login', payload)
+        result = await self._do_post(types.ApiType.ACTORV3, 'login', payload)
         return types.LoginResponse.fromDict(result)
 
     async def notify_logout(
@@ -410,7 +410,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'session_type': session_type,
             'session_id': session_id,
         }
-        return await self._doPost(types.ApiType.ACTORV3, 'logout', payload)  # Can be 'ok' or 'notified'
+        return await self._do_post(types.ApiType.ACTORV3, 'logout', payload)  # Can be 'ok' or 'notified'
 
     async def log(self, level: types.LogLevel, message: str) -> None:
         """Sends a log message to UDS Server
@@ -426,7 +426,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'level': level.value,
             'message': message,
         }
-        await self._doPost(
+        await self._do_post(
             types.ApiType.ACTORV3,
             'log',
             payLoad=payLoad,
@@ -435,7 +435,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     # Helper to execute async rest in sync mode
     # For use with configurator
     @staticmethod
-    def sync(
+    def syncexec(
         f: collections.abc.Callable[..., typing.Any], *args: typing.Any, **kwargs: typing.Any
     ) -> typing.Any:
         try:
@@ -482,7 +482,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
     def _urlFor(self, method: str) -> str:
         return self._url + method
 
-    async def _doPost(
+    async def _do_post(
         self,
         method: str,  # i.e. 'initialize', 'ready', ....
         payLoad: collections.abc.Mapping[str, typing.Any],
@@ -571,7 +571,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
             'username': username,
             'session_type': self._session_type,
         }
-        result = await self._doPost('user_login', payload)
+        result = await self._do_post('user_login', payload)
 
         try:
             res = types.LoginResponse.fromDict(result)
@@ -586,8 +586,8 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
             'session_type': self._session_type or consts.UNKNOWN,
             'session_id': self._session_id,  # We now know the session id, provided on login
         }
-        await self._doPost('user_logout', payload)  # Can be 'ok' or 'notified'
+        await self._do_post('user_logout', payload)  # Can be 'ok' or 'notified'
 
     async def log(self, level: types.LogLevel, message: str, userservice_uuid: str | None = None) -> None:
         payLoad = {'userservice_uuid': userservice_uuid, 'level': level.value, 'message': message}
-        await self._doPost('log', payLoad)  # Ignores result...
+        await self._do_post('log', payLoad)  # Ignores result...

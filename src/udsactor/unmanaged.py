@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class UnmanagedActorProcessor(ActorProcessor):
-    async def initialize(self, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:
+    async def initialize(self, *, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:
         """
         Processes an unmanaged actor
 
@@ -90,7 +90,7 @@ class UnmanagedActorProcessor(ActorProcessor):
         # Setup remote logging now that we have a valid token
         log.setup_log(type='service', cfg=cfg)
 
-    async def login(self, username: str, sessionType: str) -> types.LoginResponse:
+    async def login(self, *, username: str, session_type: str) -> types.LoginResponse:
         cfg = await self.platform.config
         api = await self.api
 
@@ -101,19 +101,19 @@ class UnmanagedActorProcessor(ActorProcessor):
         result = types.LoginResponse(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
         try:
             result = await api.notify_login(
-                actor_type=types.ActorType.UNMANAGED, username=username, session_type=sessionType
+                actor_type=types.ActorType.UNMANAGED, username=username, session_type=session_type
             )
             script = await self.platform.cfgManager.scriptToInvokeOnLogin()
             if script:
                 logger.info('Executing script on login: {}'.format(script))
-                script += f'{username} {sessionType or "unknown"} {cfg.actorType}'
+                script += f'{username} {session_type or "unknown"} {cfg.actorType}'
                 await utils.execute(script, 'Logon')
         except exceptions.RESTError as e:
             logger.error('Error notifying login: %s', e)
 
         return result
 
-    async def logout(self, username: str, session_type: str, session_id: str) -> None:
+    async def logout(self, *, username: str, session_type: str, session_id: str) -> None:
         cfg = await self.platform.config
         api = await self.api
 

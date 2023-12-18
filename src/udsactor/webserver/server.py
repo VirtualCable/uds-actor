@@ -73,14 +73,14 @@ async def index(request: aiohttp.web.Request) -> aiohttp.web.Response:
 
 async def server(
     cfg: types.ActorConfiguration,
-    certInfo: types.CertificateInfo,
-    serverMsgProcessor: server_msg_processor.MessagesProcessor,
-    readyEvent: typing.Optional[asyncio.Event] = None,
+    cert_info: types.CertificateInfo,
+    server_msg_processor: server_msg_processor.MessagesProcessor,
+    ready_event: typing.Optional[asyncio.Event] = None,
 ) -> None:
     """Main server function"""
 
     # Generate ssl context
-    ssl_context = cert.generate_server_ssl_context(certInfo)
+    ssl_context = cert.generate_server_ssl_context(cert_info)
 
     webServer = aiohttp.web.Application(
         logger=logger, middlewares=[security_checks], client_max_size=consts.CLIENT_MAX_SIZE
@@ -92,7 +92,7 @@ async def server(
         host=cfg.host, validateCert=cfg.validateCertificate, token=cfg.token
     )
     # This will translate messages from UDS to running actor client
-    webServer[keys.MSGS_QUEUE_KEY] = serverMsgProcessor
+    webServer[keys.MSGS_QUEUE_KEY] = server_msg_processor
 
     webServer.add_routes(routes)
     runner = aiohttp.web.AppRunner(webServer)
@@ -106,8 +106,8 @@ async def server(
     )
     await site.start()
 
-    if readyEvent is not None:
-        readyEvent.set()
+    if ready_event is not None:
+        ready_event.set()
 
     logger.debug('Server running...')
 

@@ -28,9 +28,9 @@ async def login(request: aiohttp.web.Request) -> aiohttp.web.Response:
 
     The client expects a json response from types.LoginResult
     """
-    outgoingQueue: asyncio.Queue = typing.cast(
+    outgoing_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
-    ).incomingQueue  # Our outgoing queue is the incoming queue of the processor
+    ).incoming_queue  # Our outgoing queue is the incoming queue of the processor
     
     data = await request.json()
     
@@ -51,7 +51,7 @@ async def login(request: aiohttp.web.Request) -> aiohttp.web.Response:
         processed.set()
 
     # Append login to process queue
-    await outgoingQueue.put(
+    await outgoing_queue.put(
         types.UDSMessage(
             msg_type=types.UDSMessageType.LOGIN,
             data={

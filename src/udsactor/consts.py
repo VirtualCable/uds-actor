@@ -35,7 +35,7 @@ import tempfile
 import platform
 import secrets
 
-def _featureRequested(env_var: str) -> bool:
+def _feature_requested(env_var: str) -> bool:
     env_var_name = env_var.upper().replace('-', '_')
     if env_var_name not in os.environ:
         # Look for temp file with that name, if it exists, its true
@@ -45,7 +45,7 @@ def _featureRequested(env_var: str) -> bool:
     return os.getenv(env_var_name, 'false').lower() in ('true', 'yes', '1')
 
 
-DEBUG: typing.Final[bool] = _featureRequested('uds-debug-on')
+DEBUG: typing.Final[bool] = _feature_requested('uds-debug-on')
 
 VERSION: typing.Final[str] = '4.0.0'
 VERSION_FULL: typing.Final[str] = f'UDSActor {VERSION}'
@@ -56,7 +56,7 @@ SYSTEM: typing.Final[str] = platform.system().lower()
 CONFIGFILE: typing.Final[str] = '/etc/udsactor/udsactor.cfg' if not DEBUG else 'udsactor.cfg'
 CONFIG_VERSION: typing.Final[int] = 0x40000
 
-ALLOW_NOADMIN: typing.Final[bool] = _featureRequested('uds-allow-noadmin')
+ALLOW_NOADMIN: typing.Final[bool] = _feature_requested('uds-allow-noadmin')
 
 # OK
 OK: typing.Final[str] = 'ok'

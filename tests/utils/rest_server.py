@@ -73,7 +73,7 @@ async def setup(
     # await webserver.server(cfg, generate_cert('127.0.0.1'), notifier)
     web_task = asyncio.create_task(
         webserver.server(
-            cfg=cfg, certInfo=generate_cert('127.0.0.1'), serverMsgProcessor=msgServer, readyEvent=notifier
+            cfg=cfg, cert_info=generate_cert('127.0.0.1'), server_msg_processor=msgServer, ready_event=notifier
         )
     )
 

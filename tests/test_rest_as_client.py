@@ -55,7 +55,7 @@ class TestRestAsClient(IsolatedAsyncioTestCase):
     async def test_enum_auths(self) -> None:
         async with fake_uds_server.fake_uds_rest_server() as server:
             rest_api = rest.BrokerREST(server.host, False)
-            auths = await rest_api.enumerateAuthenticators()
+            auths = await rest_api.enumerate_authenticators()
             self.assertEqual(len(auths), len(fake_uds_server.AUTHENTICATORS))
             auths = sorted(auths, key=lambda x: x.authId)
             authenticators = sorted(fake_uds_server.AUTHENTICATORS, key=lambda x: x['authId'])

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def signal_handler(sig, frame):
     logger.debug('Signal handler called with signal %s', sig)
-    LinuxUDSActorServer.stopEvent.set()  # Signal the server to stop
+    LinuxUDSActorServer.stop_event.set()  # Signal the server to stop
 
 
 def usage():

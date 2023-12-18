@@ -27,7 +27,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             self.assertEqual(msg.msg_type, types.UDSMessageType.PONG)
             raise exceptions.RequestStop()
 
-        async with ws.ws_connection(processor, 2) as conn:
+        async with ws.ws_connection(processor) as conn:
             await conn.private.send_message(types.UDSMessage(msg_type=types.UDSMessageType.PING))
 
             await conn.task
@@ -40,18 +40,24 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Should not be called
             raise Exception('Should not be called')
 
-        async with ws.ws_connection(processor, 2) as conn:
+        async with ws.ws_connection(processor) as conn:
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
             async def _replacement(*args, **kwargs) -> None:
+                try:
+                    self.assertEqual(kwargs['username'], '')
+                    self.assertEqual(kwargs['session_type'], '')
+                    self.assertEqual(kwargs['session_id'], '')
+                except Exception as e:
+                    conn.excpts.append(e)
                 called.set()
 
             conn.local_server.msg_processor.actor.logout = _replacement
 
             await conn.private.send_message(types.UDSMessage(msg_type=types.UDSMessageType.CLOSE))
 
-            await called.wait()
+            await asyncio.wait_for(called.wait(), 8)
 
             # Ensure no exceptions
             self.assertEqual(conn.excpts, [])
@@ -61,47 +67,73 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Should not be called
             raise Exception('Should not be called')
 
-        async with ws.ws_connection(processor, 8) as conn:
+        async with ws.ws_connection(processor) as conn:
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
             async def _replacement(*args, **kwargs) -> None:
+                try:
+                    self.assertEqual(kwargs['level'], types.LogLevel.INFO)
+                    self.assertEqual(kwargs['message'], 'test')
+                except Exception as e:
+                    conn.excpts.append(e)
                 called.set()
 
             conn.local_server.msg_processor.actor.log = _replacement
-            
+
             await conn.private.send_message(
                 types.UDSMessage(
-                    msg_type=types.UDSMessageType.LOG, data=types.LogRequest(level=types.LogLevel.INFO, message='test').asDict()
+                    msg_type=types.UDSMessageType.LOG,
+                    data=types.LogRequest(level=types.LogLevel.INFO, message='test').asDict(),
                 )
             )
 
-            await called.wait()
+            await asyncio.wait_for(called.wait(), 8)
 
             # Ensure no exceptions
             self.assertEqual(conn.excpts, [])
 
     async def test_ws_login(self) -> None:
-        first = True
         loginResult: types.LoginResponse = types.LoginResponse.null()
 
         async def processor(msg: types.UDSMessage) -> None:
-            nonlocal first, loginResult
-            if first:
-                self.assertEqual(msg.msg_type, types.UDSMessageType.OK)
-                first = False
-            else:
-                self.assertEqual(msg.msg_type, types.UDSMessageType.LOGIN)
-                loginResult = types.LoginResponse(**msg.data)
-                raise exceptions.RequestStop()
+            nonlocal loginResult
+            self.assertEqual(msg.msg_type, types.UDSMessageType.LOGIN)
+            loginResult = types.LoginResponse(**msg.data)
+            raise exceptions.RequestStop()
 
-        async with ws.ws_connection(processor, 8) as conn:
+        async with ws.ws_connection(processor) as conn:
+            # Override close processor
+            called: asyncio.Event = asyncio.Event()
+
+            async def _replacement(*args, **kwargs) -> types.LoginResponse:
+                called.set()
+                # TODO: test args
+                try:
+                    self.assertEqual(kwargs['username'], '1234')
+                    self.assertEqual(kwargs['session_type'], 'test')
+                except Exception as e:
+                    conn.excpts.append(e)
+                return types.LoginResponse(
+                    ip='0.1.2.3',
+                    hostname='test',
+                    dead_line=123456789,
+                    max_idle=987654321,
+                    session_id='test_session_id',
+                )
+
+            conn.local_server.msg_processor.actor.login = _replacement
+
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGIN,
-                    data=types.LoginRequest(username='1234', session_type='test'),
+                    data=types.LoginRequest(username='1234', session_type='test').asDict(),
                 )
             )
+
+            await asyncio.wait_for(called.wait(), 8)
+
+            # Now we should get a loginResult
 
             await conn.task
 
@@ -116,22 +148,32 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
 
     async def test_ws_logout(self) -> None:
         async def processor(msg: types.UDSMessage) -> None:
-            self.assertEqual(msg.msg_type, types.UDSMessageType.OK)
-            raise exceptions.RequestStop()
+            # Should not be called
+            raise Exception('Should not be called')
 
-        async with ws.ws_connection(processor, 8) as conn:
+        async with ws.ws_connection(processor) as conn:
+            # Override close processor
+            called: asyncio.Event = asyncio.Event()
+
+            async def _replacement(*args, **kwargs) -> None:
+                try:
+                    self.assertEqual(kwargs['username'], '1234')
+                    self.assertEqual(kwargs['session_type'], '')
+                    self.assertEqual(kwargs['session_id'], 'session_id')
+                except Exception as e:
+                    conn.excpts.append(e)
+                called.set()
+
+            conn.local_server.msg_processor.actor.logout = _replacement
+
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGOUT,
-                    data=types.LogoutRequest(
-                        username='1234', session_type='test', session_id='test_session_id'
-                    ),
+                    data=types.LogoutRequest(username='1234', session_id='session_id').asDict(),
                 )
             )
 
-            await conn.task
+            await asyncio.wait_for(called.wait(), 8)
 
             # Ensure no exceptions
             self.assertEqual(conn.excpts, [])
-
-            # Logout does not return anything
