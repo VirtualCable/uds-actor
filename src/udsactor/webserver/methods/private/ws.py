@@ -14,7 +14,7 @@ import aiohttp.web
 from udsactor import consts, types
 
 from ...routes import routes
-from ...keys import MSGS_QUEUE_KEY
+from ...keys import MSGS_PROCESSOR_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +29,17 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     The client expects a json response from types.LoginResult
     """
     # udsRest = typing.cast('rest.BrokerREST', request.app[UDSREST_KEY])
-    outgoingQueue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
+    outgoing_queue: asyncio.Queue = typing.cast(
+        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
     ).incoming_queue  # Our outgoing queue is the incoming queue of the processor
 
-    incomingQueue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_QUEUE_KEY]
+    incoming_queue: asyncio.Queue = typing.cast(
+        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
     ).outgoing_queue  # Our incoming queue is the outgoing queue of the processor
 
     # On connection, ensure all messages are cleared
-    while not incomingQueue.empty():
-        incomingQueue.get_nowait()
+    while not incoming_queue.empty():
+        incoming_queue.get_nowait()
 
     ws = aiohttp.web.WebSocketResponse()
     await ws.prepare(request)
@@ -52,7 +52,7 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     # Process incomming messages and also process messages from queue
     async def process_queue():
         while True:
-            msg = await incomingQueue.get()
+            msg = await incoming_queue.get()
             if msg is None:
                 break
             await ws.send_json(msg.asDict())
@@ -65,17 +65,17 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
                     message = types.UDSMessage(**data)
                     if message.msg_type == types.UDSMessageType.CLOSE:
                         # Close connection, respond to it an notify logout to outgoing queue
-                        await outgoingQueue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT, data={}))
+                        await outgoing_queue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT, data={}))
                         await ws.close()
                     elif message.msg_type == types.UDSMessageType.PING:
                         # Put a pong message in the queue
                         await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).asDict())
                     elif message.msg_type == types.UDSMessageType.LOG:
-                        await outgoingQueue.put(message)
+                        await outgoing_queue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGIN:
-                        await outgoingQueue.put(message)
+                        await outgoing_queue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGOUT:
-                        await outgoingQueue.put(message)
+                        await outgoing_queue.put(message)
                     else:
                         # Log strange messages
                         logger.warning('Unknown message received: %s', message)

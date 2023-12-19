@@ -54,7 +54,8 @@ class NoReaderWriter(native.abc.ConfigReader):
 
 @contextlib.asynccontextmanager
 async def setup(
-    udsserver_port: int = 8443, token: str | None = None, for_unmanaged: bool = False
+    udsserver_port: int = 8443, token: str | None = None, for_unmanaged: bool = False,
+    do_not_start_msg_processor: bool = False
 ) -> collections.abc.AsyncGenerator[SetupResult, None]:
     cfg = fixtures.configuration(token, udsserver_port)
 
@@ -77,18 +78,20 @@ async def setup(
         )
     )
 
-    msg_task = asyncio.create_task(msgServer.run())
+    msg_task = asyncio.create_task(msgServer.run()) if not do_not_start_msg_processor else None
 
     # Wait for server to be ready or task exception (not finish, because it will never finish until we cancel it)
     # create a future from notifier
     fut = asyncio.ensure_future(notifier.wait())
     # wait for notifier or task to finish
-    await asyncio.wait([fut, web_task, msg_task], return_when=asyncio.FIRST_COMPLETED)
+    tasks = [fut, web_task] + ([msg_task] if msg_task else [])
+    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     # if any task exception, raise it
-    if web_task.done() and not fut.done():
-        web_task.result()
-    if msg_task.done() and not fut.done():
-        msg_task.result()
+    if not fut.done():
+        if web_task.done():
+            web_task.result()
+        if msg_task and msg_task.done():
+            msg_task.result()
 
     # Create aiohttp client
     client = aiohttp.ClientSession(headers={'Content-Type': 'application/json'})
@@ -97,8 +100,9 @@ async def setup(
     finally:
         try:
             web_task.cancel()
-            msg_task.cancel()
-            await asyncio.wait([web_task, msg_task], return_when=asyncio.ALL_COMPLETED)
+            if msg_task:
+                msg_task.cancel()
+            await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
         except asyncio.CancelledError:
             pass
         await client.close()

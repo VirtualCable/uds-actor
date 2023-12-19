@@ -92,7 +92,7 @@ async def server(
         host=cfg.host, validateCert=cfg.validateCertificate, token=cfg.token
     )
     # This will translate messages from UDS to running actor client
-    webServer[keys.MSGS_QUEUE_KEY] = server_msg_processor
+    webServer[keys.MSGS_PROCESSOR_KEY] = server_msg_processor
 
     webServer.add_routes(routes)
     runner = aiohttp.web.AppRunner(webServer)
