@@ -251,7 +251,10 @@ class LogRequest(typing.NamedTuple):
         )
 
     def asDict(self) -> dict[str, typing.Any]:
-        return self._asdict()
+        return {
+            'level': self.level.name,
+            'message': self.message,
+        }
 
 
 class ClientInfo(typing.NamedTuple):

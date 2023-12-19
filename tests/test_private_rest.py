@@ -151,7 +151,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Should not be called
             raise Exception('Should not be called')
 
-        async with ws.ws_connection(processor) as conn:
+        async with ws.ws_connection(processor, 3) as conn:
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
@@ -164,6 +164,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
                     conn.excpts.append(e)
                 called.set()
 
+            conn.local_server.msg_processor.logged_in = True
             conn.local_server.msg_processor.actor.logout = _replacement
 
             await conn.private.send_message(
@@ -177,3 +178,21 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
 
             # Ensure no exceptions
             self.assertEqual(conn.excpts, [])
+
+            # Now, second call will not re set the event
+            called.clear()
+            await conn.private.send_message(
+                types.UDSMessage(
+                    msg_type=types.UDSMessageType.LOGOUT,
+                    data=types.LogoutRequest(username='1234', session_id='session_id').asDict(),
+                )
+            )
+
+            await conn.task
+
+            # Ensure called is not set
+            self.assertFalse(called.is_set())
+
+            # Enusure 1 Exception is produced (timeout)
+            self.assertEqual(len(conn.excpts), 1)
+            self.assertIsInstance(conn.excpts[0], asyncio.TimeoutError)
