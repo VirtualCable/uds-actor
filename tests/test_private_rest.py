@@ -53,6 +53,9 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
                     conn.excpts.append(e)
                 called.set()
 
+            # In fact, this is not needed, but as we only stop when called is set
+            # We need to ensure that it is set to True, so _replacement is called
+            conn.local_server.msg_processor.logged_in = True
             conn.local_server.msg_processor.actor.logout = _replacement
 
             await conn.private.send_message(types.UDSMessage(msg_type=types.UDSMessageType.CLOSE))
