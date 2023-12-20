@@ -45,6 +45,7 @@ import win32con
 import win32net
 import win32security
 from win32com.shell import shell
+import pythoncom
 
 from udsactor import types
 
@@ -82,6 +83,8 @@ class WindowsOperations(Operations):
     async def getNetworkInfo(self) -> list[types.InterfaceInfo]:
         def fetch_from_wmi() -> list[types.InterfaceInfo]:
             result: list[types.InterfaceInfo] = []
+            # Ensure coinitialize is called. Needed because "run_in_executor" will create a new thread
+            pythoncom.CoInitialize()
             obj = win32com.client.Dispatch("WbemScripting.SWbemLocator")
             wmobj = obj.ConnectServer("localhost", "root\\cimv2")
             adapters = wmobj.ExecQuery("Select * from Win32_NetworkAdapterConfiguration where IpEnabled=True")
