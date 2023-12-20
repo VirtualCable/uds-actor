@@ -14,27 +14,27 @@ logger = logging.getLogger(__name__)
 
 class Operations(abc.ABC):
     @abc.abstractmethod
-    async def IsUserAnAdmin(self) -> bool:
+    async def is_user_admin(self) -> bool:
         pass
 
     @abc.abstractmethod
-    async def getComputerName(self) -> str:
+    async def computer_name(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def getNetworkInfo(self) -> list[types.InterfaceInfo]:
+    async def network_info(self) -> list[types.InterfaceInfo]:
         pass
 
     @abc.abstractmethod
-    async def getDomainName(self) -> str:
+    async def domain_name(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def getOSName(self) -> str:
+    async def os_name(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def getOSVersion(self) -> str:
+    async def os_version(self) -> str:
         pass
 
     @abc.abstractmethod
@@ -58,36 +58,36 @@ class Operations(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def initIdleDuration(self, atLeastSeconds: int) -> None:
+    async def init_idle_duration(self, atLeastSeconds: int) -> None:
         pass
 
     @abc.abstractmethod
-    async def getIdleDuration(self) -> float:
+    async def current_idle(self) -> float:
         pass
 
     @abc.abstractmethod
-    async def getCurrentUser(self) -> str:
+    async def current_user(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def getSessionType(self) -> str:
+    async def session_type(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def forceTimeSync(self) -> None:
+    async def force_time_sync(self) -> None:
         pass
 
     @abc.abstractmethod
-    async def protectFileForOwnerOnly(self, filepath: str) -> None:
+    async def protect_file_for_owner_only(self, filepath: str) -> None:
         pass
 
     @abc.abstractmethod
-    async def setTitle(self, title: str) -> None:
+    async def set_title(self, title: str) -> None:
         pass
     
     # High level operations
     @abc.abstractmethod
-    async def hloJoinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> bool:
+    async def hlo_join_domain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> bool:
         """Joins domain with given name and custom parameters
         
         Returns true if a reboot is needed, false if not
@@ -106,7 +106,7 @@ class Operations(abc.ABC):
         '''
         Rename computer and change password if needed
         '''
-        hostName = await self.getComputerName()
+        hostName = await self.computer_name()
 
         # Check for password change request for an user
         if userName and newPassword:
@@ -126,7 +126,7 @@ class Operations(abc.ABC):
 
     # Convenient, overridable methods
     async def validNetworkCards(self, netString: typing.Optional[str] = None) -> list['types.InterfaceInfo']:
-        cards = await self.getNetworkInfo()
+        cards = await self.network_info()
         try:
             subnet = utils.str_to_net(netString)
         except Exception as e:

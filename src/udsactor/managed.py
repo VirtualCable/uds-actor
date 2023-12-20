@@ -131,7 +131,7 @@ class ManagedActorProcessor(ActorProcessor):
                             await self.platform.operations.reboot()
                             return None  # No more to do here
                     elif osData.action == 'rename_ad':
-                        if await self.platform.operations.hloJoinDomain(osData.name, custom):
+                        if await self.platform.operations.hlo_join_domain(osData.name, custom):
                             # If returns true, a reboot is needed
                             await self.platform.operations.reboot()
                 break  # If no error, break loop

@@ -127,16 +127,16 @@ class LinuxOperations(Operations):
         ip, mac = getIpAddr(ifname), getMacAddr(ifname)
         return (ip, mac)
 
-    async def IsUserAnAdmin(self) -> bool:
+    async def is_user_admin(self) -> bool:
         return os.getuid() == 0
 
-    async def getComputerName(self) -> str:
+    async def computer_name(self) -> str:
         '''
         Returns computer name, with no domain
         '''
         return socket.gethostname().split('.')[0]
 
-    async def getNetworkInfo(self) -> list[types.InterfaceInfo]:
+    async def network_info(self) -> list[types.InterfaceInfo]:
         result: list[types.InterfaceInfo] = []
         for ifname in await LinuxOperations.getInterfaces():
             ip, mac = await LinuxOperations.getIpAndMac(ifname)
@@ -146,10 +146,10 @@ class LinuxOperations(Operations):
                 result.append(types.InterfaceInfo(name=ifname, mac=mac, ip=ip))
         return result
 
-    async def getDomainName(self) -> str:
+    async def domain_name(self) -> str:
         return (socket.getfqdn().split('.', 1) + [''])[1]
 
-    async def getOSName(self) -> str:
+    async def os_name(self) -> str:
         try:
             with open('/etc/os-release', 'r') as f:
                 data = f.read()
@@ -159,8 +159,8 @@ class LinuxOperations(Operations):
         except Exception:
             return 'unknown'
 
-    async def getOSVersion(self) -> str:
-        return 'Linux ' + await self.getOSName()
+    async def os_version(self) -> str:
+        return 'Linux ' + await self.os_name()
 
     async def reboot(self, flags: int = 0) -> None:
         '''
@@ -216,7 +216,7 @@ class LinuxOperations(Operations):
 
         if server_software == 'ipa':
             try:
-                hostname = (await self.getComputerName()).lower() + '.' + domain
+                hostname = (await self.computer_name()).lower() + '.' + domain
                 p = await asyncio.create_subprocess_shell(f'hostnamectl set-hostname {hostname}')
                 await p.wait()
             except Exception as e:
@@ -253,19 +253,19 @@ class LinuxOperations(Operations):
         except Exception as e:
             logger.error('Error changing password: %s', e)
 
-    async def initIdleDuration(self, atLeastSeconds: int) -> None:
+    async def init_idle_duration(self, atLeastSeconds: int) -> None:
         await xss.initIdleDuration(atLeastSeconds)
 
-    async def getIdleDuration(self) -> float:
+    async def current_idle(self) -> float:
         return await xss.getIdleDuration()
 
-    async def getCurrentUser(self) -> str:
+    async def current_user(self) -> str:
         '''
         Returns current logged in user
         '''
         return os.getlogin()
 
-    async def getSessionType(self) -> str:
+    async def session_type(self) -> str:
         '''
         Known values:
         * Unknown -> No XDG_SESSION_TYPE environment variable
@@ -274,10 +274,10 @@ class LinuxOperations(Operations):
         '''
         return 'xrdp' if 'XRDP_SESSION' in os.environ else os.environ.get('XDG_SESSION_TYPE', 'unknown')
 
-    async def forceTimeSync(self) -> None:
+    async def force_time_sync(self) -> None:
         return
 
-    async def protectFileForOwnerOnly(self, filepath: str) -> None:
+    async def protect_file_for_owner_only(self, filepath: str) -> None:
         '''
         Protects a file so only owner can read/write
         '''
@@ -286,11 +286,11 @@ class LinuxOperations(Operations):
         except Exception:
             pass
 
-    async def setTitle(self, title: str) -> None:
+    async def set_title(self, title: str) -> None:
         setproctitle(title)
 
     # High level operations
-    async def hloJoinDomain(self, name: str, custom: typing.Mapping[str, typing.Any]) -> bool:
+    async def hlo_join_domain(self, name: str, custom: typing.Mapping[str, typing.Any]) -> bool:
         """Joins domain with given name and custom parameters"""
         await self.hloRename(name)
 

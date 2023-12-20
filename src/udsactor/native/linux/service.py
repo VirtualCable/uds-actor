@@ -29,7 +29,7 @@ async def login(username: str) -> None:
     logger.debug('Logging in user %s', username)
     client = rest.PrivateREST()
     r = await client.user_login(
-        username=username, sessionType=await native.Manager.instance().operations.getSessionType()
+        username=username, sessionType=await native.Manager.instance().operations.session_type()
     )
     print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
     # Store session id on /tmp/udsactor.session file, so it can be used by logout if present

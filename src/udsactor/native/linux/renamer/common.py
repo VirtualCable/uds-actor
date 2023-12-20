@@ -41,7 +41,7 @@ renamers: dict[str, collections.abc.Callable[[str], collections.abc.Coroutine[No
 
 # Renamers now are for IPv4 only addresses
 async def rename(op: 'Operations', newName: str) -> bool:
-    distribution = (await op.getOSName()).lower().strip()
+    distribution = (await op.os_name()).lower().strip()
     if distribution in renamers:
         logger.info('Renaming to {}'.format(newName))
         return await renamers[distribution](newName)

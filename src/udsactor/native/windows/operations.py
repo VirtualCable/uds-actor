@@ -74,13 +74,13 @@ NETSETUP_DEFER_SPN_SET: typing.Final[int] = 0x1000000
 
 
 class WindowsOperations(Operations):
-    async def IsUserAnAdmin(self) -> bool:
+    async def is_user_admin(self) -> bool:
         return shell.IsUserAnAdmin()
 
-    async def getComputerName(self) -> str:
+    async def computer_name(self) -> str:
         return win32api.GetComputerNameEx(win32con.ComputerNamePhysicalDnsHostname)
 
-    async def getNetworkInfo(self) -> list[types.InterfaceInfo]:
+    async def network_info(self) -> list[types.InterfaceInfo]:
         def fetch_from_wmi() -> list[types.InterfaceInfo]:
             result: list[types.InterfaceInfo] = []
             # Ensure coinitialize is called. Needed because "run_in_executor" will create a new thread
@@ -105,7 +105,7 @@ class WindowsOperations(Operations):
         # wmi can take some time, so we run it in a thread
         return await asyncio.get_running_loop().run_in_executor(None, fetch_from_wmi)
 
-    async def getDomainName(self) -> str:
+    async def domain_name(self) -> str:
         '''
         Will return the domain name if we belong a domain, else None
         (if part of a network group, will also return None)
@@ -121,12 +121,12 @@ class WindowsOperations(Operations):
 
         return domain
 
-    async def getOSName(self) -> str:
-        verinfo = self._getWindowsVersion()
+    async def os_name(self) -> str:
+        verinfo = self._windows_version()
         return f'Windows {verinfo[0]}.{verinfo[1]}'
 
-    async def getOSVersion(self) -> str:
-        verinfo = self._getWindowsVersion()
+    async def os_version(self) -> str:
+        verinfo = self._windows_version()
         # Remove platform id i
         return f'Windows-{verinfo[0]}.{verinfo[1]} Build {verinfo[2]} ({verinfo[3]}))'
 
@@ -163,7 +163,7 @@ class WindowsOperations(Operations):
             # win32api.FormatMessage -> returns error string
             # win32api.GetLastError -> returns error code
             # (just put this comment here to remember to log this when logger is available)
-            error = self._getErrorMessage()
+            error = self._error_message()
             computerName = win32api.GetComputerNameEx(win32con.ComputerNamePhysicalDnsHostname)
             raise Exception('Error renaming computer from {} to {}: {}'.format(computerName, newName, error))
         return True
@@ -215,7 +215,7 @@ class WindowsOperations(Operations):
                 if res == 1355:
                     error = "DC Is not reachable"
                 else:
-                    error = self._getErrorMessage(res)
+                    error = self._error_message(res)
                 logger.error('Error joining domain: {}, {}'.format(error, res))
                 raise Exception(
                     'Error joining domain {}, with credentials {}/*****{}: {}, {}'.format(
@@ -241,13 +241,13 @@ class WindowsOperations(Operations):
 
         if res:
             # Log the error, and raise exception to parent
-            error = self._getErrorMessage(res)
+            error = self._error_message(res)
             raise Exception('Error changing password for user {}: {} {}'.format(user, res, error))
 
-    async def initIdleDuration(self, atLeastSeconds: int) -> None:
+    async def init_idle_duration(self, atLeastSeconds: int) -> None:
         pass
 
-    async def getIdleDuration(self) -> float:
+    async def current_idle(self) -> float:
         class LASTINPUTINFO(ctypes.Structure):  # pylint: disable=too-few-public-methods
             _fields_ = [
                 ('cbSize', ctypes.c_uint),
@@ -272,10 +272,10 @@ class WindowsOperations(Operations):
             logger.error('Getting idle duration: {}'.format(e))
             return 0
 
-    async def getCurrentUser(self) -> str:
+    async def current_user(self) -> str:
         return win32api.GetUserName()
 
-    async def getSessionType(self) -> str:
+    async def session_type(self) -> str:
         '''
         Known values:
         * Unknown -> No SESSIONNAME environment variable
@@ -284,7 +284,7 @@ class WindowsOperations(Operations):
         '''
         return os.environ.get('SESSIONNAME', 'unknown')
 
-    async def forceTimeSync(self) -> None:
+    async def force_time_sync(self) -> None:
         try:
             # subprocess.call([r'c:\WINDOWS\System32\w32tm.exe', ' /resync'])  # , '/rediscover'])
             p = await asyncio.create_subprocess_exec(
@@ -298,9 +298,9 @@ class WindowsOperations(Operations):
         except Exception as e:
             logger.error('Error invoking time sync command: %s', e)
 
-    async def protectFileForOwnerOnly(self, filepath: str) -> None:
+    async def protect_file_for_owner_only(self, filepath: str) -> None:
         try:
-            user, domain, _type = win32security.LookupAccountName('', await self.getCurrentUser())
+            user, domain, _type = win32security.LookupAccountName('', await self.current_user())
 
             secDescriptor = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
             dACL = secDescriptor.GetSecurityDescriptorDacl()
@@ -310,17 +310,17 @@ class WindowsOperations(Operations):
         except Exception as e:
             logger.error('Error protecting file %s: %s', filepath, e)
 
-    async def setTitle(self, title: str) -> None:
+    async def set_title(self, title: str) -> None:
         win32api.SetConsoleTitle(title)
 
     # High level operations
-    async def hloJoinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> bool:
+    async def hlo_join_domain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> bool:
         '''
         Joins domain with given name and custom parameters
 
         Returns true if reboot is needed, false otherwise
         '''
-        versionData = self._getWindowsVersion()
+        versionData = self._windows_version()
         versionInt = versionData[0] * 10 + versionData[1]
 
         # Extract custom data
@@ -338,23 +338,23 @@ class WindowsOperations(Operations):
         # microsoft, but this also must works with it because will do a "multi
         # step" join
         if versionInt >= 60:
-            return await self.oneStepJoin(name, domain, ou, account, password)
+            return await self.one_step_join(name, domain, ou, account, password)
 
         logger.info('Using multiple step join because os is not windows vista or higher')
-        return await self.multiStepJoin(name, domain, ou, account, password)
+        return await self.multiple_steps_join(name, domain, ou, account, password)
 
     # Custom, private methods
-    async def oneStepJoin(
+    async def one_step_join(
         self, name: str, domain: str, ou: str, account: str, password: str
     ) -> bool:  # pylint: disable=too-many-arguments
         '''
         Ejecutes the join domain in exactly one step
         '''
-        currName = await self.getComputerName()
+        currName = await self.computer_name()
         # If name is desired, simply execute multiStepJoin, because computer
         # name will not change
         if currName.lower() == name.lower():
-            await self.multiStepJoin(name, domain, ou, account, password)
+            await self.multiple_steps_join(name, domain, ou, account, password)
             return False
 
         await self.renameComputer(name)
@@ -363,13 +363,13 @@ class WindowsOperations(Operations):
         logger.debug('Requested join domain {} without errors'.format(domain))
         return True
 
-    async def multiStepJoin(self, name: str, domain: str, ou: str, account: str, password: str) -> bool:
+    async def multiple_steps_join(self, name: str, domain: str, ou: str, account: str, password: str) -> bool:
         """Joins a domain in two steps, first renaming computer, and then joining domain
         Returns True if reboot is needed (that is, an step has been executed), False otherwise
         """
-        currName = await self.getComputerName()
+        currName = await self.computer_name()
         if currName.lower() == name.lower():
-            currDomain = await self.getDomainName()
+            currDomain = await self.domain_name()
             if currDomain:
                 # logger.debug('Name: "{}" vs "{}", Domain: "{}" vs "{}"'.format(currName.lower(), name.lower(), currDomain.lower(), domain.lower()))
                 logger.debug('Machine {} is part of domain {}'.format(name, domain))
@@ -385,12 +385,12 @@ class WindowsOperations(Operations):
         logger.info('Activating new name {}'.format(name))
         return True
 
-    def _getErrorMessage(self, resultCode: int = 0) -> str:
+    def _error_message(self, resultCode: int = 0) -> str:
         # sys_fs_enc = sys.getfilesystemencoding() or 'mbcs'
-        msg = win32api.FormatMessage(resultCode)
+        msg = win32api.FormatMessage(resultCode or win32api.GetLastError())  # type: ignore
         return msg
 
-    def _getWindowsVersion(self) -> tuple[int, int, int, int, str]:
+    def _windows_version(self) -> tuple[int, int, int, int, str]:
         return win32api.GetVersionEx()
 
     # def writeToPipe(pipeName: str, bytesPayload: bytes, waitForResponse: bool) -> typing.Optional[bytes]:
