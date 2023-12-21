@@ -45,7 +45,7 @@ class ActorProcessor(abc.ABC):
         Logs the requested message on this platform
         USed to redirect client logs to server
         """
-        logger.log(level.asPython(), 'SESSION: %s', message)
+        logger.log(level.as_python(), 'SESSION: %s', message)
 
     @abc.abstractmethod
     async def initialize(self, *, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:

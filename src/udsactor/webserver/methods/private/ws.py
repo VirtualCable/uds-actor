@@ -76,6 +76,8 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
                         await outgoing_queue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGOUT:
                         await outgoing_queue.put(message)
+                    elif message.msg_type == types.UDSMessageType.SCREENSHOT:
+                        await outgoing_queue.put(message)
                     else:
                         # Log strange messages
                         logger.warning('Unknown message received: %s', message)

@@ -66,20 +66,20 @@ class MessagesProcessor:
                         await self.actor.login(
                             username=msg.data['username'], session_type=msg.data['session_type']
                         )
-                    ).asDict(),
+                    ).as_dict(),
                 )
             )
         except Exception:
             logger.exception('Exception on login')
             await self.outgoing_queue.put(
-                types.UDSMessage(msg_type=types.UDSMessageType.LOGIN, data=types.LoginResponse.null().asDict())
+                types.UDSMessage(msg_type=types.UDSMessageType.LOGIN, data=types.LoginResponse.null().as_dict())
             )
 
     async def logout(self, msg: types.UDSMessage) -> None:
         if self.logged_in is False:
             return
         try:
-            req = types.LogoutRequest.fromDict(msg.data)
+            req = types.LogoutRequest.from_dict(msg.data)
             await self.actor.logout(
                 username=req.username, session_type=req.session_type, session_id=req.session_id
             )
@@ -90,7 +90,7 @@ class MessagesProcessor:
 
     async def log(self, msg: types.UDSMessage) -> None:
         try:
-            req = types.LogRequest.fromDict(msg.data)
+            req = types.LogRequest.from_dict(msg.data)
             await self.actor.log(level=req.level, message=req.message)
         except Exception:
             logger.exception('Exception on log')

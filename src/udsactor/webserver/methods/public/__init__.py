@@ -5,4 +5,4 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
 # Ensure registers routes loading modules
-from . import logout, preconnect, information, screenshot, script, uuid
+from . import information, logout, message, preconnect, script, screenshot, uuid

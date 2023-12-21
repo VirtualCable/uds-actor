@@ -43,7 +43,7 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
         if self.api:
             self.emitting = True
             await self.api.log(
-                level=types.LogLevel.fromPython(level), message=message
+                level=types.LogLevel.from_python(level), message=message
             )
             self.emitting = False
 

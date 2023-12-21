@@ -29,7 +29,7 @@ async def logout(request: aiohttp.web.Request) -> aiohttp.web.Response:
     await outgoing_queue.put(
         types.UDSMessage(
             msg_type=types.UDSMessageType.LOGOUT,
-            data=types.LogoutRequest.null().asDict(),
+            data=types.LogoutRequest.null().as_dict(),
         )
     )
     return response(result=consts.OK)

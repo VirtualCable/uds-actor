@@ -14,7 +14,7 @@ import aiohttp.web
 from ...routes import routes
 from ...keys import MSGS_PROCESSOR_KEY
 
-from udsactor import types, consts
+from udsactor import types, consts, server_msg_processor
 from udsactor.webserver.utils import response
 
 logger = logging.getLogger(__name__)
@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 
 @routes.post(consts.PUBLIC_REST_PATH('message'))
 async def message(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    queue: 'asyncio.Queue[types.UDSMessage]' = typing.cast(
-        'asyncio.Queue[types.UDSMessage]', request.app[MSGS_PROCESSOR_KEY]
-    )
+    outgoing_queue: asyncio.Queue = typing.cast(
+        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
+    ).outgoing_queue  # Our outgoing queue is the outgoing queue of the processor
     try:
         data = await request.json()
         message = data['message']
-        await queue.put(types.UDSMessage(types.UDSMessageType.MESSAGE, data=message))
+        await outgoing_queue.put(types.UDSMessage(types.UDSMessageType.MESSAGE, data=message))
     except Exception as e:
         logger.warning('Error processing log: %s', e)
         return response(result=None, error=str(e))

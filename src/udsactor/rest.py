@@ -367,19 +367,19 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         }
         result = await self._do_post(types.ApiType.ACTORV3, 'unmanaged', payload)
 
-        return types.CertificateInfo.fromDict(result)
+        return types.CertificateInfo.from_dict(result)
 
     async def ready(self, ip: str, port: int) -> types.CertificateInfo:
         payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
         result = await self._do_post(types.ApiType.ACTORV3, 'ready', payload)
 
-        return types.CertificateInfo.fromDict(result)
+        return types.CertificateInfo.from_dict(result)
 
     async def notify_new_ip(self, ip: str, port: int) -> types.CertificateInfo:
         payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
         result = await self._do_post(types.ApiType.ACTORV3, 'ipchange', payload)
 
-        return types.CertificateInfo.fromDict(result)
+        return types.CertificateInfo.from_dict(result)
 
     async def notify_login(
         self,
@@ -394,7 +394,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'session_type': session_type,
         }
         result = await self._do_post(types.ApiType.ACTORV3, 'login', payload)
-        return types.LoginResponse.fromDict(result)
+        return types.LoginResponse.from_dict(result)
 
     async def notify_logout(
         self,
@@ -574,7 +574,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
         result = await self._do_post('user_login', payload)
 
         try:
-            res = types.LoginResponse.fromDict(result)
+            res = types.LoginResponse.from_dict(result)
             self._session_id = res.session_id or ''
             return res
         except Exception:

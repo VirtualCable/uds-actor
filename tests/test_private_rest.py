@@ -87,7 +87,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOG,
-                    data=types.LogRequest(level=types.LogLevel.INFO, message='test').asDict(),
+                    data=types.LogRequest(level=types.LogLevel.INFO, message='test').as_dict(),
                 )
             )
 
@@ -130,7 +130,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGIN,
-                    data=types.LoginRequest(username='1234', session_type='test').asDict(),
+                    data=types.LoginRequest(username='1234', session_type='test').as_dict(),
                 )
             )
 
@@ -154,7 +154,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Should not be called
             raise Exception('Should not be called')
 
-        async with ws.ws_connection(processor, 3) as conn:
+        async with ws.ws_connection(processor, 1) as conn:
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
@@ -173,7 +173,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGOUT,
-                    data=types.LogoutRequest(username='1234', session_id='session_id').asDict(),
+                    data=types.LogoutRequest(username='1234', session_id='session_id').as_dict(),
                 )
             )
 
@@ -187,7 +187,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             await conn.private.send_message(
                 types.UDSMessage(
                     msg_type=types.UDSMessageType.LOGOUT,
-                    data=types.LogoutRequest(username='1234', session_id='session_id').asDict(),
+                    data=types.LogoutRequest(username='1234', session_id='session_id').as_dict(),
                 )
             )
 

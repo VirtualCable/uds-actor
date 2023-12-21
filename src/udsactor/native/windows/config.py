@@ -75,7 +75,7 @@ class WindowsConfigReader(ConfigReader):
             wreg.CloseKey(key)
             data = base64.b64decode(data).decode('utf8')
             data = json.loads(data)
-            return types.ActorConfiguration.fromDict(data)
+            return types.ActorConfiguration.from_dict(data)
         except Exception:
             return types.ActorConfiguration()
 
@@ -86,7 +86,7 @@ class WindowsConfigReader(ConfigReader):
             key = wreg.CreateKeyEx(BASEKEY, PATH, 0, wreg.KEY_ALL_ACCESS)
 
         fixRegistryPermissions(key.handle)  # type: ignore
-        data = json.dumps(config.asDict())
+        data = json.dumps(config.as_dict())
         data = base64.b64encode(data.encode('utf8')).decode('utf8')
 
         wreg.SetValueEx(key, "", 0, wreg.REG_BINARY, data)  # type: ignore
