@@ -323,6 +323,15 @@ def retry(
 
 
 async def execute(cmdLine: str, section: str) -> bool:
+    '''Executes an external command
+
+    Args:
+        cmdLine: Command line to execute
+        section: Section to log
+
+    Returns:
+        True if command was executed, False otherwise (and error is logged)
+    '''
     try:
         logger.debug('Executing command on {}: {}'.format(section, cmdLine))
         res = await asyncio.create_subprocess_shell(
@@ -334,6 +343,33 @@ async def execute(cmdLine: str, section: str) -> bool:
         return False
     logger.debug('Result of executing cmd for {} was {}'.format(section, res))
     return True
+
+
+async def script_executor(script: str) -> None:
+    '''
+    Executes a script in a thread
+
+    Note:
+        * We execute the script in a different thread because it may block for a long time
+        * Note tha if the script is async, will need its own event loop in order to work properly
+        * If you need to make it async, use asyncio.run() inside the script
+        * Normally, due to the fact that it is executed in a different thread, no need for making it async
+
+    Args:
+        script: Script to execute (python code)
+
+    Returns:
+        Nothing (if error, it is logged)
+    '''
+
+    def executor() -> None:
+        try:
+            exec(script, globals(), None)
+        except Exception as e:
+            logger.error('Error executing script: {}'.format(e))
+
+    # Execute in a thread
+    await asyncio.get_event_loop().run_in_executor(None, executor)
 
 
 # Singleton metaclass

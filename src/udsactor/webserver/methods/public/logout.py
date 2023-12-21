@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 async def logout(request: aiohttp.web.Request) -> aiohttp.web.Response:
     outgoing_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).outgoing_queue  # Our outgoing queue is the outgoing queue of the processor
+    ).incoming_queue  # Push the messages to be processed by the processor
     
     await outgoing_queue.put(
         types.UDSMessage(
             msg_type=types.UDSMessageType.LOGOUT,
-            data=types.LogoutRequest.null().as_dict(),
+            data=types.LogoutRequest.null(from_broker=True).as_dict(),
         )
     )
     return response(result=consts.OK)

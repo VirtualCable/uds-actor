@@ -67,18 +67,18 @@ async def setup(
 
     # Now override
     server = server_module.UDSActorServer()
-    actor = managed.ManagedActorProcessor() if not for_unmanaged else unmanaged.UnmanagedActorProcessor()
-    msgServer = server_msg_processor.MessagesProcessor(actor=actor)
+    actor = managed.ManagedActorProcessor(parent=server) if not for_unmanaged else unmanaged.UnmanagedActorProcessor(parent=server)
+    msg_server = server_msg_processor.MessagesProcessor(actor=actor)
 
     notifier = asyncio.Event()
     # await webserver.server(cfg, generate_cert('127.0.0.1'), notifier)
     web_task = asyncio.create_task(
         webserver.server(
-            cfg=cfg, cert_info=generate_cert('127.0.0.1'), server_msg_processor=msgServer, ready_event=notifier
+            cfg=cfg, cert_info=generate_cert('127.0.0.1'), server_msg_processor=msg_server, ready_event=notifier
         )
     )
 
-    msg_task = asyncio.create_task(msgServer.run()) if not do_not_start_msg_processor else None
+    msg_task = asyncio.create_task(msg_server.run()) if not do_not_start_msg_processor else None
 
     # Wait for server to be ready or task exception (not finish, because it will never finish until we cancel it)
     # create a future from notifier
@@ -96,7 +96,7 @@ async def setup(
     # Create aiohttp client
     client = aiohttp.ClientSession(headers={'Content-Type': 'application/json'})
     try:
-        yield SetupResult(client=client, msg_processor=msgServer, actor_server=server)
+        yield SetupResult(client=client, msg_processor=msg_server, actor_server=server)
     finally:
         try:
             web_task.cancel()

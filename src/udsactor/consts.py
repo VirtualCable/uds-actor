@@ -35,6 +35,7 @@ import tempfile
 import platform
 import secrets
 
+
 def _feature_requested(env_var: str) -> bool:
     env_var_name = env_var.upper().replace('-', '_')
     if env_var_name not in os.environ:
@@ -128,3 +129,5 @@ SECURE_CIPHERS: typing.Final[str] = (
 # (and notifys the broker of the change)
 OWN_AUTH_TOKEN: typing.Final[str] = secrets.token_urlsafe(33)
 
+# Well nown sid for remote desktop users on windows
+REMOTE_USERS_SID: typing.Final[str] = 'S-1-5-32-555'

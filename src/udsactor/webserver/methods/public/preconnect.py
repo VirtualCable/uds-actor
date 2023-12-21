@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def preconnect(request: aiohttp.web.Request) -> aiohttp.web.Response:
     outgoing_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).outgoing_queue  # Our outgoing queue is the outgoing queue of the processor
+    ).incoming_queue  # Push the messages to be processed by the processor
 
     try:
         data = types.PreconnectRequest.from_dict(await request.json())

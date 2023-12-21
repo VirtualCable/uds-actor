@@ -57,61 +57,78 @@ class MessagesProcessor:
         self.logged_in = False
 
     async def login(self, msg: types.UDSMessage) -> None:
-        try:
-            self.logged_in = True
-            await self.outgoing_queue.put(
-                types.UDSMessage(
-                    msg_type=types.UDSMessageType.LOGIN,
-                    data=(
-                        await self.actor.login(
-                            username=msg.data['username'], session_type=msg.data['session_type']
-                        )
-                    ).as_dict(),
-                )
+        self.logged_in = True
+        await self.outgoing_queue.put(
+            types.UDSMessage(
+                msg_type=types.UDSMessageType.LOGIN,
+                data=(
+                    await self.actor.login(username=msg.data['username'], session_type=msg.data['session_type'])
+                ).as_dict(),
             )
-        except Exception:
-            logger.exception('Exception on login')
-            await self.outgoing_queue.put(
-                types.UDSMessage(msg_type=types.UDSMessageType.LOGIN, data=types.LoginResponse.null().as_dict())
-            )
+        )
 
     async def logout(self, msg: types.UDSMessage) -> None:
+        # If a request from the broker is received, send the logout request to the client queue
+        req = types.LogoutRequest.from_dict(msg.data)
+        if req.from_broker is True:
+            await self.outgoing_queue.put(msg)
+            return
         if self.logged_in is False:
             return
-        try:
-            req = types.LogoutRequest.from_dict(msg.data)
-            await self.actor.logout(
-                username=req.username, session_type=req.session_type, session_id=req.session_id
-            )
-        except Exception as e:
-            logger.exception('Exception on logout')
-        finally:
-            self.logged_in = False
+
+        self.logged_in = False
+        # Invoke actor logout
+        await self.actor.logout(username=req.username, session_type=req.session_type, session_id=req.session_id)
 
     async def log(self, msg: types.UDSMessage) -> None:
-        try:
-            req = types.LogRequest.from_dict(msg.data)
-            await self.actor.log(level=req.level, message=req.message)
-        except Exception:
-            logger.exception('Exception on log')
+        req = types.LogRequest.from_dict(msg.data)
+        await self.actor.log(level=req.level, message=req.message)
+
+    async def script(self, msg: types.UDSMessage) -> None:
+        scrpt = types.ScriptRequest.from_dict(msg.data)
+        if scrpt.as_user is True:
+            await self.outgoing_queue.put(msg)  # Send to client
+        else:
+            await self.actor.script(script=scrpt.script)
+
+    async def message(self, msg: types.UDSMessage) -> None:
+        message: str = msg.data['message']  # So if message is not present, it will raise an exception
+        await self.outgoing_queue.put(
+            types.UDSMessage(
+                msg_type=types.UDSMessageType.MESSAGE,
+                data={'message': message},
+            )
+        )
+
+    async def preconnect(self, msg: types.UDSMessage) -> None:
+        data = types.PreconnectRequest.from_dict(msg.data)
+        await self.actor.preconnect(data=data)
 
     async def process_message(self, msg: types.UDSMessage) -> None:
         processors: dict[
-            types.UDSMessageType, typing.Callable[[types.UDSMessage], collections.abc.Awaitable[None]]
+            types.UDSMessageType,
+            typing.Callable[[types.UDSMessage], collections.abc.Awaitable[None]],
         ] = {
-            types.UDSMessageType.LOGIN: self.login,
-            types.UDSMessageType.LOGOUT: self.logout,
-            types.UDSMessageType.CLOSE: self.logout,
+            types.UDSMessageType.LOGIN: self.login,  # Client login
+            types.UDSMessageType.LOGOUT: self.logout,  # This can be from client or broker
+            types.UDSMessageType.CLOSE: self.logout,  # This can be from client only
             # PING and PONG are only used for keepalive, so we ignore them here
             # they are processed on ws server
-            types.UDSMessageType.LOG: self.log,
+            types.UDSMessageType.LOG: self.log,  # Log message, only from client
+            # Messages from Broker
+            types.UDSMessageType.SCRIPT: self.script,  # Script message, only from broker
+            types.UDSMessageType.MESSAGE: self.message,  # Message from broker
+            types.UDSMessageType.PRECONNECT: self.preconnect,  # Preconnect message from broker
         }
 
         if msg.msg_type not in processors:
             logger.error('Unknown message type %s', msg.msg_type)
             return
 
-        await processors[msg.msg_type](msg)
+        try:
+            await processors[msg.msg_type](msg)
+        except Exception:
+            logger.exception('Exception processing message %s', msg.msg_type)
 
     async def run(self) -> None:
         while True:

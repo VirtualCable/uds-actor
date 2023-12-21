@@ -39,14 +39,54 @@ import sys
 
 import win32serviceutil
 import win32service
+import win32net
 import pythoncom
 import servicemanager
+import win32security
 
-from udsactor import types
+from udsactor import types, consts
 from udsactor.server import UDSActorServer
 
 logger = logging.getLogger(__name__)
 
 
 class WindowsUDSActorServer(UDSActorServer):
-    pass
+    async def preconnect(self, *, data: types.PreconnectRequest) -> None:
+        logger.debug('Pre connect invoked')
+
+        if data.protocol == 'rdp':  # If connection is not using rdp, skip adding user
+            # We cast None to str so mypy does not complains :)
+            groupName = win32security.LookupAccountSid(
+                typing.cast(str, None), win32security.GetBinarySid(consts.REMOTE_USERS_SID)
+            )[0]
+
+            useraAlreadyInGroup = False
+            resumeHandle = 0
+            # Note that this loop is fast enough, so we can do it syncronously
+            while True:
+                users, _, resumeHandle = win32net.NetLocalGroupGetMembers(
+                    typing.cast(str, None), groupName, 1, resumeHandle, 32768
+                )[
+                    :3
+                ]  # In fact, NetLocalGroupGetMembers returns 3 values, but type checker thinks it should be 4 :(
+                if data.username.lower() in [u['name'].lower() for u in users]:
+                    useraAlreadyInGroup = True
+                    break
+                if resumeHandle == 0:
+                    break
+
+            if not useraAlreadyInGroup:
+                logger.debug('User not in group, adding it')
+                try:
+                    userSSID = win32security.LookupAccountName(None, data.username)[0]
+                    # Cast to typing.any is due to type checker not knowing that the parameter is a list of dicts
+                    win32net.NetLocalGroupAddMembers(
+                        typing.cast(str, None), groupName, 0, typing.cast(typing.Any, [{'sid': userSSID}])
+                    )
+                except Exception as e:
+                    logger.error('Exception adding user to Remote Desktop Users: {}'.format(e))
+            else:
+                self._user = None
+                logger.debug('User {} already in group'.format(data.username))
+
+        return await super().preconnect(data=data)

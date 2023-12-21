@@ -36,7 +36,7 @@ import logging
 import threading
 import asyncio
 
-from udsactor import types, managed, unmanaged, rest, native, server_msg_processor as msg_processor, log
+from udsactor import types, managed, unmanaged, utils, native, server_msg_processor as msg_processor, log
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +116,9 @@ class UDSActorServer(threading.Thread):
         # Setup actor processor
         actor: 'ActorProcessor'
         if cfg.actorType == types.ActorType.MANAGED:
-            actor = managed.ManagedActorProcessor()
+            actor = managed.ManagedActorProcessor(self)
         else:
-            actor = unmanaged.UnmanagedActorProcessor()
+            actor = unmanaged.UnmanagedActorProcessor(self)
 
         # Keep reference to tasks so we can cancel them on exit (and avoid garbage collection of them)
         back_tasks: typing.Final[list[asyncio.Task]] = [
@@ -150,3 +150,16 @@ class UDSActorServer(threading.Thread):
 
             # Wait for all tasks to finish after cancellation
             await asyncio.gather(*back_tasks, return_exceptions=True)
+
+    async def preconnect(self, *, data: types.PreconnectRequest) -> None:
+        """
+        Executes the preconnect command
+        """
+        cfg = await native.Manager.instance().config
+
+        if cfg.pre_command:
+            await utils.execute(
+                cfg.pre_command
+                + f' {data.username.replace(" ", "%20")} {data.protocol} {data.ip} {data.hostname} {data.udsuser.replace(" ", "%20")}',
+                'preConnect',
+            )

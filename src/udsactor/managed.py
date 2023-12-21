@@ -40,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 
 class ManagedActorProcessor(ActorProcessor):
-    async def initialize(self, *, interfaces: list[types.InterfaceInfo]) -> typing.Optional[types.CertificateInfo]:
+    async def initialize(
+        self, *, interfaces: list[types.InterfaceInfo]
+    ) -> typing.Optional[types.CertificateInfo]:
         """
         Processes a managed actor
 
@@ -208,7 +210,9 @@ class ManagedActorProcessor(ActorProcessor):
         result = types.LoginResponse(ip='', hostname='', dead_line=None, max_idle=None, session_id=None)
         try:
             result = await api.notify_login(
-                actor_type=cfg.actorType or types.ActorType.MANAGED, username=username, session_type=session_type
+                actor_type=cfg.actorType or types.ActorType.MANAGED,
+                username=username,
+                session_type=session_type,
             )
             script = await self.platform.cfgManager.scriptToInvokeOnLogin()
             if script:

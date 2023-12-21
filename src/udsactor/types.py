@@ -210,13 +210,15 @@ class LogoutRequest(typing.NamedTuple):
     username: str
     session_id: str
     session_type: str = ''
+    from_broker: bool = False
 
     @staticmethod
-    def null() -> 'LogoutRequest':
-        return LogoutRequest(username='', session_type='', session_id='')
+    def null(from_broker: bool = False) -> 'LogoutRequest':
+        return LogoutRequest(username='', session_type='', session_id='', from_broker=from_broker)
+    
 
     @staticmethod
-    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LogoutRequest':
+    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None, from_broker: bool = False) -> 'LogoutRequest':
         if not data or not isinstance(data, collections.abc.Mapping):
             return LogoutRequest.null()
 
@@ -224,6 +226,7 @@ class LogoutRequest(typing.NamedTuple):
             username=data.get('username', ''),
             session_type=data.get('session_type', ''),
             session_id=data.get('session_id', ''),
+            from_broker=from_broker,
         )
 
     def as_dict(self) -> dict[str, typing.Any]:
@@ -337,6 +340,7 @@ class PreconnectRequest(typing.NamedTuple):
 class ScriptRequest(typing.NamedTuple):
     # {'script': '# python code to execute'}
     script: str  # Script to execute
+    as_user: typing.Optional[bool] = False  # If true, script will be executed as user, if false, as service
     script_type: str = 'python'  # Script type (python, bash, etc..)
 
     @staticmethod
@@ -350,6 +354,7 @@ class ScriptRequest(typing.NamedTuple):
 
         return ScriptRequest(
             script=data['script'],
+            as_user=data.get('as_user', False),
             script_type=data.get('script_type', 'python'),
         )
 
@@ -357,6 +362,7 @@ class ScriptRequest(typing.NamedTuple):
         return {
             'script': self.script,
             'script_type': self.script_type,
+            'as_user': self.as_user,
         }
 
 

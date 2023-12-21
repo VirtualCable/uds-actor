@@ -48,18 +48,3 @@ def response(result: typing.Any, status: int = 200, **kwargs) -> aiohttp.web.Res
     return aiohttp.web.json_response(
         {'result': result, 'stamp': time.time(), 'version': consts.VERSION, **kwargs}
     )
-
-
-async def script_executor(script: str) -> None:
-    '''
-    Executes a script in a thread
-    '''
-
-    def executor() -> None:
-        try:
-            exec(script, globals(), None)
-        except Exception as e:
-            logger.error('Error executing script: {}'.format(e))
-
-    # Execute in a thread
-    await asyncio.get_event_loop().run_in_executor(None, executor)
