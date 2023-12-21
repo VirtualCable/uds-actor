@@ -74,8 +74,8 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
                     # Ensure repsonse is an string, contains consts.VERSION and UDS
                     self.assertEqual(data, consts.OK)
 
-                self.assertEqual(svr.msg_processor.incoming_queue.qsize(), 1)
-                msg = await svr.msg_processor.incoming_queue.get()
+                self.assertEqual(svr.msg_processor.queue.qsize(), 1)
+                msg = await svr.msg_processor.queue.get()
                 self.assertEqual(msg.msg_type, managed.types.UDSMessageType.LOGOUT)
                 self.assertEqual(msg.data, managed.types.LogoutRequest.null(from_broker=True).as_dict())
 
@@ -96,8 +96,8 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
                     # Ensure repsonse is an string, contains consts.VERSION and UDS
                     self.assertEqual(data, consts.OK)
 
-                self.assertEqual(conn.msg_processor.incoming_queue.qsize(), 1)
-                msg = await conn.msg_processor.incoming_queue.get()
+                self.assertEqual(conn.msg_processor.queue.qsize(), 1)
+                msg = await conn.msg_processor.queue.get()
                 self.assertEqual(msg.msg_type, managed.types.UDSMessageType.MESSAGE)
                 self.assertEqual(msg.data, {'message': 'test'})
 
@@ -131,8 +131,8 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
                             # Ensure repsonse is an string, contains consts.VERSION and UDS
                             self.assertEqual(data, consts.OK)
 
-                        self.assertEqual(conn.msg_processor.incoming_queue.qsize(), 1)
-                        msg = await conn.msg_processor.incoming_queue.get()
+                        self.assertEqual(conn.msg_processor.queue.qsize(), 1)
+                        msg = await conn.msg_processor.queue.get()
                         self.assertEqual(msg.msg_type, managed.types.UDSMessageType.PRECONNECT)
                         self.assertEqual(types.PreconnectRequest.from_dict(msg.data), test_data)
 
@@ -152,8 +152,8 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
                     # Ensure repsonse is an string, contains consts.VERSION and UDS
                     self.assertEqual(data, consts.OK)
 
-                self.assertEqual(conn.msg_processor.incoming_queue.qsize(), 1)
-                msg = await conn.msg_processor.incoming_queue.get()
+                self.assertEqual(conn.msg_processor.queue.qsize(), 1)
+                msg = await conn.msg_processor.queue.get()
                 self.assertEqual(msg.msg_type, managed.types.UDSMessageType.SCREENSHOT)
                 self.assertEqual(msg.data, {})
 
@@ -175,8 +175,8 @@ class TestPublicRest(exclusive_tests.AsyncExclusiveTests):
                     # Ensure repsonse is an string, contains consts.VERSION and UDS
                     self.assertEqual(data, consts.OK)
 
-                self.assertEqual(conn.msg_processor.incoming_queue.qsize(), 1)
-                msg = await conn.msg_processor.incoming_queue.get()
+                self.assertEqual(conn.msg_processor.queue.qsize(), 1)
+                msg = await conn.msg_processor.queue.get()
                 self.assertEqual(msg.msg_type, managed.types.UDSMessageType.SCRIPT)
                 self.assertEqual(msg.data, test_script.as_dict())
 

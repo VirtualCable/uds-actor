@@ -44,21 +44,23 @@ if typing.TYPE_CHECKING:
 
 class MessagesProcessor:
     actor: 'ActorProcessor'
-    incoming_queue: asyncio.Queue[types.UDSMessage]
-    outgoing_queue: asyncio.Queue[types.UDSMessage]
+    # Queue where messages from client or broker are received
+    queue: asyncio.Queue[types.UDSMessage]
+    # Queue where messages to be sent to client are put
+    client_queue: asyncio.Queue[types.UDSMessage]
 
     logged_in: bool
 
     def __init__(self, actor: 'ActorProcessor') -> None:
         self.actor = actor
-        self.incoming_queue = asyncio.Queue()
-        self.outgoing_queue = asyncio.Queue()
+        self.queue = asyncio.Queue()
+        self.client_queue = asyncio.Queue()
 
         self.logged_in = False
 
     async def login(self, msg: types.UDSMessage) -> None:
         self.logged_in = True
-        await self.outgoing_queue.put(
+        await self.client_queue.put(
             types.UDSMessage(
                 msg_type=types.UDSMessageType.LOGIN,
                 data=(
@@ -71,7 +73,7 @@ class MessagesProcessor:
         # If a request from the broker is received, send the logout request to the client queue
         req = types.LogoutRequest.from_dict(msg.data)
         if req.from_broker is True:
-            await self.outgoing_queue.put(msg)
+            await self.client_queue.put(msg)
             return
         if self.logged_in is False:
             return
@@ -87,13 +89,13 @@ class MessagesProcessor:
     async def script(self, msg: types.UDSMessage) -> None:
         scrpt = types.ScriptRequest.from_dict(msg.data)
         if scrpt.as_user is True:
-            await self.outgoing_queue.put(msg)  # Send to client
+            await self.client_queue.put(msg)  # Send to client
         else:
             await self.actor.script(script=scrpt.script)
 
     async def message(self, msg: types.UDSMessage) -> None:
         message: str = msg.data['message']  # So if message is not present, it will raise an exception
-        await self.outgoing_queue.put(
+        await self.client_queue.put(
             types.UDSMessage(
                 msg_type=types.UDSMessageType.MESSAGE,
                 data={'message': message},
@@ -132,6 +134,6 @@ class MessagesProcessor:
 
     async def run(self) -> None:
         while True:
-            msg = await self.incoming_queue.get()
+            msg = await self.queue.get()
             await self.process_message(msg)
-            self.incoming_queue.task_done()  # Allow join to work
+            self.queue.task_done()  # Allow join to work

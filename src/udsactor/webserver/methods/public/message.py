@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def message(request: aiohttp.web.Request) -> aiohttp.web.Response:
     queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).incoming_queue  # Push the messages to be processed by the processor
+    ).queue  # Push the messages to be processed by the processor
     
     try:
         data = await request.json()

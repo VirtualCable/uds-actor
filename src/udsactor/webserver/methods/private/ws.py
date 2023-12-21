@@ -31,11 +31,11 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     # udsRest = typing.cast('rest.BrokerREST', request.app[UDSREST_KEY])
     outgoing_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).incoming_queue  # Our outgoing queue is the incoming queue of the processor
+    ).queue  # Our outgoing queue is the incoming queue of the processor
 
     incoming_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).outgoing_queue  # Our incoming queue is the outgoing queue of the processor
+    ).client_queue  # Our incoming queue is the outgoing queue of the processor
 
     # On connection, ensure all messages are cleared
     while not incoming_queue.empty():
