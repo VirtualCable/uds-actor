@@ -32,15 +32,16 @@ import typing
 import socket
 import logging
 import random
+import sys
+import unittest
 
-from udsactor import consts
+from udsactor import consts, native, types
 
 logger = logging.getLogger(__name__)
 
 
 def get_free_port(ipv6: bool = False) -> int:
-    '''Returns a free port in the system
-    '''
+    '''Returns a free port in the system'''
     if not ipv6:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     else:
@@ -50,8 +51,55 @@ def get_free_port(ipv6: bool = False) -> int:
     s.close()
     return port
 
+
 def rnd_string_for_test(length: int = 32) -> str:
     return ''.join(random.choice('0123456789ABCDEF') for i in range(length))  # nosec: testing purposes only
 
-def public_rest_path(method: str, *, server: str = f'https://localhost:{consts.LISTEN_PORT}', token: typing.Optional[str] = None) -> str:
-    return server.strip('/') + consts.PUBLIC_REST_PATH(method).replace('{auth_token}', token or consts.OWN_AUTH_TOKEN)
+
+def public_rest_path(
+    method: str, *, server: str = f'https://localhost:{consts.LISTEN_PORT}', token: typing.Optional[str] = None
+) -> str:
+    return server.strip('/') + consts.PUBLIC_REST_PATH(method).replace(
+        '{auth_token}', token or consts.OWN_AUTH_TOKEN
+    )
+
+
+_previous_cfg: typing.Optional[types.ActorConfiguration] = None
+
+
+def set_testing_cfg(cfg: typing.Optional[types.ActorConfiguration]) -> None:
+    global _previous_cfg
+
+    class NoReaderWriter(native.abc.ConfigReader):
+        cfg: types.ActorConfiguration
+
+        def __init__(self, cfg: types.ActorConfiguration):
+            self.cfg = cfg
+
+        async def read(self) -> types.ActorConfiguration:
+            return self.cfg
+
+        async def write(self, cfg: types.ActorConfiguration) -> None:
+            self.cfg = cfg
+
+        async def scriptToInvokeOnLogin(self) -> str:
+            return ''
+
+    # Override "save" config, platform provided config, etc..
+    p = native.Manager.instance()
+    # Ensure own is used
+    if _previous_cfg is None and p.cfg is not None:
+        _previous_cfg = p.cfg
+    if cfg is not None:
+        p.cfgManager = NoReaderWriter(cfg)
+    elif _previous_cfg is not None:
+        p.cfgManager = NoReaderWriter(_previous_cfg)
+
+    p.cfg = None  # Cleans up cfg, so next read will reload it
+
+
+def skip_if_not(platforms: 'list[str] | str') -> None:
+    platforms = [platforms] if isinstance(platforms, str) else platforms
+
+    if sys.platform not in platforms:
+        raise unittest.SkipTest(f'Test skipped on platform {sys.platform} (desired: {",".join(platforms)})')

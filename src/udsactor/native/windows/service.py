@@ -133,9 +133,9 @@ class WindowsRunner(Runner):
             servicemanager.Initialize()
             servicemanager.PrepareToHostSingle(UDSActorService)
             servicemanager.StartServiceCtrlDispatcher()
-        elif sys.argv[1] == '--setup-recovery':
-            self.setupRecoverService()
-        elif len(sys.argv) == 2 and sys.argv[1] == 'debug':
+        elif sys.argv[1] == '--setup-recovery':  # len(sys.argv) is greater than 1
+            self.setup_recovery()
+        elif sys.argv[1] == 'debug':
             # Execute as application, not as service (for debugging purposes on windows)
             udsAppServer = WindowsUDSActorServer()
             udsAppServer.run()  # Blocking call, not running on a thread
@@ -148,7 +148,7 @@ class WindowsRunner(Runner):
     #     """
     #     win32serviceutil.StopService(SVC_NAME)
 
-    def setupRecoverService(self):
+    def setup_recovery(self):
         svc_name = UDSActorService._svc_name_  # pylint: disable=protected-access
 
         hs = None

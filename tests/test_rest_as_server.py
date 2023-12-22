@@ -8,7 +8,6 @@ import typing
 import asyncio
 import logging
 import aiohttp
-import contextlib
 from unittest import mock
 
 

@@ -16,54 +16,14 @@ def signal_handler(sig, frame):
     LinuxUDSActorServer.stop_event.set()  # Signal the server to stop
 
 
-def usage():
-    """Shows usage"""
-    sys.stderr.write('usage: udsactor run|login "username"|logout "username"\n')
-    sys.exit(2)
-
-
-async def login(username: str) -> None:
-    """
-    Logs in a user
-    """
-    logger.debug('Logging in user %s', username)
-    client = rest.PrivateREST()
-    r = await client.user_login(
-        username=username, sessionType=await native.Manager.instance().operations.session_type()
-    )
-    print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
-    # Store session id on /tmp/udsactor.session file, so it can be used by logout if present
-    with open(consts.CLIENT_SESSION_ID_FILE, 'w', encoding='utf8') as f:
-        f.write(r.session_id or '')
-
-
-async def logout(username: str) -> None:
-    """
-    Logs out a user
-    """
-    logger.debug('Logging out user %s', username)
-    client = rest.PrivateREST()
-    # Try to get session id from /tmp/udsactor.session file
-    with open(consts.CLIENT_SESSION_ID_FILE, 'r', encoding='utf8') as f:
-        session_id = f.read()
-    await client.user_logout(username=username, session_id=session_id)
-
-
 class LinuxRunner(Runner):
     def run(self) -> None:
         """
         Main entry point
         Actor is redesigned to run on foreground
-        Daemonization is done by systemd, removed from here
+        Daemonization is done by systemd
         """
-        if len(sys.argv) == 3 and sys.argv[1] in ('login', 'logout'):
-            # Execute required forced action
-            asyncio.run(getattr(sys.modules[__name__], sys.argv[1])(sys.argv[2]))
-            sys.exit(0)
-        elif len(sys.argv) != 2:
-            usage()
-
-        if sys.argv[1] == 'run':
+        if len(sys.argv) == 1 or len(sys.argv) == 2 and sys.argv[1] in ('run', 'debug'):
             logger.debug('Starting service')
             # Setup signal handlers for CTRL+C or TERM
             signal.signal(signal.SIGINT, signal_handler)
@@ -71,5 +31,50 @@ class LinuxRunner(Runner):
             # Execute Main thread, and wait for it to finish
             udsAppServer = LinuxUDSActorServer()
             udsAppServer.run()  # Blocking call, not running on a thread
+        elif len(sys.argv) == 3 and sys.argv[1] in ('login', 'logout'):
+            # Execute required forced action
+            if sys.argv[1] == 'login':
+                self.login(sys.argv[2])
+            elif sys.argv[1] == 'logout':
+                self.logout(sys.argv[2])
         else:
-            usage()
+            self.usage()
+            sys.exit(2)
+
+    def usage(self):
+        """Shows usage"""
+        sys.stderr.write('usage: udsactor run|login "username"|logout "username"\n')
+        sys.exit(2)
+
+    def login(self, username: str) -> None:
+        """
+        Logs in a user
+        """
+
+        async def inner() -> None:
+            logger.debug('Logging in user %s', username)
+            client = rest.PrivateREST()
+            r = await client.user_login(
+                username=username, sessionType=await native.Manager.instance().operations.session_type()
+            )
+            print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
+            # Store session id on /tmp/udsactor.session file, so it can be used by logout if present
+            with open(consts.CLIENT_SESSION_ID_FILE, 'w', encoding='utf8') as f:
+                f.write(r.session_id or '')
+
+        asyncio.run(inner())
+
+    def logout(self, username: str) -> None:
+        """
+        Logs out a user
+        """
+
+        async def inner() -> None:
+            logger.debug('Logging out user %s', username)
+            client = rest.PrivateREST()
+            # Try to get session id from /tmp/udsactor.session file
+            with open(consts.CLIENT_SESSION_ID_FILE, 'r', encoding='utf8') as f:
+                session_id = f.read()
+            await client.user_logout(username=username, session_id=session_id)
+
+        asyncio.run(inner())

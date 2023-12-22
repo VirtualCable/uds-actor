@@ -27,7 +27,7 @@ from udsactor import (
     abc,
 )
 
-from . import fixtures
+from . import fixtures, tools
 from .cert import generate_cert
 
 
@@ -38,22 +38,6 @@ class SetupResult(typing.NamedTuple):
     actor_server: server_module.UDSActorServer
 
 
-class NoReaderWriter(native.abc.ConfigReader):
-    cfg: types.ActorConfiguration
-
-    def __init__(self, cfg: types.ActorConfiguration):
-        self.cfg = cfg
-
-    async def read(self) -> types.ActorConfiguration:
-        return self.cfg
-
-    async def write(self, cfg: types.ActorConfiguration) -> None:
-        self.cfg = cfg
-
-    async def scriptToInvokeOnLogin(self) -> str:
-        return ''
-
-
 @contextlib.asynccontextmanager
 async def setup(
     udsserver_port: int = 8443, token: str | None = None, for_unmanaged: bool = False,
@@ -61,11 +45,7 @@ async def setup(
 ) -> collections.abc.AsyncGenerator[SetupResult, None]:
     cfg = fixtures.configuration(token, udsserver_port)
 
-    # Override "save" config, platform provided config, etc..
-    p = native.Manager.instance()
-    # Ensure own is used
-    p.cfgManager = NoReaderWriter(cfg)
-    p.cfg = None  # Cleans up cfg
+    tools.set_testing_cfg(cfg)
 
     # Now override
     server = server_module.UDSActorServer()

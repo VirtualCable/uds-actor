@@ -5,6 +5,7 @@ import string
 
 from udsactor import types, consts
 
+from . import tools
 
 def configuration(
     token: str | None = None,
@@ -12,10 +13,10 @@ def configuration(
     actorType: types.ActorType = types.ActorType.MANAGED,
     **kwargs,
 ) -> types.ActorConfiguration:
-    token = token or ''.join(random.choices(string.ascii_letters, k=32))  # nosec, test only
+    token = token or tools.rnd_string_for_test(length=32)
     return types.ActorConfiguration(
         version=consts.CONFIG_VERSION,
-        actorType=types.ActorType.MANAGED,
+        actorType=actorType,
         host=f'localhost:{udsserver_port}',        
         validateCertificate=False,
         token=token,

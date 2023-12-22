@@ -13,7 +13,12 @@ from udsactor import log, native, webserver
 logger = logging.getLogger(__name__)
 
 
-if __name__ == "__main__":
+def main() -> None:
     log.setup_log(level='INFO')
 
-    pass
+    manager = native.Manager.instance()
+    manager.runner.run()
+
+
+if __name__ == "__main__":
+    main()
