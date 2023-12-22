@@ -35,7 +35,7 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
 
     incoming_queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).client_queue  # Our incoming queue is the outgoing queue of the processor
+    ).user_queue  # Our incoming queue is the outgoing queue of the processor
 
     # On connection, ensure all messages are cleared
     while not incoming_queue.empty():

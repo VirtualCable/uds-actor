@@ -24,6 +24,7 @@ from udsactor import (
     server as server_module,
     managed,
     unmanaged,
+    abc,
 )
 
 from . import fixtures
@@ -32,6 +33,7 @@ from .cert import generate_cert
 
 class SetupResult(typing.NamedTuple):
     client: aiohttp.ClientSession
+    actor: abc.ActorProcessor
     msg_processor: server_msg_processor.MessagesProcessor
     actor_server: server_module.UDSActorServer
 
@@ -96,7 +98,7 @@ async def setup(
     # Create aiohttp client
     client = aiohttp.ClientSession(headers={'Content-Type': 'application/json'})
     try:
-        yield SetupResult(client=client, msg_processor=msg_server, actor_server=server)
+        yield SetupResult(client=client, msg_processor=msg_server, actor_server=server, actor=actor)
     finally:
         try:
             web_task.cancel()

@@ -47,20 +47,37 @@ class MessagesProcessor:
     # Queue where messages from client or broker are received
     queue: asyncio.Queue[types.UDSMessage]
     # Queue where messages to be sent to client are put
-    client_queue: asyncio.Queue[types.UDSMessage]
+    user_queue: asyncio.Queue[types.UDSMessage]
 
     logged_in: bool
+    
+    _processors:dict[
+            types.UDSMessageType,
+            typing.Callable[[types.UDSMessage], collections.abc.Awaitable[None]],
+        ]
 
     def __init__(self, actor: 'ActorProcessor') -> None:
         self.actor = actor
         self.queue = asyncio.Queue()
-        self.client_queue = asyncio.Queue()
+        self.user_queue = asyncio.Queue()
 
         self.logged_in = False
 
+        self._processors = {
+            types.UDSMessageType.LOGIN: self.login,  # Client login
+            types.UDSMessageType.LOGOUT: self.logout,  # This can be from client or broker
+            types.UDSMessageType.CLOSE: self.logout,  # This can be from client only
+            # PING and PONG are only used for keepalive, so we ignore them here
+            # they are processed on ws server
+            types.UDSMessageType.LOG: self.log,  # Log message, only from client
+            # Messages from Broker
+            types.UDSMessageType.SCRIPT: self.script,  # Script message, only from broker
+            types.UDSMessageType.PRECONNECT: self.preconnect,  # Preconnect message from broker
+        }
+
     async def login(self, msg: types.UDSMessage) -> None:
         self.logged_in = True
-        await self.client_queue.put(
+        await self.user_queue.put(
             types.UDSMessage(
                 msg_type=types.UDSMessageType.LOGIN,
                 data=(
@@ -73,7 +90,7 @@ class MessagesProcessor:
         # If a request from the broker is received, send the logout request to the client queue
         req = types.LogoutRequest.from_dict(msg.data)
         if req.from_broker is True:
-            await self.client_queue.put(msg)
+            await self.user_queue.put(msg)
             return
         if self.logged_in is False:
             return
@@ -89,46 +106,22 @@ class MessagesProcessor:
     async def script(self, msg: types.UDSMessage) -> None:
         scrpt = types.ScriptRequest.from_dict(msg.data)
         if scrpt.as_user is True:
-            await self.client_queue.put(msg)  # Send to client
+            await self.user_queue.put(msg)  # Send to client
         else:
             await self.actor.script(script=scrpt.script)
-
-    async def message(self, msg: types.UDSMessage) -> None:
-        message: str = msg.data['message']  # So if message is not present, it will raise an exception
-        await self.client_queue.put(
-            types.UDSMessage(
-                msg_type=types.UDSMessageType.MESSAGE,
-                data={'message': message},
-            )
-        )
 
     async def preconnect(self, msg: types.UDSMessage) -> None:
         data = types.PreconnectRequest.from_dict(msg.data)
         await self.actor.preconnect(data=data)
 
     async def process_message(self, msg: types.UDSMessage) -> None:
-        processors: dict[
-            types.UDSMessageType,
-            typing.Callable[[types.UDSMessage], collections.abc.Awaitable[None]],
-        ] = {
-            types.UDSMessageType.LOGIN: self.login,  # Client login
-            types.UDSMessageType.LOGOUT: self.logout,  # This can be from client or broker
-            types.UDSMessageType.CLOSE: self.logout,  # This can be from client only
-            # PING and PONG are only used for keepalive, so we ignore them here
-            # they are processed on ws server
-            types.UDSMessageType.LOG: self.log,  # Log message, only from client
-            # Messages from Broker
-            types.UDSMessageType.SCRIPT: self.script,  # Script message, only from broker
-            types.UDSMessageType.MESSAGE: self.message,  # Message from broker
-            types.UDSMessageType.PRECONNECT: self.preconnect,  # Preconnect message from broker
-        }
 
-        if msg.msg_type not in processors:
+        if msg.msg_type not in self._processors:
             logger.error('Unknown message type %s', msg.msg_type)
             return
 
         try:
-            await processors[msg.msg_type](msg)
+            await self._processors[msg.msg_type](msg)
         except Exception:
             logger.exception('Exception processing message %s', msg.msg_type)
 

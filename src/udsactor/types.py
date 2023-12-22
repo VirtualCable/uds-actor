@@ -226,7 +226,7 @@ class LogoutRequest(typing.NamedTuple):
             username=data.get('username', ''),
             session_type=data.get('session_type', ''),
             session_id=data.get('session_id', ''),
-            from_broker=from_broker,
+            from_broker=from_broker or data.get('from_broker', False),
         )
 
     def as_dict(self) -> dict[str, typing.Any]:

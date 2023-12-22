@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 async def message(request: aiohttp.web.Request) -> aiohttp.web.Response:
     queue: asyncio.Queue = typing.cast(
         'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).queue  # Push the messages to be processed by the processor
-    
+    ).user_queue  # Push the messages to be processed by the client actor (on user space)
+
     try:
         data = await request.json()
         await queue.put(types.UDSMessage(types.UDSMessageType.MESSAGE, data=data))
