@@ -50,7 +50,7 @@ class TestManagedServer(IsolatedAsyncioTestCase):
                 # ensure exit code is 2
                 exit_mock.assert_called_with(2)
 
-        # Now, ensure run and debug works
+        # Now, ensure run and debug works (that is, run is called and signal is setup)
         # Patch signal setup, and LinuxUDSActorServer.run
         for arg in ('run', 'debug', ''):
             arglist = ['udsactor_service'] if arg == '' else ['udsactor_service', arg]
@@ -66,7 +66,7 @@ class TestManagedServer(IsolatedAsyncioTestCase):
                         run_mock.assert_called_with()
 
         # Ensure login and logout works
-        # Login request has "login username" as arguments, logout has "logout" only
+        # Login and logout are called with username as argument
         for arg in ('login', 'logout'):
             arglist = ['udsactor_service', arg, 'username']
 
