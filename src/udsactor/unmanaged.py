@@ -74,12 +74,11 @@ class UnmanagedActorProcessor(ActorProcessor):
             # So we will not save it, and after user logout, we will reload config (restoring token)
             if initResult.token and cfg.token != initResult.token:
                 logger.debug('Token changed from %s to %s', cfg.token, initResult.token)
-                cfg = cfg._replace(token=initResult.token, initialized=True)
+                cfg.token = initResult.token
+                cfg.initialized = True
 
             # Store config
-            cfg = cfg._replace(
-                config=types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
-            )
+            cfg.config = types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
             logger.debug('Config not saved, only updated: %s', cfg)
         except (exceptions.RESTConnectionError, exceptions.RESTError) as e:
             logger.warning('Error validating with Broker: %s', e)

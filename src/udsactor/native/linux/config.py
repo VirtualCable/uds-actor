@@ -119,7 +119,7 @@ class LinuxConfigReader(ConfigReader):
         writeIfValue(config.runonce_command, 'runonce_command')
         uds['log_level'] = str(config.log_level)
         if config.config:  # Special case, encoded as base64 from json dump
-            uds['config'] = base64.b64encode(json.dumps(config.config._asdict()).encode()).decode()
+            uds['config'] = base64.b64encode(json.dumps(config.config.as_dict()).encode()).decode()
 
         if config.data:  # Special case, encoded as base64 from pickle dump
             uds['data'] = base64.b64encode(json.dumps(config.data).encode()).decode()

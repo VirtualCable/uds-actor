@@ -7,8 +7,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 import collections.abc
 import datetime
 import enum
-import functools
-import hashlib
+import dataclasses
 import typing
 
 from . import consts
@@ -57,9 +56,10 @@ class UDSMessageType(enum.StrEnum):
     OK = 'ok'  # No data
 
 
-class UDSMessage(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class UDSMessage:
     msg_type: UDSMessageType
-    data: dict[str, typing.Any] = {}
+    data: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Async callback, if any, to be called when message is processed
     callback: typing.Optional[
         typing.Callable[[typing.Any, typing.Optional[Exception]], typing.Coroutine]
@@ -73,13 +73,15 @@ class UDSMessage(typing.NamedTuple):
         }
 
 
-class InterfaceInfo(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class InterfaceInfo:
     name: str
     mac: str
     ip: str  # IPv4 or IPv6
 
 
-class Authenticator(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class Authenticator:
     authId: str
     authSmallName: str
     auth: str
@@ -88,18 +90,53 @@ class Authenticator(typing.NamedTuple):
     isCustom: bool
 
 
-class ActorOsConfiguration(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class ActorOsConfiguration:
     action: str
     name: str
     custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
+    
+    @staticmethod
+    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'ActorOsConfiguration':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return ActorOsConfiguration(action='', name='', custom=None)
 
+        return ActorOsConfiguration(
+            action=data.get('action', ''),
+            name=data.get('name', ''),
+            custom=data.get('custom', None),
+        )
 
+    def as_dict(self) -> dict[str, typing.Any]:
+        return {
+            'action': self.action,
+            'name': self.name,
+            'custom': self.custom,
+        }
+
+@dataclasses.dataclass(frozen=True)
 class ActorDataConfiguration(typing.NamedTuple):
     unique_id: typing.Optional[str] = None
     os: typing.Optional[ActorOsConfiguration] = None
+    
+    @staticmethod
+    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'ActorDataConfiguration':
+        if not data or not isinstance(data, collections.abc.Mapping):
+            return ActorDataConfiguration(unique_id=None, os=None)
 
+        return ActorDataConfiguration(
+            unique_id=data.get('unique_id', None),
+            os=ActorOsConfiguration.from_dict(data.get('os', None)),
+        )
+    
+    def as_dict(self) -> dict[str, typing.Any]:
+        return {
+            'unique_id': self.unique_id,
+            'os': self.os.as_dict() if self.os else None,
+        }
 
-class ActorConfiguration(typing.NamedTuple):
+@dataclasses.dataclass
+class ActorConfiguration:
     version: int = 0  # No version, old version
     actorType: typing.Optional[str] = None
 
@@ -126,27 +163,38 @@ class ActorConfiguration(typing.NamedTuple):
         return not bool(self.host) or not bool(self.token)
 
     def as_dict(self) -> dict[str, typing.Any]:
-        cfg = self._asdict()
-        cfg['config'] = cfg['config']._asdict() if cfg['config'] else None
-        return cfg
+        return {
+            'version': self.version,
+            'actorType': self.actorType,
+            'token': self.token,
+            'initialized': self.initialized,
+            'host': self.host,
+            'validateCertificate': self.validateCertificate,
+            'restrict_net': self.restrict_net,
+            'pre_command': self.pre_command,
+            'runonce_command': self.runonce_command,
+            'post_command': self.post_command,
+            'log_level': self.log_level,
+            'config': self.config.as_dict() if self.config else None,
+            'data': self.data,
+        }
 
     @staticmethod
     def from_dict(data: dict[str, typing.Any]) -> 'ActorConfiguration':
         if not data or not isinstance(data, collections.abc.Mapping):
             raise Exception('Invalid data')
-
         cfg = data.copy()
-        cfg['config'] = ActorDataConfiguration(**cfg['config']) if cfg['config'] else None
+        cfg['config'] = ActorDataConfiguration.from_dict(cfg.get('config', None))
         return ActorConfiguration(**cfg)
 
-
-class InitializationResult(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class InitializationResult:
     token: typing.Optional[str] = None
     unique_id: typing.Optional[str] = None
     os: typing.Optional[ActorOsConfiguration] = None
 
-
-class LoginRequest(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class LoginRequest:
     # {'username': '1234', 'session_type': 'test'}
     username: str
     session_type: str
@@ -166,10 +214,13 @@ class LoginRequest(typing.NamedTuple):
         )
 
     def as_dict(self) -> dict[str, typing.Any]:
-        return self._asdict()
+        return {
+            'username': self.username,
+            'session_type': self.session_type,
+        }
 
-
-class LoginResponse(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class LoginResponse:
     ip: str
     hostname: str
     dead_line: typing.Optional[int]
@@ -202,10 +253,16 @@ class LoginResponse(typing.NamedTuple):
         )
 
     def as_dict(self) -> dict[str, typing.Any]:
-        return self._asdict()
+        return {
+            'ip': self.ip,
+            'hostname': self.hostname,
+            'dead_line': self.dead_line,
+            'max_idle': self.max_idle,
+            'session_id': self.session_id,
+        }
 
-
-class LogoutRequest(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class LogoutRequest:
     # {'username': '1234', 'session_type': 'test', 'session_id': 'test'}
     username: str
     session_id: str
@@ -215,10 +272,11 @@ class LogoutRequest(typing.NamedTuple):
     @staticmethod
     def null(from_broker: bool = False) -> 'LogoutRequest':
         return LogoutRequest(username='', session_type='', session_id='', from_broker=from_broker)
-    
 
     @staticmethod
-    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None, from_broker: bool = False) -> 'LogoutRequest':
+    def from_dict(
+        data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None, from_broker: bool = False
+    ) -> 'LogoutRequest':
         if not data or not isinstance(data, collections.abc.Mapping):
             return LogoutRequest.null()
 
@@ -230,13 +288,18 @@ class LogoutRequest(typing.NamedTuple):
         )
 
     def as_dict(self) -> dict[str, typing.Any]:
-        return self._asdict()
+        return {
+            'username': self.username,
+            'session_type': self.session_type,
+            'session_id': self.session_id,
+            'from_broker': self.from_broker,
+        }
 
 
-# No logout response, just an OK message
+# No logout response class exists, just an OK message is sent
 
-
-class LogRequest(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class LogRequest:
     # {'level': 'INFO', 'message': 'test'}
     level: LogLevel
     message: str
@@ -262,13 +325,15 @@ class LogRequest(typing.NamedTuple):
         }
 
 
-class ClientInfo(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class ClientInfo:
     url: str
     session_id: str
 
 
 # Certificate
-class CertificateInfo(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class CertificateInfo:
     """A certificate"""
 
     key: str  # Key, in PEM format
@@ -289,10 +354,15 @@ class CertificateInfo(typing.NamedTuple):
         )
 
     def as_dict(self) -> dict[str, typing.Any]:
-        return self._asdict()
+        return {
+            'key': self.key,
+            'certificate': self.certificate,
+            'password': self.password,
+            'ciphers': self.ciphers,
+        }
 
-
-class PreconnectRequest(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class PreconnectRequest:
     #     self._params['user'],
     # self._params['protocol'],
     # self._params.get('ip', 'unknown'),
@@ -336,8 +406,8 @@ class PreconnectRequest(typing.NamedTuple):
             data['user'] = self.username
         return data
 
-
-class ScriptRequest(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class ScriptRequest:
     # {'script': '# python code to execute'}
     script: str  # Script to execute
     as_user: typing.Optional[bool] = False  # If true, script will be executed as user, if false, as service
@@ -367,7 +437,8 @@ class ScriptRequest(typing.NamedTuple):
 
 
 # Cache related
-class CacheInfo(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class CacheInfo:
     """
     Cache info
     """

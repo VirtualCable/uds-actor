@@ -64,16 +64,14 @@ class ManagedActorProcessor(ActorProcessor):
                     initResult: types.InitializationResult = await api.initialize(interfaces, cfg.actorType)
 
                     if initResult.token:
-                        # Replace token with the one provided by server
+                        # Replace token with the one provided by server if needed
                         if initResult.token != cfg.token:
                             logger.debug('Token changed from %s to %s', cfg.token, initResult.token)
-                            cfg = cfg._replace(token=initResult.token, initialized=True)
-                            # And store it
+                            cfg.token = initResult.token
+                            cfg.initialized = True
 
                     # Store config
-                    cfg = cfg._replace(
-                        config=types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
-                    )
+                    cfg.config=types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
                     await self.platform.cfgManager.write(cfg)
                 except (exceptions.RESTConnectionError, exceptions.RESTError) as e:
                     logger.warning('Error validating with Broker: %s', e)
@@ -95,7 +93,7 @@ class ManagedActorProcessor(ActorProcessor):
         if cfg.runonce_command:
             runOnce = cfg.runonce_command
             # Remove from cfg and save it
-            cfg = cfg._replace(runonce_command=None)
+            cfg.runonce_command = None
             await self.platform.cfgManager.write(cfg)
 
             if utils.execute(runOnce, "runOnce"):
@@ -148,9 +146,7 @@ class ManagedActorProcessor(ActorProcessor):
 
         # If we are here, configuration is done, clean up os configuration data (for security)
         # (clenup is done by removing os data and custom data from cfg)
-        cfg = cfg._replace(
-            config=typing.cast(types.ActorDataConfiguration, cfg.config)._replace(os=None), data=None
-        )
+        cfg.config = types.ActorDataConfiguration(unique_id= typing.cast(types.ActorDataConfiguration, cfg.config).unique_id, os=None)
         await self.platform.cfgManager.write(cfg)
 
         # If "post config" command is present, execute it now
@@ -158,7 +154,7 @@ class ManagedActorProcessor(ActorProcessor):
         # Also, this commad differs from "runonce" in that control is expected to return to this point
         if cfg.post_command:
             await utils.execute(cfg.post_command, 'postConfig')
-            cfg = cfg._replace(post_command=None)
+            cfg.post_command = None
             await self.platform.cfgManager.write(cfg)
 
         # Look for service interface
