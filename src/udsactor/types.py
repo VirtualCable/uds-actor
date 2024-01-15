@@ -52,7 +52,7 @@ class InitializationResultType(typing.NamedTuple):
 class LoginResultInfoType(typing.NamedTuple):
     ip: str
     hostname: str
-    dead_line: typing.Optional[int]
+    deadline: typing.Optional[int]
     max_idle: typing.Optional[int]
     session_id: typing.Optional[str]
 

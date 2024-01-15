@@ -385,7 +385,7 @@ class UDSServerApi(UDSApi):
     ) -> types.LoginResultInfoType:
         if not token:
             return types.LoginResultInfoType(
-                ip='0.0.0.0', hostname=UNKNOWN, dead_line=None, max_idle=None, session_id=None
+                ip='0.0.0.0', hostname=UNKNOWN, deadline=None, max_idle=None, session_id=None
             )
         payload = {
             'type': actor_type or types.MANAGED,
@@ -399,7 +399,7 @@ class UDSServerApi(UDSApi):
         return types.LoginResultInfoType(
             ip=result['ip'],
             hostname=result['hostname'],
-            dead_line=result['dead_line'],
+            deadline=result['deadline'],
             max_idle=result['max_idle'],
             session_id=result.get('session_id', ''),
         )
@@ -483,7 +483,7 @@ class UDSClientApi(UDSApi, metaclass=tools.Singleton):
         res = types.LoginResultInfoType(
             ip=result['ip'],
             hostname=result['hostname'],
-            dead_line=result['dead_line'],
+            deadline=result['deadline'],
             max_idle=result['max_idle'],
             session_id=result['session_id'],
         )

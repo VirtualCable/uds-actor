@@ -135,10 +135,10 @@ class UDSActorClient(threading.Thread):  # pylint: disable=too-many-instance-att
         self.stop()
 
     def checkDeadLine(self):
-        if self._loginInfo is None or not self._loginInfo.dead_line:  # No deadline check
+        if self._loginInfo is None or not self._loginInfo.deadline:  # No deadline check
             return
 
-        remainingTime = self._loginInfo.dead_line - (datetime.datetime.now() - self._sessionStartTime).total_seconds()
+        remainingTime = self._loginInfo.deadline - (datetime.datetime.now() - self._sessionStartTime).total_seconds()
         logger.debug('Remaining time: {}'.format(remainingTime))
 
         if not self._notifiedDeadline and remainingTime < 300:  # With five minutes, show a warning message

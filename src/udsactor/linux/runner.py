@@ -48,7 +48,7 @@ def run() -> None:
             client: rest.UDSClientApi = rest.UDSClientApi()
             if sys.argv[1] == 'login':
                 r = client.login(sys.argv[2], platform.operations.getSessionType())
-                print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.dead_line or ''))
+                print('{},{},{},{}\n'.format(r.ip, r.hostname, r.max_idle, r.deadline or ''))
             elif sys.argv[1] == 'logout':
                 client.logout(sys.argv[2], platform.operations.getSessionType())
         except Exception as e:
