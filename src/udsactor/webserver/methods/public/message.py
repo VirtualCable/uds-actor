@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 @routes.post(consts.PUBLIC_REST_PATH('message'))
 async def message(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).user_queue  # Push the messages to be processed by the client actor (on user space)
+    queue = request.app[MSGS_PROCESSOR_KEY].user_queue  # Push the messages to be processed by the client actor (on user space)
 
     try:
         data = await request.json()

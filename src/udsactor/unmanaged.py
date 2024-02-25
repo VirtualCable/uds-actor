@@ -60,7 +60,7 @@ class UnmanagedActorProcessor(ActorProcessor):
         api = await self.api
 
         # We know for sure that we have interfaces, we got them before :)
-        interfaces = await self.platform.operations.validNetworkCards()
+        interfaces = await self.platform.operations.list_valid_interfaces()
 
         # ********************************************
         # Token not transformed, so we must initialize

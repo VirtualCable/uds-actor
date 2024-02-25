@@ -107,16 +107,16 @@ class LinuxConfigReader(ConfigReader):
         uds['validate'] = 'yes' if config.validateCertificate else 'no'
         uds['token_transformed'] = 'yes' if config.initialized else 'no'
 
-        def writeIfValue(val, name):
+        def store_if_value(val: typing.Any, name: str):
             if val:
                 uds[name] = val
 
-        writeIfValue(config.actorType, 'type')
-        writeIfValue(config.token, 'token')
-        writeIfValue(config.restrict_net, 'restrict_net')
-        writeIfValue(config.pre_command, 'pre_command')
-        writeIfValue(config.post_command, 'post_command')
-        writeIfValue(config.runonce_command, 'runonce_command')
+        store_if_value(config.actorType, 'type')
+        store_if_value(config.token, 'token')
+        store_if_value(config.restrict_net, 'restrict_net')
+        store_if_value(config.pre_command, 'pre_command')
+        store_if_value(config.post_command, 'post_command')
+        store_if_value(config.runonce_command, 'runonce_command')
         uds['log_level'] = str(config.log_level)
         if config.config:  # Special case, encoded as base64 from json dump
             uds['config'] = base64.b64encode(json.dumps(config.config.as_dict()).encode()).decode()

@@ -42,7 +42,7 @@ import typing
 import logging
 
 try:
-    from setproctitle import setproctitle  # type: ignore
+    from setproctitle import setproctitle  # pyright: ignore[reportMissingImports,reportUnknownVariable,reportUnknownVariableType]
 except ImportError:  # Platform may not include prctl, so in case it's not available, we let the "name" as is
 
     def setproctitle(title: str) -> None:
@@ -136,7 +136,7 @@ class LinuxOperations(Operations):
         '''
         return socket.gethostname().split('.')[0]
 
-    async def network_info(self) -> list[types.InterfaceInfo]:
+    async def list_interfaces(self) -> list[types.InterfaceInfo]:
         result: list[types.InterfaceInfo] = []
         for ifname in await LinuxOperations.getInterfaces():
             ip, mac = await LinuxOperations.getIpAndMac(ifname)
@@ -184,7 +184,7 @@ class LinuxOperations(Operations):
         # subprocess.call(['/sbin/shutdown', 'now', '-r'])
         # subprocess.call(['/usr/bin/systemctl', 'reboot', '-i'])
 
-    async def renameComputer(self, newName: str) -> bool:
+    async def rename_computer(self, newName: str) -> bool:
         '''
         Changes the computer name
         Returns True if reboot needed
@@ -192,7 +192,7 @@ class LinuxOperations(Operations):
         await rename(self, newName)
         return True  # Always reboot right now. Not much slower but much more convenient
 
-    async def joinDomain(self, **kwargs) -> None:
+    async def join_domain(self, **kwargs: typing.Any) -> None:
         custom = kwargs.get('custom', None)
 
         if not custom:
@@ -222,26 +222,27 @@ class LinuxOperations(Operations):
             except Exception as e:
                 logger.error(f'Error set hostname for freeeipa: {e}')
         try:
-            command = f'realm join -U {account} '
+            command: list[str] = ['realm', 'join', '-U', account]
+            # command = f'realm join -U {account} '
             if client_software and client_software != 'automatically':
-                command += f'--client-software={client_software} '
+                command.append(f'--client-software={client_software}')
             if server_software:
-                command += f'--server-software={server_software} '
+                command.append(f'--server-software={server_software}')
             if membership_software and membership_software != 'automatically':
-                command += f'--membership-software={membership_software} '
+                command.append(f'--membership-software={membership_software}')
             if ou and server_software != 'ipa':
-                command += f'--computer-ou="{ou}" '
-            if ssl == 'y':
-                command += '--use-ldaps '
-            if automatic_id_mapping == 'n':
-                command += '--automatic-id-mapping=no '
-            command += domain
-            p = await asyncio.create_subprocess_shell(command, stdin=asyncio.subprocess.PIPE)
+                command.append(f'--computer-ou={ou}')
+            if ssl:
+                command.append('--use-ldaps')
+            if not automatic_id_mapping:
+                command.append('--automatic-id-mapping=no')
+            command.append(domain)
+            p = await asyncio.create_subprocess_shell(' '.join(command), stdin=asyncio.subprocess.PIPE)
             await p.communicate(password.encode())
         except Exception as e:
             logger.error(f'Error join machine to domain {domain}: {e}')
 
-    async def changeUserPassword(self, user: str, oldPassword: str, newPassword: str) -> None:
+    async def change_user_password(self, user: str, oldPassword: str, newPassword: str) -> None:
         '''
         Simple password change for user on linux
         '''
@@ -259,7 +260,7 @@ class LinuxOperations(Operations):
     async def current_idle(self) -> float:
         return await xss.getIdleDuration()
 
-    async def current_user(self) -> str:
+    async def whoami(self) -> str:
         '''
         Returns current logged in user
         '''
@@ -292,7 +293,7 @@ class LinuxOperations(Operations):
     # High level operations
     async def hlo_join_domain(self, name: str, custom: typing.Mapping[str, typing.Any]) -> bool:
         """Joins domain with given name and custom parameters"""
-        await self.hloRename(name)
+        await self.hlo_rename(name)
 
-        await self.joinDomain(custom=custom)
+        await self.join_domain(custom=custom)
         return True

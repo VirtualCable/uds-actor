@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 @routes.post(consts.PUBLIC_REST_PATH('screenshot'))
 async def screenshot(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).user_queue  # Push the messages to the user queue
+    queue = request.app[MSGS_PROCESSOR_KEY].user_queue  # Push the messages to the user queue
 
     try:
         await queue.put(types.UDSMessage(types.UDSMessageType.SCREENSHOT))

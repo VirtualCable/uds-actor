@@ -27,7 +27,7 @@ def generate_server_ssl_context(certInfo: types.CertificateInfo) -> ssl.SSLConte
         sslContext.load_cert_chain(f.name, password=certInfo.password)
 
     # Ensure file is deleted at exit
-    def remove():
+    def remove() -> None:
         try:
             os.unlink(f.name)
         except Exception:

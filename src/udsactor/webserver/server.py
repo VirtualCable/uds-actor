@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 # Token could be on TOKEN_AUTH Header or on token query parameter
 @aiohttp.web.middleware
 async def security_checks(
-    request: aiohttp.web.Request, handler: collections.abc.Callable
-) -> aiohttp.web.Response:
+    request: aiohttp.web.Request, handler: collections.abc.Callable[[aiohttp.web.Request], collections.abc.Awaitable[aiohttp.web.StreamResponse]]
+) -> aiohttp.web.StreamResponse:
     """
     Several security checks:
         # Checks if the ip is allowed
         Checks if the token is valid
     """
-    cfg = typing.cast('types.ActorConfiguration', request.app[keys.CONFIG_KEY])
+    # cfg = request.app[keys.CONFIG_KEY]
 
     # Check if ip is allowed. Ips is a list of allowed ips or networks
     # if cfg.allowed_ips:
@@ -59,7 +59,7 @@ async def security_checks(
     except Exception:
         raise aiohttp.web.HTTPForbidden()
 
-    response: aiohttp.web.Response = await handler(request)
+    response = await handler(request)
     # Set server header
     response.headers['Server'] = 'UDSActor/4.0'
     return response

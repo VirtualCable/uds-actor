@@ -543,7 +543,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
                 msg = await self._queue.get()
                 if msg is None:
                     break
-                await ws.send_json(msg.asDict())
+                await ws.send_json(msg.as_dict())
 
         try:
             async with aiohttp.ClientSession() as session:

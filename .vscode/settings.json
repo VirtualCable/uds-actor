@@ -1,7 +1,22 @@
 {
+    "python.analysis.typeCheckingMode": "strict",
+    "python.languageServer": "Pylance",
+    "python.analysis.stubPath": "../../enterprise/stubs",
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
         "tests"
     ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnusedImport": "none",
+        "reportPrivateUsage": "none",
+        "reportMissingTypeStubs": "none"
+    },
+    "mypy-type-checker.args": [
+        "--strict",
+        "--disable-error-code=import",
+        "--config_file=mypy.ini"
+    ]
 }

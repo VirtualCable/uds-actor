@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 @routes.post(consts.PUBLIC_REST_PATH('logout'))
 async def logout(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).queue  # Push the messages to be processed by the processor
+    queue = request.app[MSGS_PROCESSOR_KEY].queue  # Push the messages to be processed by the processor
     
     await queue.put(
         types.UDSMessage(

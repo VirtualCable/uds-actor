@@ -40,7 +40,7 @@ from udsactor import consts
 logger = logging.getLogger(__name__)
 
 
-def response(result: typing.Any, status: int = 200, **kwargs) -> aiohttp.web.Response:
+def response(result: typing.Any, status: int = 200, **kwargs: typing.Any) -> aiohttp.web.Response:
     '''
     Returns a REST result
     '''

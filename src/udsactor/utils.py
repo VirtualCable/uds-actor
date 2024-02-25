@@ -1,6 +1,7 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
+
 import random
 import typing
 import collections.abc
@@ -11,9 +12,7 @@ import time
 import asyncio
 import re
 import datetime
-import random
 import contextlib
-import logging
 import ipaddress
 
 from . import types, consts
@@ -22,22 +21,25 @@ logger = logging.getLogger(__name__)
 
 # For type checking generics
 T = typing.TypeVar('T')
-Coro = collections.abc.Coroutine[None, None, typing.Any]
+AsyncCallable = collections.abc.Callable[..., collections.abc.Awaitable[typing.Any]]
+FT = typing.TypeVar('FT', bound=AsyncCallable)
+
+
+HUMAN_SYMBOLS: typing.Final[list[str]] = ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+HUMAN_PREFIXS: typing.Final[dict[str, int]] = {
+    s: 1 << (i + 1) * 10 for i, s in enumerate(('K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'))
+}
 
 
 def bytes2human(n: int, *, format: str = "{value:.0f}{symbol:s}") -> str:
     """
     http://goo.gl/zeJZl
     """
-    symbols = ('B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
-    prefix = {}
-    for i, s in enumerate(symbols[1:]):
-        prefix[s] = 1 << (i + 1) * 10
-    for symbol in reversed(symbols[1:]):
-        if n >= prefix[symbol]:
-            value = float(n + 1) / prefix[symbol]
+    for symbol in reversed(HUMAN_SYMBOLS[1:]):
+        if n >= HUMAN_PREFIXS[symbol]:
+            value = float(n + 1) / HUMAN_PREFIXS[symbol]
             return format.format(value=value, symbol=symbol)
-    return format.format(value=n, symbol=symbols[0])
+    return format.format(value=n, symbol=HUMAN_SYMBOLS[0])
 
 
 def random_string(length: int = 32) -> str:
@@ -66,7 +68,7 @@ def ensure_valid_uuid(uuid: str) -> str:
     return re.sub('[^a-zA-Z0-9-]', '', uuid[:32])
 
 
-def ensure_list(value: typing.Union[T, list[T]]) -> list[T]:
+def ensure_list(value: typing.Any) -> list[typing.Any]:
     """
     Ensures that the value is a list
 
@@ -76,9 +78,11 @@ def ensure_list(value: typing.Union[T, list[T]]) -> list[T]:
     Returns:
         List
     """
-    if not isinstance(value, list):
-        return [value]
-    return value
+    if isinstance(value, list):
+        return value  # pyright: ignore  # This is a known list
+    if isinstance(value, collections.abc.Iterable):
+        return list(value)  # pyright: ignore  # This is a known list from iterable of ANY
+    return [value]
 
 
 def str_to_net(
@@ -158,9 +162,9 @@ class ByPassCache(Exception):
 def async_lru_cache(
     maxsize: int = 128,
     maxduration: typing.Optional[types.CacheDuration] = None,
-    ignore_args: typing.Optional[collections.abc.Iterable[int]] = None,
-    ignore_kwargs: typing.Optional[collections.abc.Iterable[str]] = None,
-):
+    ignore_args: typing.Optional[typing.Iterable[int]] = None,
+    ignore_kwargs: typing.Optional[typing.Iterable[str]] = None,
+) -> collections.abc.Callable[[FT], FT]:
     """
     Least-recently-used cache decorator for async functions.
 
@@ -173,9 +177,7 @@ def async_lru_cache(
         Decorator
     """
 
-    def decorator(
-        fnc: collections.abc.Callable[..., collections.abc.Coroutine[None, None, T]]
-    ) -> collections.abc.Callable[..., collections.abc.Coroutine[None, None, T]]:
+    def cache_decorator(fnc: FT) -> FT:
         skip_kwargs_set = set(ignore_kwargs or [])
         skip_args_set = set(ignore_args or [])
         duration = maxduration or datetime.timedelta(days=999999)  # A big enough duration
@@ -191,8 +193,7 @@ def async_lru_cache(
 
         duration_seconds = duration.total_seconds()
 
-        @functools.wraps(fnc)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             nonlocal hits, misses
             skip_caching = False
             async with lock:
@@ -264,9 +265,9 @@ def async_lru_cache(
         wrapper.maxsize = maxsize  # type: ignore
         wrapper.maxduration = maxduration  # type: ignore
 
-        return wrapper
+        return typing.cast(FT, wrapper)
 
-    return decorator
+    return cache_decorator
 
 
 @contextlib.asynccontextmanager
@@ -293,9 +294,7 @@ async def logexceptions(message: str, *, backtrace: bool = False) -> collections
             logger.error('%s: %s', message, e)
 
 
-def retry(
-    times: int = consts.RETRIES, initial_delay: typing.Union[int, float] = consts.WAIT_RETRY
-) -> collections.abc.Callable[[collections.abc.Callable[..., Coro]], collections.abc.Callable[..., Coro]]:
+def retry(times: int = 3, initial_delay: float = 8.0) -> collections.abc.Callable[[FT], FT]:
     """Decorator that will execute method N times, with an increasing delay between executions of the method
     Args:
         times: Number of times to retry
@@ -305,9 +304,10 @@ def retry(
         @retry(times=3, initial_delay=1)
     """
 
-    def decorator(fnc: collections.abc.Callable[..., Coro]) -> collections.abc.Callable[..., Coro]:
-        @functools.wraps(fnc)
-        async def wrapper(*args, **kwargs) -> T:  # type: ignore  # Will always return something or raise an exception
+    def retry_decorator(fnc: FT) -> FT:
+        async def wrapper(
+            *args: typing.Any, **kwargs: typing.Any
+        ) -> typing.Any:  # Will always return something or raise an exception
             for i in range(times):
                 try:
                     return await fnc(*args, **kwargs)
@@ -315,14 +315,14 @@ def retry(
                     logger.warning('Exception %s on %s, retrying %s more times', e, fnc, times - i - 1)
                     if i == times - 1:
                         raise
-                    await asyncio.sleep(float(initial_delay) * (2 << i))
+                    await asyncio.sleep(initial_delay * (2 << i))
 
-        return wrapper
+        return typing.cast(FT, wrapper)
 
-    return decorator
+    return retry_decorator
 
 
-async def execute(cmdLine: str, section: str) -> bool:
+async def execute(command_line: str, section: str) -> bool:
     '''Executes an external command
 
     Args:
@@ -333,13 +333,13 @@ async def execute(cmdLine: str, section: str) -> bool:
         True if command was executed, False otherwise (and error is logged)
     '''
     try:
-        logger.debug('Executing command on {}: {}'.format(section, cmdLine))
+        logger.debug('Executing command on {}: {}'.format(section, command_line))
         res = await asyncio.create_subprocess_shell(
-            cmdLine, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            command_line, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await res.communicate()
+        _stdout, _stderr = await res.communicate()  # Extract stdout and stderr
     except Exception as e:
-        logger.error('Got exception executing: {} - {} - {}'.format(section, cmdLine, e))
+        logger.error('Got exception executing: {} - {} - {}'.format(section, command_line, e))
         return False
     logger.debug('Result of executing cmd for {} was {}'.format(section, res))
     return True
@@ -382,14 +382,15 @@ class Singleton(type):
         ...
     '''
 
-    _instance: typing.Optional[typing.Any]
+    _instance: typing.Optional['Singleton'] = None
 
     # We use __init__ so we customise the created class from this metaclass
-    def __init__(self, *args, **kwargs) -> None:
-        self._instance = None
-        super().__init__(*args, **kwargs)
+    def __init__(
+        cls: 'type[Singleton]', name: str, bases: typing.Tuple[type, ...], dct: dict[str, typing.Any]
+    ) -> None:
+        cls._instance = None  # Initial value
 
-    def __call__(self, *args, **kwargs) -> typing.Any:
-        if self._instance is None:
-            self._instance = super().__call__(*args, **kwargs)
-        return self._instance
+    def __call__(cls: 'type[Singleton]', *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        if cls._instance is None:
+            cls._instance = super().__call__(*args, **kwargs)
+        return cls._instance

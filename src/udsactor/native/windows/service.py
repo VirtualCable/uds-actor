@@ -29,6 +29,7 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportUnknownMemberType=false,reportMissingModuleSource=false
 import logging
 import typing
 import sys
@@ -39,10 +40,10 @@ import pythoncom
 import servicemanager
 
 # So pyinstaller can find these modules, not used here
-import win32timezone  # type: ignore
-import win32security  # type: ignore
-import win32net  # type: ignore
-import win32event  # type: ignore
+import win32timezone
+import win32security
+import win32net
+import win32event
 
 from .server import WindowsUDSActorServer
 from ..abc import Runner
@@ -149,9 +150,9 @@ class WindowsRunner(Runner):
     #     win32serviceutil.StopService(SVC_NAME)
 
     def setup_recovery(self):
-        svc_name = UDSActorService._svc_name_  # pylint: disable=protected-access
+        svc_name = UDSActorService._svc_name_
 
-        hs = None
+        hs: typing.Any = None
         hscm = None
         try:
             hscm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)

@@ -29,7 +29,7 @@ class TestOperations(IsolatedAsyncioTestCase):
         self.assertEqual((await self.operations.computer_name()).lower(), socket.gethostname().lower())
 
     async def test_network_info(self) -> None:
-        netInfo = await self.operations.network_info()
+        netInfo = await self.operations.list_interfaces()
         self.assertIsInstance(netInfo, list)
         self.assertGreater(len(netInfo), 0)
         self.assertIsInstance(netInfo[0], types.InterfaceInfo)
@@ -50,7 +50,7 @@ class TestOperations(IsolatedAsyncioTestCase):
         self.assertGreaterEqual(idle, 0)  # If executed from a console, idle will be 0
 
     async def test_get_current_user(self) -> None:
-        self.assertIsInstance(await self.operations.current_user(), str)
+        self.assertIsInstance(await self.operations.whoami(), str)
 
     async def test_get_session_type(self) -> None:
         self.assertIsInstance(await self.operations.session_type(), str)

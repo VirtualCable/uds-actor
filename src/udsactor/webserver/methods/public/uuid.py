@@ -21,5 +21,5 @@ logger = logging.getLogger(__name__)
 
 @routes.get(consts.PUBLIC_REST_PATH('uuid'))
 async def uuid(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    cfg: types.ActorConfiguration = typing.cast(types.ActorConfiguration, request.app[CONFIG_KEY])
+    cfg = request.app[CONFIG_KEY]
     return response(result=cfg.token or '' if cfg.actorType == types.ActorType.MANAGED else '')

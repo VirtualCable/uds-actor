@@ -14,7 +14,7 @@ import aiohttp.web
 from ...routes import routes
 from ...keys import MSGS_PROCESSOR_KEY
 
-from udsactor import types, native, consts, server_msg_processor
+from udsactor import types, consts
 from udsactor.webserver.utils import response
 
 
@@ -24,9 +24,7 @@ logger = logging.getLogger(__name__)
 @routes.post(consts.PUBLIC_REST_PATH('preconnect'))
 @routes.post(consts.PUBLIC_REST_PATH('preConnect'))  # Old name, for compatibility
 async def preconnect(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).queue  # Push the messages to be processed by the processor
+    queue = request.app[MSGS_PROCESSOR_KEY].queue  # Push the messages to be processed by the processor
 
     try:
         data = types.PreconnectRequest.from_dict(await request.json())

@@ -17,8 +17,7 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
     # Note, once initialized api, it will remain the same for all instances
     # Even if RemoteLogger is reinstanced
     api: 'rest.BrokerREST | rest.PrivateREST |None'
-    def_userservice_uuid: "str | None"
-    log_queue: asyncio.Queue
+    log_queue: asyncio.Queue[types.LogMessage]
     # flag to indicate we are emitting a log message
     # This is used to avoid circular logging
     emitting: bool
@@ -36,23 +35,14 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
         """
         return UDSBrokerLogger()
 
-    async def _log(self, level: int, message: str, userservice_uuid: str | None = None) -> None:
+    async def _log(self, level: types.LogLevel, message: str) -> None:
         """
         Logs a message to remote log
         """
         if self.api:
             self.emitting = True
-            await self.api.log(
-                level=types.LogLevel.from_python(level), message=message
-            )
+            await self.api.log(level=level, message=message)
             self.emitting = False
-
-    @staticmethod
-    def set_defaults(userservice_uuid: str | None = None) -> None:
-        """
-        Sets the default userservice_uuid to be used in all log calls
-        """
-        UDSBrokerLogger.manager().def_userservice_uuid = userservice_uuid
 
     @staticmethod
     async def wait_and_send_logs(forever: bool = True) -> None:
@@ -61,15 +51,15 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
 
         Will stop when cancelled
         """
-        async def process_log(level: int, message: str, userservice_uuid: str | None = None) -> None:
-            await UDSBrokerLogger.manager()._log(
-                level, message, userservice_uuid or UDSBrokerLogger.manager().def_userservice_uuid
-            )
+
+        async def process_log(message: types.LogMessage) -> None:
+            await UDSBrokerLogger.manager()._log(message.level, message.message)
+
         if forever:
             while True:
                 try:
-                    level, message, userservice_uuid = await UDSBrokerLogger.manager().log_queue.get()
-                    await process_log(level, message, userservice_uuid)
+                    log_item = await UDSBrokerLogger.manager().log_queue.get()
+                    await process_log(log_item)
                 except asyncio.CancelledError:
                     break
                 except Exception:
@@ -77,8 +67,8 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
         else:
             try:
                 while True:
-                    level, message, userservice_uuid = UDSBrokerLogger.manager().log_queue.get_nowait()
-                    await process_log(level, message, userservice_uuid)
+                    log_message = UDSBrokerLogger.manager().log_queue.get_nowait()
+                    await process_log(log_message)
             except asyncio.QueueEmpty:
                 pass
 
@@ -89,7 +79,9 @@ class UDSBrokerLogger(metaclass=utils.Singleton):
         """
         try:
             if not UDSBrokerLogger.manager().emitting:
-                UDSBrokerLogger.manager().log_queue.put_nowait((level, message, userservice_uuid))
+                UDSBrokerLogger.manager().log_queue.put_nowait(
+                    types.LogMessage(types.LogLevel.from_python(level), message)
+                )
             # If emitting, we are in a log call, so we cannot log again
         except Exception:
             pass  # Eat exception, we are not interested in it
@@ -119,7 +111,7 @@ def setup_log(
         None
     """
     filename = filename or os.path.join(
-        tempfile.gettempdir(), ('udsappserver.log' if type == 'server' else 'udsapp.log')
+        tempfile.gettempdir(), ('udsappserver.log' if type == 'service' else 'udsapp.log')
     )
 
     new_handlers: list[logging.Handler] = [

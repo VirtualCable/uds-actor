@@ -80,7 +80,7 @@ class WindowsOperations(Operations):
     async def computer_name(self) -> str:
         return win32api.GetComputerNameEx(win32con.ComputerNamePhysicalDnsHostname)
 
-    async def network_info(self) -> list[types.InterfaceInfo]:
+    async def list_interfaces(self) -> list[types.InterfaceInfo]:
         def fetch_from_wmi() -> list[types.InterfaceInfo]:
             result: list[types.InterfaceInfo] = []
             # Ensure coinitialize is called. Needed because "run_in_executor" will create a new thread
@@ -148,7 +148,7 @@ class WindowsOperations(Operations):
     async def loggoff(self) -> None:
         win32api.ExitWindowsEx(EWX_LOGOFF)
 
-    async def renameComputer(self, newName: str) -> bool:
+    async def rename_computer(self, newName: str) -> bool:
         '''
         Changes the computer name
         Returns True if reboot needed
@@ -168,7 +168,7 @@ class WindowsOperations(Operations):
             raise Exception('Error renaming computer from {} to {}: {}'.format(computerName, newName, error))
         return True
 
-    async def joinDomain(self, **kwargs: typing.Any) -> None:
+    async def join_domain(self, **kwargs: typing.Any) -> None:
         def innerJoinDomain() -> None:
             domain = kwargs.get('domain', None)
             ou = kwargs.get('ou', None)
@@ -230,7 +230,7 @@ class WindowsOperations(Operations):
         # Join domain can take some time, so we run it in a thread
         await asyncio.get_running_loop().run_in_executor(None, innerJoinDomain)
 
-    async def changeUserPassword(self, user: str, oldPassword: str, newPassword: str) -> None:
+    async def change_user_password(self, user: str, oldPassword: str, newPassword: str) -> None:
         # lpUser = LPCWSTR(user)
         # lpOldPassword = LPCWSTR(oldPassword)
         # lpNewPassword = LPCWSTR(newPassword)
@@ -272,7 +272,7 @@ class WindowsOperations(Operations):
             logger.error('Getting idle duration: {}'.format(e))
             return 0
 
-    async def current_user(self) -> str:
+    async def whoami(self) -> str:
         return win32api.GetUserName()
 
     async def session_type(self) -> str:
@@ -300,7 +300,7 @@ class WindowsOperations(Operations):
 
     async def protect_file_for_owner_only(self, filepath: str) -> None:
         try:
-            user, domain, _type = win32security.LookupAccountName('', await self.current_user())
+            user, domain, _type = win32security.LookupAccountName('', await self.whoami())
 
             secDescriptor = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
             dACL = secDescriptor.GetSecurityDescriptorDacl()
@@ -357,9 +357,9 @@ class WindowsOperations(Operations):
             await self.multiple_steps_join(name, domain, ou, account, password)
             return False
 
-        await self.renameComputer(name)
+        await self.rename_computer(name)
         logger.debug('Computer renamed to {} without reboot'.format(name))
-        await self.joinDomain(domain=domain, ou=ou, account=account, password=password, executeInOneStep=True)
+        await self.join_domain(domain=domain, ou=ou, account=account, password=password, executeInOneStep=True)
         logger.debug('Requested join domain {} without errors'.format(domain))
         return True
 
@@ -376,12 +376,12 @@ class WindowsOperations(Operations):
                 return False
             else:
                 logger.info('Joining domain {}'.format(domain))
-                await self.joinDomain(
+                await self.join_domain(
                     domain=domain, ou=ou, account=account, password=password, executeInOneStep=False
                 )
                 return True
 
-        await self.renameComputer(name)
+        await self.rename_computer(name)
         logger.info('Activating new name {}'.format(name))
         return True
 

@@ -22,7 +22,7 @@ class Operations(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def network_info(self) -> list[types.InterfaceInfo]:
+    async def list_interfaces(self) -> list[types.InterfaceInfo]:
         pass
 
     @abc.abstractmethod
@@ -46,15 +46,15 @@ class Operations(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def renameComputer(self, newName: str) -> bool:
+    async def rename_computer(self, newName: str) -> bool:
         pass
 
     @abc.abstractmethod
-    async def joinDomain(self, **kwargs: typing.Any) -> None:
+    async def join_domain(self, **kwargs: typing.Any) -> None:
         pass
 
     @abc.abstractmethod
-    async def changeUserPassword(self, user: str, oldPassword: str, newPassword: str) -> None:
+    async def change_user_password(self, user: str, oldPassword: str, newPassword: str) -> None:
         pass
 
     @abc.abstractmethod
@@ -66,7 +66,7 @@ class Operations(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def current_user(self) -> str:
+    async def whoami(self) -> str:
         pass
 
     @abc.abstractmethod
@@ -96,7 +96,7 @@ class Operations(abc.ABC):
 
     
     # Default implementations
-    async def hloRename(
+    async def hlo_rename(
         self,
         name: str,
         userName: typing.Optional[str] = None,
@@ -112,7 +112,7 @@ class Operations(abc.ABC):
         if userName and newPassword:
             logger.info('Setting password for configured user')
             try:
-                await self.changeUserPassword(userName, oldPassword or '', newPassword)
+                await self.change_user_password(userName, oldPassword or '', newPassword)
             except Exception as e:
                 # Logs error, but continue renaming computer
                 logger.error('Could not change password for user {}: {}'.format(userName, e))
@@ -121,15 +121,15 @@ class Operations(abc.ABC):
             logger.info('Computer name is already {}'.format(hostName))
             return False
 
-        return await self.renameComputer(name)
+        return await self.rename_computer(name)
     
 
     # Convenient, overridable methods
-    async def validNetworkCards(self, netString: typing.Optional[str] = None) -> list['types.InterfaceInfo']:
-        cards = await self.network_info()
+    async def list_valid_interfaces(self, net_filter: typing.Optional[str] = None) -> list['types.InterfaceInfo']:
+        cards = await self.list_interfaces()
         try:
-            subnet = utils.str_to_net(netString)
-        except Exception as e:
+            subnet = utils.str_to_net(net_filter)
+        except Exception:
             subnet = None
 
         if subnet is None:

@@ -71,7 +71,7 @@ class ManagedActorProcessor(ActorProcessor):
                             cfg.initialized = True
 
                     # Store config
-                    cfg.config=types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
+                    cfg.config = types.ActorDataConfiguration(unique_id=initResult.unique_id, os=initResult.os)
                     await self.platform.cfgManager.write(cfg)
                 except (exceptions.RESTConnectionError, exceptions.RESTError) as e:
                     logger.warning('Error validating with Broker: %s', e)
@@ -91,12 +91,12 @@ class ManagedActorProcessor(ActorProcessor):
 
         # First, if runOnce command is requested, run it, cleand it and exit
         if cfg.runonce_command:
-            runOnce = cfg.runonce_command
+            run_once = cfg.runonce_command
             # Remove from cfg and save it
             cfg.runonce_command = None
             await self.platform.cfgManager.write(cfg)
 
-            if utils.execute(runOnce, "runOnce"):
+            if await utils.execute(run_once, "runOnce"):
                 # If runonce is present, will not do anythin more
                 # So you must ensure that, when runonce command is finished, reboots the machine.
                 # That is, the COMMAND itself has to restart the machine!
@@ -121,7 +121,7 @@ class ManagedActorProcessor(ActorProcessor):
                         return None
 
                     if osData.action == 'rename':
-                        if self.platform.operations.hloRename(
+                        if await self.platform.operations.hlo_rename(
                             osData.name,
                             custom.get('username'),
                             custom.get('password'),
@@ -146,7 +146,9 @@ class ManagedActorProcessor(ActorProcessor):
 
         # If we are here, configuration is done, clean up os configuration data (for security)
         # (clenup is done by removing os data and custom data from cfg)
-        cfg.config = types.ActorDataConfiguration(unique_id= typing.cast(types.ActorDataConfiguration, cfg.config).unique_id, os=None)
+        cfg.config = types.ActorDataConfiguration(
+            unique_id=typing.cast(types.ActorDataConfiguration, cfg.config).unique_id, os=None
+        )
         await self.platform.cfgManager.write(cfg)
 
         # If "post config" command is present, execute it now
@@ -159,11 +161,7 @@ class ManagedActorProcessor(ActorProcessor):
 
         # Look for service interface
         try:
-            serviceInterface = next(
-                x
-                for x in interfaces
-                if x.mac.lower() == typing.cast(types.ActorDataConfiguration, cfg.config).unique_id
-            )
+            serviceInterface = next(x for x in interfaces if x.mac.lower() == cfg.config.unique_id)
         except StopIteration:
             serviceInterface = interfaces[0]
 

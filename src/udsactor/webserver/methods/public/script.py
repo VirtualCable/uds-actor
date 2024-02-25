@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 @routes.post(consts.PUBLIC_REST_PATH('script'))
 async def script(request: aiohttp.web.Request) -> aiohttp.web.Response:
-    outgoing_queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).queue  # Push the messages to be processed by the processor
+    outgoing_queue = request.app[MSGS_PROCESSOR_KEY].queue  # Push the messages to be processed by the processor
 
     try:
         data = types.ScriptRequest.from_dict(await request.json())

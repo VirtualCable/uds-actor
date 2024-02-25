@@ -42,6 +42,12 @@ class LogLevel(enum.IntEnum):
         return LogLevel.ERROR  # Default to error
 
 
+@dataclasses.dataclass(frozen=True)
+class LogMessage:
+    level: LogLevel
+    message: str
+
+
 class UDSMessageType(enum.StrEnum):
     MESSAGE = 'message'  # Data is the message to be shown (str)
     SCREENSHOT = 'screenshot'  # Data is the screenshot (bytes, png or jpeg) or None depending if it is for the server of for the client
@@ -62,10 +68,10 @@ class UDSMessage:
     data: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Async callback, if any, to be called when message is processed
     callback: typing.Optional[
-        typing.Callable[[typing.Any, typing.Optional[Exception]], typing.Coroutine]
+        typing.Callable[[typing.Any, typing.Optional[Exception]], typing.Coroutine[None, None, None]]
     ] = None
 
-    def asDict(self) -> dict[str, typing.Any]:
+    def as_dict(self) -> dict[str, typing.Any]:
         # callback is not serialized
         return {
             'msg_type': self.msg_type.value,
@@ -95,10 +101,12 @@ class ActorOsConfiguration:
     action: str
     name: str
     custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
-    
+
     @staticmethod
-    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'ActorOsConfiguration':
-        if not data or not isinstance(data, collections.abc.Mapping):
+    def from_dict(
+        data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None
+    ) -> 'ActorOsConfiguration':
+        if not data:
             return ActorOsConfiguration(action='', name='', custom=None)
 
         return ActorOsConfiguration(
@@ -114,26 +122,30 @@ class ActorOsConfiguration:
             'custom': self.custom,
         }
 
+
 @dataclasses.dataclass(frozen=True)
 class ActorDataConfiguration(typing.NamedTuple):
     unique_id: typing.Optional[str] = None
     os: typing.Optional[ActorOsConfiguration] = None
-    
+
     @staticmethod
-    def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'ActorDataConfiguration':
-        if not data or not isinstance(data, collections.abc.Mapping):
+    def from_dict(
+        data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None
+    ) -> 'ActorDataConfiguration':
+        if not data:
             return ActorDataConfiguration(unique_id=None, os=None)
 
         return ActorDataConfiguration(
             unique_id=data.get('unique_id', None),
             os=ActorOsConfiguration.from_dict(data.get('os', None)),
         )
-    
+
     def as_dict(self) -> dict[str, typing.Any]:
         return {
             'unique_id': self.unique_id,
             'os': self.os.as_dict() if self.os else None,
         }
+
 
 @dataclasses.dataclass
 class ActorConfiguration:
@@ -181,17 +193,19 @@ class ActorConfiguration:
 
     @staticmethod
     def from_dict(data: dict[str, typing.Any]) -> 'ActorConfiguration':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             raise Exception('Invalid data')
         cfg = data.copy()
         cfg['config'] = ActorDataConfiguration.from_dict(cfg.get('config', None))
         return ActorConfiguration(**cfg)
+
 
 @dataclasses.dataclass(frozen=True)
 class InitializationResult:
     token: typing.Optional[str] = None
     unique_id: typing.Optional[str] = None
     os: typing.Optional[ActorOsConfiguration] = None
+
 
 @dataclasses.dataclass(frozen=True)
 class LoginRequest:
@@ -205,7 +219,7 @@ class LoginRequest:
 
     @staticmethod
     def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LoginRequest':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return LoginRequest.null()
 
         return LoginRequest(
@@ -218,6 +232,7 @@ class LoginRequest:
             'username': self.username,
             'session_type': self.session_type,
         }
+
 
 @dataclasses.dataclass(frozen=True)
 class LoginResponse:
@@ -241,7 +256,7 @@ class LoginResponse:
 
     @staticmethod
     def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LoginResponse':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return LoginResponse.null()
 
         return LoginResponse(
@@ -261,6 +276,7 @@ class LoginResponse:
             'session_id': self.session_id,
         }
 
+
 @dataclasses.dataclass(frozen=True)
 class LogoutRequest:
     # {'username': '1234', 'session_type': 'test', 'session_id': 'test'}
@@ -277,7 +293,7 @@ class LogoutRequest:
     def from_dict(
         data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None, from_broker: bool = False
     ) -> 'LogoutRequest':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return LogoutRequest.null()
 
         return LogoutRequest(
@@ -298,6 +314,7 @@ class LogoutRequest:
 
 # No logout response class exists, just an OK message is sent
 
+
 @dataclasses.dataclass(frozen=True)
 class LogRequest:
     # {'level': 'INFO', 'message': 'test'}
@@ -310,7 +327,7 @@ class LogRequest:
 
     @staticmethod
     def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'LogRequest':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return LogRequest.null()
 
         return LogRequest(
@@ -343,7 +360,7 @@ class CertificateInfo:
 
     @staticmethod
     def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'CertificateInfo':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return CertificateInfo(key='', certificate='', password='', ciphers=None)
 
         return CertificateInfo(
@@ -360,6 +377,7 @@ class CertificateInfo:
             'password': self.password,
             'ciphers': self.ciphers,
         }
+
 
 @dataclasses.dataclass(frozen=True)
 class PreconnectRequest:
@@ -382,7 +400,7 @@ class PreconnectRequest:
     def from_dict(
         data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None
     ) -> 'PreconnectRequest':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return PreconnectRequest.null()
 
         return PreconnectRequest(
@@ -406,6 +424,7 @@ class PreconnectRequest:
             data['user'] = self.username
         return data
 
+
 @dataclasses.dataclass(frozen=True)
 class ScriptRequest:
     # {'script': '# python code to execute'}
@@ -419,7 +438,7 @@ class ScriptRequest:
 
     @staticmethod
     def from_dict(data: typing.Optional[collections.abc.Mapping[str, typing.Any]] = None) -> 'ScriptRequest':
-        if not data or not isinstance(data, collections.abc.Mapping):
+        if not data:
             return ScriptRequest.null()
 
         return ScriptRequest(

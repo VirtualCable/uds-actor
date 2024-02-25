@@ -29,13 +29,11 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     The client expects a json response from types.LoginResult
     """
     # udsRest = typing.cast('rest.BrokerREST', request.app[UDSREST_KEY])
-    outgoing_queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).queue  # Our outgoing queue is the incoming queue of the processor
+    # Our outgoing queue is the incoming queue of the processor
+    outgoing_queue = request.app[MSGS_PROCESSOR_KEY].queue
 
-    incoming_queue: asyncio.Queue = typing.cast(
-        'server_msg_processor.MessagesProcessor', request.app[MSGS_PROCESSOR_KEY]
-    ).user_queue  # Our incoming queue is the outgoing queue of the processor
+    # Our incoming queue is the outgoing queue of the processor
+    incoming_queue = request.app[MSGS_PROCESSOR_KEY].user_queue
 
     # On connection, ensure all messages are cleared
     while not incoming_queue.empty():
@@ -44,20 +42,18 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     ws = aiohttp.web.WebSocketResponse()
     await ws.prepare(request)
     logger.debug('Websocket connection ready')
-    
+
     # helper to send Ok message
-    async def send_ok():
-        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.OK).asDict())
-        
+    async def send_ok() -> None:  # pyright: ignore[reportUnusedFunction]
+        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.OK).as_dict())
+
     # Process incomming messages and also process messages from queue
-    async def process_queue():
+    async def process_queue() -> None:
         while True:
             msg = await incoming_queue.get()
-            if msg is None:
-                break
-            await ws.send_json(msg.asDict())
+            await ws.send_json(msg.as_dict())
 
-    async def process_ws():
+    async def process_ws() -> None:
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -65,11 +61,13 @@ async def ws(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
                     message = types.UDSMessage(**data)
                     if message.msg_type == types.UDSMessageType.CLOSE:
                         # Close connection, respond to it an notify logout to outgoing queue
-                        await outgoing_queue.put(types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT, data={}))
+                        await outgoing_queue.put(
+                            types.UDSMessage(msg_type=types.UDSMessageType.LOGOUT, data={})
+                        )
                         await ws.close()
                     elif message.msg_type == types.UDSMessageType.PING:
                         # Put a pong message in the queue
-                        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).asDict())
+                        await ws.send_json(types.UDSMessage(msg_type=types.UDSMessageType.PONG).as_dict())
                     elif message.msg_type == types.UDSMessageType.LOG:
                         await outgoing_queue.put(message)
                     elif message.msg_type == types.UDSMessageType.LOGIN:

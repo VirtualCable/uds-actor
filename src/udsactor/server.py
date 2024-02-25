@@ -26,9 +26,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
-@author: Adolfo Gómez, dkmaster at dkmon dot com
+Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
-# pylint: disable=invalid-name
 
 import typing
 import collections.abc
@@ -52,7 +51,7 @@ class UDSActorServer(threading.Thread):
     def __init__(self) -> None:
         super().__init__()
 
-    async def _run(self):
+    async def _run(self) -> None:
         # Run the mainAsyncTask, and store the task to check if it has finished
         task = asyncio.create_task(self.main())
 
@@ -88,7 +87,7 @@ class UDSActorServer(threading.Thread):
             except Exception as e:
                 logger.exception(e)
 
-    def run(self):
+    def run(self) -> None:
         logger.debug('Starting UDSActorServer')
 
         loop = asyncio.new_event_loop()
@@ -121,7 +120,7 @@ class UDSActorServer(threading.Thread):
             actor = unmanaged.UnmanagedActorProcessor(self)
 
         # Keep reference to tasks so we can cancel them on exit (and avoid garbage collection of them)
-        back_tasks: typing.Final[list[asyncio.Task]] = [
+        back_tasks: typing.Final[list[asyncio.Task[None]]] = [
             # asyncio.create_task(platform.events.sensEventsProcessor(cfg)),  # Add events processor task
             # asyncio.create_task(platform.events.statsNotifier(cfg)),  # Add stats notifier task
             asyncio.create_task(log.UDSBrokerLogger.wait_and_send_logs()),  # Add log sender task
@@ -132,13 +131,13 @@ class UDSActorServer(threading.Thread):
         # First, wait for interfaces to be available BEFORE trying to initialize anything
         logger.info('Waiting for network connectivity')
         while True:
-            interfaces = await native.Manager.instance().operations.validNetworkCards()
+            interfaces = await native.Manager.instance().operations.list_valid_interfaces()
             if len(interfaces) > 0:
                 break
 
         logger.info('Detected network interfaces: %s', interfaces)
 
-        certInfo: typing.Optional[types.CertificateInfo] = await actor.initialize(interfaces=interfaces)
+        _certInfo: typing.Optional[types.CertificateInfo] = await actor.initialize(interfaces=interfaces)
 
         # Create the webserver and run until cancelled
         try:

@@ -25,10 +25,10 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 '''
-@author: Adolfo Gómez, dkmaster at dkmon dot com
+Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportUnknownVariableType=false,reportUnknownMemberType=false,reportAttributeAccessIssue=false,reportUnknownArgumentType=false,reportMissingModuleSource=false
 import typing
 import json
 import base64
@@ -39,13 +39,15 @@ import win32security
 from udsactor import types
 from ..abc import ConfigReader
 
-PATH: typing.Final[str] = 'Software\\UDSActor\\Config'  # Moved to "Config" on 4.0 to ensure that 3.x data (not compatible) is not used
+PATH: typing.Final[str] = (
+    'Software\\UDSActor\\Config'  # Moved to "Config" on 4.0 to ensure that 3.x data (not compatible) is not used
+)
 BASEKEY: typing.Final[str] = wreg.HKEY_LOCAL_MACHINE  # type: ignore
 
 
-def fixRegistryPermissions(handle) -> None:
+def secure_registry(handle: int) -> None:
     # Fix permissions so users can't read this key
-    v = win32security.GetSecurityInfo(
+    v = win32security.GetSecurityInfo(  # pyright: ignore
         handle, win32security.SE_REGISTRY_KEY, win32security.DACL_SECURITY_INFORMATION
     )
     dacl = v.GetSecurityDescriptorDacl()
@@ -56,14 +58,14 @@ def fixRegistryPermissions(handle) -> None:
             dacl.DeleteAce(n)
         else:
             n += 1
-    win32security.SetSecurityInfo(
+    win32security.SetSecurityInfo(  # pyright: ignore
         handle,
         win32security.SE_REGISTRY_KEY,
         win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
-        None,
-        None,
+        None,  # type: ignore
+        None,  # type: ignore
         dacl,
-        None,
+        None,  # type: ignore
     )
 
 
@@ -85,7 +87,7 @@ class WindowsConfigReader(ConfigReader):
         except Exception:
             key = wreg.CreateKeyEx(BASEKEY, PATH, 0, wreg.KEY_ALL_ACCESS)
 
-        fixRegistryPermissions(key.handle)  # type: ignore
+        secure_registry(key.handle)
         data = json.dumps(config.as_dict())
         data = base64.b64encode(data.encode('utf8')).decode('utf8')
 
