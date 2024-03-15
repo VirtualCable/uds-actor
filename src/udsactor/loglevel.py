@@ -29,4 +29,4 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 
-OTHER, DEBUG, INFO, WARN, ERROR, FATAL = (10000 * x for x in range(6))
+OTHER, DEBUG, INFO, WARN, ERROR, FATAL = (10000 * (x + 1) for x in range(6))
