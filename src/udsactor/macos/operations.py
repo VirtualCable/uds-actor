@@ -171,8 +171,7 @@ def getCurrentUser() -> str:
     '''
     Returns current logged in user
     '''
-    return os.getlogin()
-
+    return os.environ.get('USER', 'unknown')
 
 def getSessionType() -> str:
     '''
