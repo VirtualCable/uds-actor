@@ -11,7 +11,7 @@ from ..abc import Runner
 logger = logging.getLogger(__name__)
 
 
-def signal_handler(sig, frame):
+def signal_handler(sig: typing.Any, frame: typing.Any) -> None:
     logger.debug('Signal handler called with signal %s', sig)
     LinuxUDSActorServer.stop_event.set()  # Signal the server to stop
 
@@ -41,7 +41,7 @@ class LinuxRunner(Runner):
             self.usage()
             sys.exit(2)
 
-    def usage(self):
+    def usage(self) -> None:
         """Shows usage"""
         sys.stderr.write('usage: udsactor run|login "username"|logout "username"\n')
         sys.exit(2)

@@ -3,12 +3,11 @@ import typing
 import collections.abc
 import logging
 import contextlib
-from unittest import mock
 
 
-from udsactor import exceptions, rest, managed, consts, types
+from udsactor import exceptions, rest, types
 
-from . import rest_server, fixtures, fake_uds_server, exclusive_tests
+from . import rest_server, fake_uds_server
 
 logger = logging.getLogger(__name__)
 

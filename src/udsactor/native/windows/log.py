@@ -32,7 +32,7 @@
 import logging
 import logging.handlers
 
-import servicemanager
+import servicemanager  # pyright: ignore [reportMissingModuleSource]
 
 
 class ServiceLogger(logging.Handler):

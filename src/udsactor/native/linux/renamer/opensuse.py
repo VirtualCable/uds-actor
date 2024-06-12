@@ -36,7 +36,7 @@ from .common import renamers
 logger = logging.getLogger(__name__)
 
 
-async def rename(newName: str) -> bool:
+async def rename(new_name: str) -> bool:
     '''
     RH, Centos, Fedora Renamer
     Expects new host name on newName
@@ -45,11 +45,11 @@ async def rename(newName: str) -> bool:
     logger.debug('using SUSE renamer')
 
     with open('/etc/hostname', 'w') as hostname:
-        hostname.write(newName)
+        hostname.write(new_name)
 
     # Force system new name
     # Force system new name
-    for cmd in (f'hostnamectl set-hostname {newName}', f'/bin/hostname {newName}'):
+    for cmd in (f'hostnamectl set-hostname {new_name}', f'/bin/hostname {new_name}'):
         # Exec and wait for it to finish
         proc = await asyncio.create_subprocess_shell(cmd)
         await proc.wait()
@@ -58,7 +58,7 @@ async def rename(newName: str) -> bool:
     with open('/etc/hosts', 'r') as hosts:
         lines = hosts.readlines()
     with open('/etc/hosts', 'w') as hosts:
-        hosts.write("127.0.1.1\t{}\n".format(newName))
+        hosts.write("127.0.1.1\t{}\n".format(new_name))
         for l in lines:
             if l[:9] != '127.0.1.1':  # Skips existing 127.0.1.1. if it already exists
                 hosts.write(l)

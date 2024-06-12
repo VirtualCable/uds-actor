@@ -53,7 +53,7 @@ def get_free_port(ipv6: bool = False) -> int:
 
 
 def rnd_string_for_test(length: int = 32) -> str:
-    return ''.join(random.choice('0123456789ABCDEF') for i in range(length))  # nosec: testing purposes only
+    return ''.join(random.choice('0123456789ABCDEF') for _ in range(length))  # nosec: testing purposes only
 
 
 def public_rest_path(
@@ -79,10 +79,10 @@ def set_testing_cfg(cfg: typing.Optional[types.ActorConfiguration]) -> None:
         async def read(self) -> types.ActorConfiguration:
             return self.cfg
 
-        async def write(self, cfg: types.ActorConfiguration) -> None:
-            self.cfg = cfg
+        async def write(self, config: types.ActorConfiguration) -> None:
+            self.cfg = config
 
-        async def scriptToInvokeOnLogin(self) -> str:
+        async def script_to_invoke_on_login(self) -> str:
             return ''
 
     # Override "save" config, platform provided config, etc..

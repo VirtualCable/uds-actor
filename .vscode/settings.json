@@ -5,18 +5,19 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
-        "tests"
+        "src/tests"
     ],
     "python.analysis.autoFormatStrings": true,
     "python.analysis.autoImportCompletions": true,
     "python.analysis.diagnosticSeverityOverrides": {
-        "reportUnusedImport": "none",
-        "reportPrivateUsage": "none",
-        "reportMissingTypeStubs": "none"
     },
     "mypy-type-checker.args": [
         "--strict",
         "--disable-error-code=import",
         "--config_file=mypy.ini"
-    ]
+    ],
+    "python.analysis.include": [
+        "src/tests"
+    ],
+    "python.analysis.inlayHints.variableTypes": false
 }

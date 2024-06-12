@@ -11,9 +11,9 @@ import aiohttp
 from unittest import mock
 
 
-from udsactor import rest, managed, consts, types, server_msg_processor
+from udsactor import managed, consts, types
 
-from .utils import rest_server, fixtures, fake_uds_server, exclusive_tests, tools
+from .utils import rest_server, fake_uds_server, exclusive_tests, tools
 
 # Also, due to the fact that there are more than one event loop, we need to ensure that
 # the test is run alone and comms.Queue is not shared between event loops

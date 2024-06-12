@@ -34,7 +34,7 @@ import typing
 import collections.abc
 import logging
 
-from udsactor import types, managed, unmanaged, rest
+from udsactor import types
 
 logger = logging.getLogger(__name__)
 

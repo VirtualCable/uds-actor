@@ -4,14 +4,10 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import sys
-import typing
-import collections.abc
-from unittest import mock
 
 from unittest import IsolatedAsyncioTestCase
 
-from udsactor import native, types, consts
+from udsactor import types
 
 from .utils import tools, fixtures
 
@@ -25,5 +21,3 @@ class TestManagedServer(IsolatedAsyncioTestCase):
 
     def tearDown(self) -> None:
         tools.set_testing_cfg(None)
-
-

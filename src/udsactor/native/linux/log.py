@@ -4,7 +4,7 @@ import logging.handlers
 
 class ServiceLogger(logging.Handler):
     """
-    Custom log handler for UDS that will log to windows event log if we are a service
+    Custom log handler for UDS that will log to linux system log
     """
 
     def __init__(
@@ -13,7 +13,8 @@ class ServiceLogger(logging.Handler):
         super().__init__()
 
     def emit(self, record: logging.LogRecord) -> None:
-        msg = f'{record.levelname} {record.getMessage()}'
+        _msg = f'{record.levelname} {record.getMessage()}'
+        # TODO: Log to linux system log
 
 
     def __eq__(self, other: object) -> bool:

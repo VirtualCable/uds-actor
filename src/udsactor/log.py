@@ -4,7 +4,6 @@ import logging.handlers
 import os
 import tempfile
 import typing
-import collections.abc
 
 from . import consts, native, types, utils, rest
 

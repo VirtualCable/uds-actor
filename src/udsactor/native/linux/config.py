@@ -47,7 +47,7 @@ class LinuxConfigReader(ConfigReader):
             cfg.read(consts.CONFIGFILE)
             uds: configparser.SectionProxy = cfg['uds']
 
-            cfgVersion = int(uds.get('config_version', '0'), 16)
+            config_version = int(uds.get('config_version', '0'), 16)
 
             config: typing.Any = None
             data: typing.Any = None
@@ -56,7 +56,7 @@ class LinuxConfigReader(ConfigReader):
             base64Data = uds.get('data', None)
 
             # Get old compat values and translate them to new ones if needed
-            if cfgVersion == 0:  # Old version
+            if config_version == 0:  # Old version
                 token = uds.get('master_token', None) or uds.get('own_token', None)
                 # Extract data:
                 config = (
@@ -70,7 +70,7 @@ class LinuxConfigReader(ConfigReader):
                     if base64Data
                     else None
                 )
-            elif cfgVersion == consts.CONFIG_VERSION:
+            elif config_version == consts.CONFIG_VERSION:
                 # New version has just token, and config and data are encoded as base64 but with json inside
                 token = uds.get('token', None)
                 config = json.loads(base64.b64decode(base64Config.encode())) if base64Config else None
@@ -136,5 +136,5 @@ class LinuxConfigReader(ConfigReader):
 
         os.chmod(consts.CONFIGFILE, 0o0600)  # Ensure only readable by root
 
-    async def scriptToInvokeOnLogin(self) -> str:
+    async def script_to_invoke_on_login(self) -> str:
         return ''

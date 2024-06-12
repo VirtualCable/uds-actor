@@ -30,7 +30,6 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 import typing
-import asyncio
 import time
 import aiohttp.web
 import logging

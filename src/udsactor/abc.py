@@ -6,7 +6,6 @@
 import typing
 import abc
 import logging
-import collections.abc
 
 from udsactor import types, utils, rest
 from udsactor.native import Manager

@@ -10,8 +10,6 @@ import enum
 import dataclasses
 import typing
 
-from . import consts
-
 
 class LogLevel(enum.IntEnum):
     # From (logging + 10) * 1000    (logging.DEBUG = 10, logging.INFO = 20, etc..)

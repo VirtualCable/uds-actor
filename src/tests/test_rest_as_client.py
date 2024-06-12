@@ -30,8 +30,6 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 import logging
 import random
-import typing
-import collections.abc
 
 from unittest import IsolatedAsyncioTestCase
 

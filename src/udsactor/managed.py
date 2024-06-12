@@ -208,7 +208,7 @@ class ManagedActorProcessor(ActorProcessor):
                 username=username,
                 session_type=session_type,
             )
-            script = await self.platform.cfgManager.scriptToInvokeOnLogin()
+            script = await self.platform.cfgManager.script_to_invoke_on_login()
             if script:
                 logger.info('Executing script on login: {}'.format(script))
                 script += f'{username} {session_type or "unknown"} {cfg.actorType}'

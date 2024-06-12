@@ -29,6 +29,7 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportUnusedImport=false
 from .common import rename
 
 # Import packages

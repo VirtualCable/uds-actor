@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 class LinuxOperations(Operations):
     @staticmethod
-    async def getInterfaces() -> list[str]:
+    async def get_interfaces() -> list[str]:
         '''
         Returns a list of interfaces names coded in utf-8
         '''
@@ -138,7 +138,7 @@ class LinuxOperations(Operations):
 
     async def list_interfaces(self) -> list[types.InterfaceInfo]:
         result: list[types.InterfaceInfo] = []
-        for ifname in await LinuxOperations.getInterfaces():
+        for ifname in await LinuxOperations.get_interfaces():
             ip, mac = await LinuxOperations.getIpAndMac(ifname)
             if (
                 mac != '00:00:00:00:00:00' and mac and ip and ip.startswith('169.254') is False

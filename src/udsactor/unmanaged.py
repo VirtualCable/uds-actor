@@ -28,7 +28,6 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
-import asyncio
 import typing
 import logging
 
@@ -49,7 +48,6 @@ class UnmanagedActorProcessor(ActorProcessor):
         """
         logger.info('Starting unmanaged actor')
 
-        cfg = await self.platform.config
         api = await self.api
 
         # Unmanaged actor simply gets a "registered" certificate to start local swebserver
@@ -102,7 +100,7 @@ class UnmanagedActorProcessor(ActorProcessor):
             result = await api.notify_login(
                 actor_type=types.ActorType.UNMANAGED, username=username, session_type=session_type
             )
-            script = await self.platform.cfgManager.scriptToInvokeOnLogin()
+            script = await self.platform.cfgManager.script_to_invoke_on_login()
             if script:
                 logger.info('Executing script on login: {}'.format(script))
                 script += f'{username} {session_type or "unknown"} {cfg.actorType}'
@@ -113,7 +111,6 @@ class UnmanagedActorProcessor(ActorProcessor):
         return result
 
     async def logout(self, *, username: str, session_type: str, session_id: str) -> None:
-        cfg = await self.platform.config
         api = await self.api
 
         try:

@@ -36,17 +36,17 @@ from .common import renamers
 logger = logging.getLogger(__name__)
 
 
-async def rename(newName: str) -> bool:
+async def rename(new_name: str) -> bool:
     '''
     Debian renamer
     Expects new host name on newName
     Host does not needs to be rebooted after renaming
     '''
     with open('/etc/hostname', 'w') as hostname:
-        hostname.write(newName)
+        hostname.write(new_name)
 
     # Force system new name
-    for cmd in (f'hostnamectl set-hostname {newName}', f'/bin/hostname {newName}'):
+    for cmd in (f'hostnamectl set-hostname {new_name}', f'/bin/hostname {new_name}'):
         # Exec and wait for it to finish
         proc = await asyncio.create_subprocess_shell(cmd)
         await proc.wait()
@@ -55,7 +55,7 @@ async def rename(newName: str) -> bool:
     with open('/etc/hosts', 'r') as hosts:
         lines = hosts.readlines()
     with open('/etc/hosts', 'w') as hosts:
-        hosts.write("127.0.1.1\t%s\n" % newName)
+        hosts.write("127.0.1.1\t%s\n" % new_name)
         for l in lines:
             if l[:9] == '127.0.1.1':  # Skips existing 127.0.1.1. if it already exists
                 continue

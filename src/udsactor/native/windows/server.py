@@ -29,19 +29,10 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
-
+# pyright: reportMissingModuleSource=false, reportUnknownMemberType=false
 import logging
 import typing
-import collections.abc
-import threading
-import asyncio
-import sys
-
-import win32serviceutil
-import win32service
 import win32net
-import pythoncom
-import servicemanager
 import win32security
 
 from udsactor import types, consts

@@ -4,18 +4,14 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import socket
-import sys
 import signal
-import typing
-import collections.abc
 from unittest import mock
 
 from unittest import IsolatedAsyncioTestCase
 
 from udsactor import native
 
-from .utils import tools, fixtures
+from .utils import tools
 
 import udsactor_service
 

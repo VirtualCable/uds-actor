@@ -28,6 +28,7 @@
 '''
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportUnusedFunction=false
 import aiohttp
 import aiohttp.web
 import typing
@@ -38,7 +39,7 @@ import logging
 import contextlib
 
 
-from udsactor import consts, types, cert
+from udsactor import consts, cert
 from .cert import generate_cert
 
 from .tools import get_free_port
@@ -77,7 +78,7 @@ AUTHENTICATORS: typing.Final[list[dict[str, typing.Any]]] = [
 ]
 
 
-def rest_result(result: typing.Any, **kwargs) -> aiohttp.web.Response:
+def rest_result(result: typing.Any, **kwargs: typing.Any) -> aiohttp.web.Response:
     '''
     Returns a REST result
     '''
@@ -164,7 +165,7 @@ class FakeUDSRestServer:
 
         @routes.post('/uds/rest/actor/v3/register')
         async def register(request: aiohttp.web.Request) -> aiohttp.web.Response:
-            params = await request.json()
+            _params = await request.json()
             await self.store_request(request)
             return rest_result(TOKEN)  # Same token as login, in fact, does not matter... :)
 

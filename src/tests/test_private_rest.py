@@ -4,14 +4,14 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
+import typing
 import asyncio
 import logging
-from unittest import mock
 
 
-from udsactor import exceptions, rest, managed, consts, types
+from udsactor import exceptions, types
 
-from .utils import rest_server, fixtures, fake_uds_server, exclusive_tests, ws
+from .utils import exclusive_tests, ws
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
-            async def _replacement(*args, **kwargs) -> None:
+            async def _replacement(*args: typing.Any, **kwargs: typing.Any) -> None:
                 try:
                     self.assertEqual(kwargs['username'], '')
                     self.assertEqual(kwargs['session_type'], '')
@@ -74,7 +74,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
-            async def _replacement(*args, **kwargs) -> None:
+            async def _replacement(*args: typing.Any, **kwargs: typing.Any) -> None:
                 try:
                     self.assertEqual(kwargs['level'], types.LogLevel.INFO)
                     self.assertEqual(kwargs['message'], 'test')
@@ -109,7 +109,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
-            async def _replacement(*args, **kwargs) -> types.LoginResponse:
+            async def _replacement(*args: typing.Any, **kwargs: typing.Any) -> types.LoginResponse:
                 called.set()
                 # TODO: test args
                 try:
@@ -158,7 +158,7 @@ class TestPrivateRest(exclusive_tests.AsyncExclusiveTests):
             # Override close processor
             called: asyncio.Event = asyncio.Event()
 
-            async def _replacement(*args, **kwargs) -> None:
+            async def _replacement(*args: typing.Any, **kwargs: typing.Any) -> None:
                 try:
                     self.assertEqual(kwargs['username'], '1234')
                     self.assertEqual(kwargs['session_type'], '')

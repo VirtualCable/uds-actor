@@ -5,15 +5,10 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
 import socket
-import os
-import typing
-import collections.abc
 
 from unittest import IsolatedAsyncioTestCase
 
-from udsactor import native, types, consts
-
-from .utils.tools import rnd_string_for_test
+from udsactor import native, types
 
 
 class TestOperations(IsolatedAsyncioTestCase):

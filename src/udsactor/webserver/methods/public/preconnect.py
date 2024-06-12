@@ -4,8 +4,6 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import typing
-import asyncio
 import logging
 
 import aiohttp

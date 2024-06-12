@@ -53,7 +53,7 @@ VERSION_FULL: typing.Final[str] = f'UDSActor {VERSION}'
 BUILD: typing.Final[str] = '20231212'
 SYSTEM: typing.Final[str] = platform.system().lower()
 
-# File where configuration is stored
+# File where configuration is stored, on Linux
 CONFIGFILE: typing.Final[str] = '/etc/udsactor/udsactor.cfg' if not DEBUG else 'udsactor.cfg'
 CONFIG_VERSION: typing.Final[int] = 0x40000
 
@@ -123,6 +123,8 @@ SECURE_CIPHERS: typing.Final[str] = (
     ':ECDHE-ECDSA-AES256-GCM-SHA384'
     ':ECDHE-ECDSA-CHACHA20-POLY1305'
 )
+
+SECURE_MIN_TLS_VERSION: typing.Final[str] = '1.2'
 
 # Secret used to authenticate messages from UDS Broker
 # It will change every time the actor is restarted

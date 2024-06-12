@@ -35,12 +35,11 @@ import logging
 import ssl
 import typing
 import collections.abc
-import warnings
 
 import aiohttp
 import aiohttp.client_exceptions
 
-from . import consts, exceptions, types
+from . import consts, exceptions, types, security
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +53,14 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     """
 
     _host: str
-    _validateCert: bool
+    _verify_ssl: bool
     _url: str
     _context: 'ssl.SSLContext'
     _token: str | None = None
 
-    def __init__(self, host: str, validateCert: bool, token: str | None = None) -> None:
+    def __init__(self, host: str, verify_ssl: bool, token: str | None = None) -> None:
         self._host = host
-        self._validateCert = validateCert
+        self._verify_ssl = verify_ssl
         self._url = f'https://{self._host}/uds/rest/'
         self._token = token
         # try:
@@ -69,14 +68,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         # except Exception:
         #     pass
 
-        self._context = (
-            ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-            if validateCert
-            else ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
-        )
-        # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
-        self._context.minimum_version = ssl.TLSVersion.TLSv1_2
-        self._context.set_ciphers(consts.SECURE_CIPHERS)
+        self._context = security.create_client_sslcontext(verify=verify_ssl)
 
     @property
     def _headers(self) -> typing.MutableMapping[str, str]:
@@ -336,13 +328,15 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         return types.InitializationResult(
             token=r['token'],
             unique_id=r['unique_id'].lower() if r['unique_id'] else None,
-            os=types.ActorOsConfiguration(
-                action=os['action'],
-                name=os['name'],
-                custom=os.get('custom'),
-            )
-            if r['os']
-            else None,
+            os=(
+                types.ActorOsConfiguration(
+                    action=os['action'],
+                    name=os['name'],
+                    custom=os.get('custom'),
+                )
+                if r['os']
+                else None
+            ),
         )
 
     # The flow for initialization of an unmanaged actor is:
@@ -467,10 +461,12 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
 
         self._url = f'https://{"127.0.0.1" if not ipv6 else "[::1]"}:{consts.LISTEN_PORT}{consts.BASE_PRIVATE_REST_PATH}/'
 
-        self._context = ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
+        self._context = ssl._create_unverified_context(  # pyright: ignore [reportPrivateUsage]
+            purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False
+        )
 
         # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
-        self._context.minimum_version = ssl.TLSVersion.TLSv1_2  # Local connection, no need for more
+        self._context.minimum_version = ssl.TLSVersion.TLSv1_3  # Local connection, no need for more
 
     @property
     def _headers(self) -> typing.MutableMapping[str, str]:
@@ -541,7 +537,7 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
         async def proces_outgoing(ws: aiohttp.ClientWebSocketResponse) -> None:
             while True:
                 msg = await self._queue.get()
-                if msg is None:
+                if typing.cast(typing.Any, msg) is None:  # None is a "stop" message
                     break
                 await ws.send_json(msg.as_dict())
 
@@ -558,14 +554,13 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
             # Cancel received, propagate it (fine also :)
             raise
         except Exception as e:
+            logger.error('Exception on communicate: %s', e)
             raise  # Not expected, so raise it
-            
+
     async def send_message(self, msg: types.UDSMessage) -> None:
         await self._queue.put(msg)
 
-    async def user_login(
-        self, username: str, sessionType: typing.Optional[str] = None
-    ) -> types.LoginResponse:
+    async def user_login(self, username: str, sessionType: typing.Optional[str] = None) -> types.LoginResponse:
         self._session_type = sessionType or consts.UNKNOWN
         payload = {
             'username': username,

@@ -2,8 +2,6 @@ import threading
 from unittest import IsolatedAsyncioTestCase
 
 
-from udsactor import consts, types, rest, managed
-
 # Test can be run multithreaded, so we need to ensure that only one test is run at a time
 # for these tests
 # Also, due to the fact that there are more than one event loop, we need to ensure that

@@ -4,8 +4,6 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import typing
-import asyncio
 import logging
 
 import aiohttp
@@ -14,7 +12,7 @@ import aiohttp.web
 from ...routes import routes
 from ...keys import MSGS_PROCESSOR_KEY
 
-from udsactor import types, consts, server_msg_processor
+from udsactor import types, consts
 from udsactor.webserver.utils import response
 
 logger = logging.getLogger(__name__)

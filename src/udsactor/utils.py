@@ -7,7 +7,6 @@ import typing
 import collections.abc
 import logging
 import string
-import functools
 import time
 import asyncio
 import re
@@ -15,7 +14,7 @@ import datetime
 import contextlib
 import ipaddress
 
-from . import types, consts
+from . import types
 
 logger = logging.getLogger(__name__)
 
@@ -394,3 +393,4 @@ class Singleton(type):
         if cls._instance is None:
             cls._instance = super().__call__(*args, **kwargs)
         return cls._instance
+

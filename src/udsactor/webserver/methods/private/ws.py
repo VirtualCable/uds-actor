@@ -19,7 +19,8 @@ from ...keys import MSGS_PROCESSOR_KEY
 logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
-    from udsactor import rest, server_msg_processor
+    # from udsactor import rest, server_msg_processor
+    pass
 
 
 @routes.get(consts.PRIVATE_REST_WS)

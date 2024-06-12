@@ -16,7 +16,7 @@ from udsactor import consts, rest, types, cert, server_msg_processor
 
 # To ensure loading and registering of methods, they have decorators
 # that register themselfs on "routes" for aiohttp web server
-from . import methods, keys
+from . import keys
 
 from .routes import routes
 

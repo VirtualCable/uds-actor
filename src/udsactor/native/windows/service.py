@@ -40,10 +40,10 @@ import pythoncom
 import servicemanager
 
 # So pyinstaller can find these modules, not used here
-import win32timezone
-import win32security
-import win32net
-import win32event
+import win32timezone  # pyright: ignore [reportUnusedImport]
+import win32security  # pyright: ignore [reportUnusedImport]
+import win32net  # pyright: ignore [reportUnusedImport]
+import win32event  # pyright: ignore [reportUnusedImport]
 
 from .server import WindowsUDSActorServer
 from ..abc import Runner
@@ -150,7 +150,7 @@ class WindowsRunner(Runner):
     #     win32serviceutil.StopService(SVC_NAME)
 
     def setup_recovery(self):
-        svc_name = UDSActorService._svc_name_
+        svc_name = UDSActorService._svc_name_  # pyright: ignore [reportPrivateUsage]
 
         hs: typing.Any = None
         hscm = None

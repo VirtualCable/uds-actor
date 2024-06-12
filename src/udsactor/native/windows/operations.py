@@ -29,12 +29,12 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportMissingModuleSource=false, reportUnknownMemberType=false
 import asyncio
 import collections.abc
 import ctypes
 import logging
 import os
-import subprocess
 import typing
 from ctypes.wintypes import DWORD, LPCWSTR
 
@@ -201,14 +201,20 @@ class WindowsOperations(Operations):
             lpAccount = LPCWSTR(account)
             lpPassword = LPCWSTR(password)
 
-            res = ctypes.windll.netapi32.NetJoinDomain(  # type: ignore
-                None, lpDomain, lpOu, lpAccount, lpPassword, flags
+            res = typing.cast(
+                int,
+                ctypes.windll.netapi32.NetJoinDomain(  # type: ignore
+                    None, lpDomain, lpOu, lpAccount, lpPassword, flags
+                ),
             )
             # Machine found in another ou, use it and warn this on log
             if res == 2224:
                 flags = DWORD(NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN)
-                res = ctypes.windll.netapi32.NetJoinDomain(  # type: ignore
-                    None, lpDomain, None, lpAccount, lpPassword, flags
+                res = typing.cast(
+                    int,
+                    ctypes.windll.netapi32.NetJoinDomain(  # type: ignore
+                        None, lpDomain, None, lpAccount, lpPassword, flags
+                    ),
                 )
             if res:
                 # Log the error
@@ -300,7 +306,7 @@ class WindowsOperations(Operations):
 
     async def protect_file_for_owner_only(self, filepath: str) -> None:
         try:
-            user, domain, _type = win32security.LookupAccountName('', await self.whoami())
+            user, _domain, _type = win32security.LookupAccountName('', await self.whoami())
 
             secDescriptor = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
             dACL = secDescriptor.GetSecurityDescriptorDacl()
@@ -391,9 +397,9 @@ class WindowsOperations(Operations):
         return msg
 
     def _windows_version(self) -> tuple[int, int, int, int, str]:
-        return win32api.GetVersionEx()
+        return typing.cast(typing.Any, win32api.GetVersionEx())
 
-    # def writeToPipe(pipeName: str, bytesPayload: bytes, waitForResponse: bool) -> typing.Optional[bytes]:
+    # def write_to_pipe(pipeName: str, bytesPayload: bytes, waitForResponse: bool) -> typing.Optional[bytes]:
     #     # (str, bytes, bool) -> Optional[bytes]
     #     try:
     #         with open(pipeName, 'r+b', 0) as f:

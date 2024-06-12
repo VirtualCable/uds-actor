@@ -4,11 +4,9 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import typing
-import asyncio
 import logging
 
-from udsactor import log, native, webserver
+from udsactor import log, native
 
 logger = logging.getLogger(__name__)
 

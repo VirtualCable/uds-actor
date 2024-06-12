@@ -29,7 +29,6 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
-import typing
 import logging
 import collections.abc
 

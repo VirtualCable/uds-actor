@@ -4,7 +4,6 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import typing
 import logging
 
 import aiohttp
@@ -12,7 +11,7 @@ import aiohttp.web
 
 from ...routes import routes
 
-from udsactor import types,consts
+from udsactor import consts
 from udsactor.webserver.utils import response
 
 logger = logging.getLogger(__name__)

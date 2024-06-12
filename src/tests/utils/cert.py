@@ -4,14 +4,10 @@
 """
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 """
-import atexit
 import datetime
 import ipaddress
 import logging
-import os
 import secrets
-import ssl
-import tempfile
 import typing
 
 from cryptography import x509

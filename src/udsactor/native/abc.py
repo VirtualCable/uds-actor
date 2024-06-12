@@ -148,7 +148,7 @@ class ConfigReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def scriptToInvokeOnLogin(self) -> str:
+    async def script_to_invoke_on_login(self) -> str:
         pass
 
 
