@@ -120,7 +120,10 @@ def _getIpAndMac(
 
 
 def checkPermissions() -> bool:
-    return os.getuid() == 0
+    # If debugging, we are root
+    if os.environ.get('UDS_DEBUG', '0') == '1':
+        return True
+    return os.getuid() == 0 
 
 
 def getComputerName() -> str:

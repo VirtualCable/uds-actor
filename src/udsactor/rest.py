@@ -51,17 +51,6 @@ TIMEOUT: typing.Final[int] = 5  # 5 seconds is more than enought
 # Constants
 UNKNOWN: typing.Final[str] = 'unknown'
 
-SECURE_CIPHERS: typing.Final[str] = (
-    'TLS_AES_256_GCM_SHA384'
-    ':TLS_CHACHA20_POLY1305_SHA256'
-    ':TLS_AES_128_GCM_SHA256'
-    ':ECDHE-RSA-AES256-GCM-SHA384'
-    ':ECDHE-RSA-AES128-GCM-SHA256'
-    ':ECDHE-RSA-CHACHA20-POLY1305'
-    ':ECDHE-ECDSA-AES128-GCM-SHA256'
-    ':ECDHE-ECDSA-AES256-GCM-SHA384'
-    ':ECDHE-ECDSA-CHACHA20-POLY1305'
-)
 
 
 class RESTError(Exception):
@@ -117,33 +106,8 @@ class UDSApi:  # pylint: disable=too-few-public-methods
         # Disable logging requests messages except for errors, ...
         logging.getLogger('request').setLevel(logging.CRITICAL)
         logging.getLogger('urllib3').setLevel(logging.ERROR)
-        try:
-            warnings.simplefilter('ignore')  # Disables all warnings
-        except Exception:  # nosec: not interested in exceptions
-            pass
 
-        context = (
-            ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-            if validateCert
-            else ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH, check_hostname=False)
-        )
-        # Disable SSLv2, SSLv3, TLSv1, TLSv1.1, TLSv1.2
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.set_ciphers(SECURE_CIPHERS)
-
-        # Configure session security
-        class UDSHTTPAdapter(requests.adapters.HTTPAdapter):
-            def init_poolmanager(self, *args, **kwargs) -> None:
-                kwargs["ssl_context"] = context
-
-                return super().init_poolmanager(*args, **kwargs)
-            
-            def cert_verify(self, conn, url, verify, cert):  # pylint: disable=unused-argument
-                # Overridden to do nothing
-                return super().cert_verify(conn, url, validateCert, cert)
-
-        self._session = requests.Session()
-        self._session.mount("https://", UDSHTTPAdapter())
+        self._session = tools.secure_requests_session(verify=self._validateCert)
 
     @property
     def _headers(self) -> typing.MutableMapping[str, str]:
