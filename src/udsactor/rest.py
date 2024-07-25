@@ -30,11 +30,10 @@
 @author: Alexander Burmatov,  thatman at altlinux dot org
 '''
 # pylint: disable=invalid-name
-import warnings
 import json
-import ssl
 import logging
 import typing
+import platform
 
 import requests
 import requests.adapters
@@ -206,9 +205,11 @@ class UDSServerApi(UDSApi):
             'ip': ip,
             'mac': mac,
             'pre_command': preCommand,
+            'version': f'{VERSION}/{BUILD}',
             'run_once_command': runOnceCommand,
             'post_command': postCommand,
             'log_level': logLevel,
+            'os': f'{platform.system()}',
         }
 
         # First, try to login to REST api
