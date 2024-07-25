@@ -99,9 +99,9 @@ class Operations(abc.ABC):
     async def hlo_rename(
         self,
         name: str,
-        userName: typing.Optional[str] = None,
-        oldPassword: typing.Optional[str] = None,
-        newPassword: typing.Optional[str] = None,
+        username: typing.Optional[str] = None,
+        old_password: typing.Optional[str] = None,
+        new_password: typing.Optional[str] = None,
     ) -> bool:
         '''
         Rename computer and change password if needed
@@ -109,13 +109,13 @@ class Operations(abc.ABC):
         hostName = await self.computer_name()
 
         # Check for password change request for an user
-        if userName and newPassword:
+        if username and new_password:
             logger.info('Setting password for configured user')
             try:
-                await self.change_user_password(userName, oldPassword or '', newPassword)
+                await self.change_user_password(username, old_password or '', new_password)
             except Exception as e:
                 # Logs error, but continue renaming computer
-                logger.error('Could not change password for user {}: {}'.format(userName, e))
+                logger.error('Could not change password for user {}: {}'.format(username, e))
 
         if hostName.lower() == name.lower():
             logger.info('Computer name is already {}'.format(hostName))

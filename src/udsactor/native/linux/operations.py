@@ -88,28 +88,28 @@ class LinuxOperations(Operations):
         return [namestr[i : i + offset].split(b'\0', 1)[0].decode('utf-8') for i in range(0, outbytes, length)]
 
     @staticmethod
-    async def getIpAndMac(
+    async def get_ip_mac(
         ifname: str,
     ) -> tuple[typing.Optional[str], typing.Optional[str]]:
-        def getMacAddr(ifname: str) -> typing.Optional[str]:
+        def _get_mac_address(ifname: str) -> typing.Optional[str]:
             '''
             Returns the mac address of an interface
             Mac is returned as unicode utf-8 encoded
             '''
-            ifnameBytes = ifname.encode('utf-8')
+            ifname_bytes = ifname.encode('utf-8')
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                info = bytearray(fcntl.ioctl(s.fileno(), 0x8927, struct.pack(str('256s'), ifnameBytes[:15])))
+                info = bytearray(fcntl.ioctl(s.fileno(), 0x8927, struct.pack(str('256s'), ifname_bytes[:15])))
                 return str(''.join(['%02x:' % char for char in info[18:24]])[:-1]).upper()
             except Exception:
                 return None
 
-        def getIpAddr(ifname: str) -> typing.Optional[str]:
+        def _get_ip_address(ifname: str) -> typing.Optional[str]:
             '''
             Returns the ip address of an interface
             Ip is returned as unicode utf-8 encoded
             '''
-            ifnameBytes = ifname.encode('utf-8')
+            ifname_bytes = ifname.encode('utf-8')
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 return str(
@@ -117,14 +117,14 @@ class LinuxOperations(Operations):
                         fcntl.ioctl(
                             s.fileno(),
                             0x8915,  # SIOCGIFADDR
-                            struct.pack(str('256s'), ifnameBytes[:15]),
+                            struct.pack(str('256s'), ifname_bytes[:15]),
                         )[20:24]
                     )
                 )
             except Exception:
                 return None
 
-        ip, mac = getIpAddr(ifname), getMacAddr(ifname)
+        ip, mac = _get_ip_address(ifname), _get_mac_address(ifname)
         return (ip, mac)
 
     async def is_user_admin(self) -> bool:
@@ -139,7 +139,7 @@ class LinuxOperations(Operations):
     async def list_interfaces(self) -> list[types.InterfaceInfo]:
         result: list[types.InterfaceInfo] = []
         for ifname in await LinuxOperations.get_interfaces():
-            ip, mac = await LinuxOperations.getIpAndMac(ifname)
+            ip, mac = await LinuxOperations.get_ip_mac(ifname)
             if (
                 mac != '00:00:00:00:00:00' and mac and ip and ip.startswith('169.254') is False
             ):  # Skips local interfaces & interfaces with no dhcp IPs

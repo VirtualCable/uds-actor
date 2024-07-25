@@ -32,6 +32,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 import asyncio
 import json
 import logging
+import platform
 import ssl
 import typing
 import collections.abc
@@ -74,7 +75,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
     def _headers(self) -> typing.MutableMapping[str, str]:
         return {
             'Content-Type': 'application/json',
-            'User-Agent': 'UDS AppServer v{}'.format(consts.VERSION),
+            'User-Agent': f'UDS Actor v{consts.VERSION}/{consts.BUILD}',
         }
 
     @property
@@ -257,7 +258,9 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             'pre_command': preCommand,
             'run_once_command': runOnceCommand,
             'post_command': postCommand,
+            'version': f'{consts.VERSION}/{consts.BUILD}',
             'log_level': (logLevel * 10000) + 20000,
+            'os': f'{platform.system()}',
         }
 
         # First, try to login to REST api

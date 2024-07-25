@@ -37,7 +37,7 @@ from udsactor import utils, types
 
 
 class Manager(metaclass=utils.Singleton):
-    cfgManager: abc.ConfigReader
+    config_manager: abc.ConfigReader
     operations: abc.Operations
     runner: abc.Runner
     logger: typing.Any = None
@@ -50,7 +50,7 @@ class Manager(metaclass=utils.Singleton):
             # pylint: disable=import-outside-toplevel
             from .windows import operations, config, service, log
 
-            self.cfgManager = config.WindowsConfigReader()
+            self.config_manager = config.WindowsConfigReader()
             self.operations = operations.WindowsOperations()
             self.runner = service.WindowsRunner()
             self.logger = log.ServiceLogger()
@@ -58,7 +58,7 @@ class Manager(metaclass=utils.Singleton):
             # pylint: disable=import-outside-toplevel
             from .linux import operations, config, service
 
-            self.cfgManager = config.LinuxConfigReader()
+            self.config_manager = config.LinuxConfigReader()
             self.operations = operations.LinuxOperations()
             self.runner = service.LinuxRunner()
             self.logger = None
@@ -75,7 +75,7 @@ class Manager(metaclass=utils.Singleton):
         use with "xxx = await Platform.platform().config" to get the configuration
         '''
         if self.cfg is None:
-            self.cfg = await self.cfgManager.read()
+            self.cfg = await self.config_manager.read()
 
         return self.cfg
 
