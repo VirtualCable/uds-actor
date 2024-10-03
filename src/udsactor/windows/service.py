@@ -258,7 +258,7 @@ class UDSActorSvc(win32serviceutil.ServiceFramework, CommonService):
             return
 
         # Unmanaged services does not initializes "on start", but rather when user logs in (because userservice does not exists "as such" before that)
-        if self.isManaged():
+        if self.is_managed():
             if not self.initialize():
                 logger.info('Service stopped due to init')
                 self.finish()

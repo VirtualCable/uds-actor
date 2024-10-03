@@ -65,7 +65,7 @@ class UDSActorSvc(CommonService):
 
         # Linux daemon will continue running unless something is requested to
         # Unmanaged services does not initializes "on start", but rather when user logs in (because userservice does not exists "as such" before that)
-        if self.isManaged():  # Currently, managed is not implemented for UDS on M
+        if self.is_managed():  # Currently, managed is not implemented for UDS on M
             logger.error('Managed machines not supported on MacOS')
             # Wait a bit, this is mac os and will be run by launchd
             # If the daemon shuts down too quickly, launchd may think it is a crash.

@@ -148,7 +148,7 @@ class UDSConfigDialog(QDialog):
             log_level=self.ui.logLevelComboBox.currentIndex(),
         )
 
-        udsactor.platform.store.writeConfig(self._config)
+        udsactor.platform.store.write_config(self._config)
         # Enables test button
         self.ui.testButton.setEnabled(True)
         # Informs the user
@@ -186,7 +186,7 @@ if __name__ == "__main__":
             try:
                 with open(sys.argv[2], 'rb') as import_:
                     config = pickle.load(import_)  # nosec: B301: the file is provided by user, so it's not a security issue
-                udsactor.platform.store.writeConfig(config)
+                udsactor.platform.store.write_config(config)
             except Exception as e:
                 print('Error importing configuration file: {}'.format(e))
                 sys.exit(1)

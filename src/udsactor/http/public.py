@@ -89,6 +89,6 @@ class PublicProvider(handler.Handler):
         return self._service._clientsPool.screenshot()  # pylint: disable=protected-access
 
     def get_uuid(self) -> typing.Any:
-        if self._service.isManaged():
+        if self._service.is_managed():
             return self._service._cfg.own_token  # pylint: disable=protected-access
         return ''

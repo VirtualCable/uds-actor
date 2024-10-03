@@ -74,7 +74,7 @@ class UDSActorSvc(daemon.Daemon, CommonService):
 
         # Linux daemon will continue running unless something is requested to
         # Unmanaged services does not initializes "on start", but rather when user logs in (because userservice does not exists "as such" before that)
-        if self.isManaged():
+        if self.is_managed():
             if not self.initialize():
                 self.finish()
                 return # Stop daemon if initializes told to do so

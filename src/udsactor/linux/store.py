@@ -81,7 +81,7 @@ def readConfig() -> types.ActorConfigurationType:
         return types.ActorConfigurationType('', False)
 
 
-def writeConfig(config: types.ActorConfigurationType) -> None:
+def write_config(config: types.ActorConfigurationType) -> None:
     cfg = configparser.ConfigParser()
     cfg.add_section('uds')
     uds: configparser.SectionProxy = cfg['uds']

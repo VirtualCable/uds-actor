@@ -114,7 +114,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         self._http = server.HTTPServerThread(self)
         self._http.start()
 
-    def isManaged(self) -> bool:
+    def is_managed(self) -> bool:
         return (
             self._cfg.actorType != types.UNMANAGED
         )  # Only "unmanaged" hosts are unmanaged, the rest are "managed"
@@ -142,7 +142,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         self._rebootRequested = True
 
     def setReady(self) -> None:
-        if not self._isAlive or not self.isManaged():
+        if not self._isAlive or not self.is_managed():
             return
         # Unamanged actor types does not set ready never (has no osmanagers, no needing for this)
 
@@ -150,7 +150,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         if self._cfg.post_command:
             self.execute(self._cfg.post_command, 'postConfig')
             self._cfg = self._cfg._replace(post_command=None)
-            platform.store.writeConfig(self._cfg)
+            platform.store.write_config(self._cfg)
 
         if self._cfg.own_token and self._interfaces:
             srvInterface = self.serviceInterfaceInfo()
@@ -190,8 +190,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
 
         if self._cfg.config:
             self._cfg = self._cfg._replace(config=self._cfg.config._replace(os=None), data=None)
-            platform.store.writeConfig(self._cfg)
-            
+            platform.store.write_config(self._cfg)
 
         logger.info('Service ready')
 
@@ -199,7 +198,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         if not self._isAlive:
             return False
 
-        if not self.isManaged():
+        if not self.is_managed():
             return True
 
         # First, if runonce is present, honor it and remove it from config
@@ -207,7 +206,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         if self._cfg.runonce_command:
             runOnce = self._cfg.runonce_command
             self._cfg = self._cfg._replace(runonce_command=None)
-            platform.store.writeConfig(self._cfg)
+            platform.store.write_config(self._cfg)
             if self.execute(runOnce, "runOnce"):
                 # If runonce is present, will not do anythin more
                 # So we have to ensure that, when runonce command is finished, reboots the machine.
@@ -285,7 +284,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         self._initialized = True
 
         # Force time sync, just in case...
-        if self.isManaged():
+        if self.is_managed():
             platform.operations.forceTimeSync()
 
         # Wait for Broker to be ready
@@ -296,33 +295,31 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
             try:
                 # If master token is present, initialize and get configuration data
                 if self._cfg.master_token:
-                    initResult: types.InitializationResultType = self._api.initialize(
+                    init_result: types.InitializationResultType = self._api.initialize(
                         self._cfg.master_token, self._interfaces, self._cfg.actorType
                     )
-                    if not initResult.token:  # Not managed
-                        logger.debug(
-                            'This host is not managed by UDS Broker (ids: {})'.format(self._interfaces)
-                        )
+                    if not init_result.token:  # Not managed
+                        logger.debug('This host is not managed by UDS Broker (ids: %s)', self._interfaces)
                         return False
 
                     # Only removes master token for managed machines (will need it on next client execution)
                     # For unmanaged, if alias is present, replace master token with it
                     master_token = (
-                        None if self.isManaged() else (initResult.token or self._cfg.master_token)
+                        None if self.is_managed() else (init_result.master_token or self._cfg.master_token)
                     )
                     # Replace master token with alias token if present
                     self._cfg = self._cfg._replace(
                         master_token=master_token,
-                        own_token=initResult.token,
+                        own_token=init_result.token,
                         config=types.ActorDataConfigurationType(
-                            unique_id=initResult.unique_id, os=initResult.os
+                            unique_id=init_result.unique_id, os=init_result.os
                         ),
                     )
 
                 # On first successfull initialization request, master token will dissapear for managed hosts
                 # so it will be no more available (not needed anyway). For unmanaged, the master token will
                 # be replaced with an alias token.
-                platform.store.writeConfig(self._cfg)
+                platform.store.write_config(self._cfg)
 
                 # Setup logger now
                 if self._cfg.own_token:
@@ -370,7 +367,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         self.notifyStop()
 
     def checkIpsChanged(self) -> None:
-        if not self.isManaged():
+        if not self.is_managed():
             return  # Unamanaged hosts does not changes ips. (The full initialize-login-logout process is done in a row, so at login the IP is correct)
 
         try:
@@ -455,17 +452,16 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         secret = None
         # If unmanaged, do initialization now, because we don't know before this
         # Also, even if not initialized, get a "login" notification token
-        if not self.isManaged():
+        if not self.is_managed():
             self._initialized = (
                 self.initialize()
             )  # Maybe it's a local login by an unmanaged host.... On real login, will execute initilize again
-            # Unamanaged, need the master token
-            master_token = self._cfg.master_token
             secret = self._secret
 
         # Own token will not be set if UDS did not assigned the initialized VM to an user
-        # In that case, take master token (if machine is Unamanaged version)
-        token = self._cfg.own_token or master_token
+        # On "unmanaged", on login the "initialize" method is invoked always,
+        # so the own token will be set
+        token = self._cfg.own_token or self._cfg.master_token
         if token:
             result = self._api.login(
                 self._cfg.actorType,
@@ -476,9 +472,8 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
                 secret,
             )
 
-        if (
-            result.session_id
-        ):  # If logged in, process it. client_pool will take account of login response to client and session
+        # If logged in, process it. client_pool will take account of login response to client and session
+        if result.session_id:
             script = platform.store.invokeScriptOnLogin()
             if script:
                 logger.info('Executing script on login: {}'.format(script))
@@ -493,11 +488,9 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         session_type: typing.Optional[str],
         session_id: typing.Optional[str],
     ) -> None:
-        master_token = self._cfg.master_token
-
         # Own token will not be set if UDS did not assigned the initialized VM to an user
         # In that case, take master token (if machine is Unamanaged version)
-        token = self._cfg.own_token or master_token
+        token = self._cfg.own_token or self._cfg.master_token
         if token:
             # If logout is not processed (that is, not ok result), the logout has not been processed
             if (
@@ -517,7 +510,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
 
         self.onLogout(username, session_id or '')
 
-        if not self.isManaged():
+        if not self.is_managed():
             self.uninitialize()
 
     # ******************************************************

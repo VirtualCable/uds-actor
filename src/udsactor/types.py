@@ -45,6 +45,7 @@ class ActorConfigurationType(typing.NamedTuple):
     data: typing.Optional[dict[str, typing.Any]] = None
 
 class InitializationResultType(typing.NamedTuple):
+    master_token: typing.Optional[str] = None
     token: typing.Optional[str] = None
     unique_id: typing.Optional[str] = None
     os: typing.Optional[ActorOsConfigurationType] = None

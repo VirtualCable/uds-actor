@@ -280,6 +280,7 @@ class UDSServerApi(UDSApi):
             custom[name] = os[i]  # os[i] is present, so force it on custom
 
         return types.InitializationResultType(
+            master_token=r['master_token'],
             token=r['token'],
             unique_id=r['unique_id'].lower() if r['unique_id'] else None,
             os=types.ActorOsConfigurationType(

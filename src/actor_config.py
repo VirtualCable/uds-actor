@@ -158,7 +158,7 @@ class UDSConfigDialog(QDialog):
                 self.ui.logLevelComboBox.currentIndex()  # Loglevel
             )
             # Store parameters on register for later use, notify user of registration
-            udsactor.platform.store.writeConfig(
+            udsactor.platform.store.write_config(
                 udsactor.types.ActorConfigurationType(
                     actorType=udsactor.types.MANAGED,
                     host=self.ui.host.text(),
