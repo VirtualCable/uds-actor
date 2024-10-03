@@ -84,6 +84,10 @@ class UDSActorClientPool(metaclass=tools.Singleton):
                 result.append((client, None))
 
         return result
+    
+    @staticmethod
+    def manager() -> 'UDSActorClientPool':
+        return UDSActorClientPool()
 
     @property
     def clients(self) -> list[types.ClientInfo]:
@@ -116,7 +120,7 @@ class UDSActorClientPool(metaclass=tools.Singleton):
                 self._clients.pop(i)
                 return
 
-    def executeScript(self, script: str, session_id: typing.Optional[str] = None) -> None:
+    def execute_script(self, script: str, session_id: typing.Optional[str] = None) -> None:
         self._post(session_id, 'script', {'script': script}, timeout=30)
 
     def logout(self, session_id: typing.Optional[str] = None) -> None:
@@ -132,6 +136,8 @@ class UDSActorClientPool(metaclass=tools.Singleton):
         # Port ping to every client
         for i in self._post(session_id, 'ping', {}, timeout=1):
             if i[1] is None:
+                # Remove from clients list
+                self.unregister(i[0].url)
                 yield i[0]
 
     def screenshot(

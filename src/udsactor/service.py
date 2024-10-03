@@ -404,7 +404,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
             self.checkIpsChanged()
 
             # Now check if every registered client is already there (if logged in OFC)
-            for lost_client in clients_pool.UDSActorClientPool().lost_clients():
+            for lost_client in clients_pool.UDSActorClientPool.manager().lost_clients():
                 logger.info('Lost client: {}'.format(lost_client))
                 self.logout('client_unavailable', '', lost_client.session_id or '')  # '' means "all clients"
         except Exception as e:
