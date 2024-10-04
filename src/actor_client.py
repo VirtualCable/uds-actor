@@ -36,41 +36,45 @@ import PyQt5  # noqa
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QMainWindow
 
-from udsactor.log import logger, INFO
+from udsactor.log import logger, INFO, ERROR
 from udsactor.client import UDSClientQApp
 from udsactor import platform
 
 if __name__ == "__main__":
-    logger.setLevel(INFO)
+    try:
+        logger.setLevel(INFO)
 
-    # Ensure idle operations is initialized on start
-    platform.operations.initIdleDuration(0)
+        # Ensure idle operations is initialized on start
+        platform.operations.initIdleDuration(0)
 
-    if platform.is_linux:
-        os.environ['QT_X11_NO_MITSHM'] = '1'
+        if platform.is_linux:
+            os.environ['QT_X11_NO_MITSHM'] = '1'
 
-    UDSClientQApp.setQuitOnLastWindowClosed(False)
+        UDSClientQApp.setQuitOnLastWindowClosed(False)
 
-    qApp = UDSClientQApp(sys.argv)
+        qApp = UDSClientQApp(sys.argv)
 
-    if platform.is_windows or platform.is_mac:
-        # The "hidden window" is not needed on linux
-        # Not needed on Linux
-        mw = QMainWindow()
-        mw.showMinimized()  # Start minimized, will be hidden (not destroyed) as soon as qApp.init is invoked
-        qApp.setMainWindow(mw)
+        if platform.is_windows or platform.is_mac:
+            # The "hidden window" is not needed on linux
+            # Not needed on Linux
+            mw = QMainWindow()
+            mw.showMinimized()  # Start minimized, will be hidden (not destroyed) as soon as qApp.init is invoked
+            qApp.setMainWindow(mw)
 
-    qApp.init()
+        qApp.init()
 
-    # Crate a timer to a "dummy" function, so python can check signals from time to time by executing the python interpreter
-    # Note: Signals are only checked on python code execution, so we create a timer to force call back to python
-    timer = QTimer(qApp)
-    timer.start(1000)
-    timer.timeout.connect(lambda *a: None)  # type: ignore  # timeout can be connected to a callable
+        # Crate a timer to a "dummy" function, so python can check signals from time to time by executing the python interpreter
+        # Note: Signals are only checked on python code execution, so we create a timer to force call back to python
+        timer = QTimer(qApp)
+        timer.start(1000)
+        timer.timeout.connect(lambda *a: None)  # type: ignore  # timeout can be connected to a callable
 
-    qApp.exec()
+        qApp.exec()
 
-    # On windows, if no window is created, this point will never be reached.
-    qApp.end()
+        # On windows, if no window is created, this point will never be reached.
+        qApp.end()
 
-    logger.debug('Exiting...')
+        logger.debug('Exiting...')
+    except Exception as e:
+        logger.exception(level=ERROR, message='Exception at main')
+        sys.exit(1)

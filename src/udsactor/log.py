@@ -47,6 +47,7 @@ if typing.TYPE_CHECKING:
 # Valid logging levels, from UDS Broker (uds.core.utils.log)
 from .loglevel import OTHER, DEBUG, INFO, WARN, ERROR, FATAL
 
+
 class Logger:
     remoteLogger: typing.Optional['rest.UDSServerApi']
     own_token: str
@@ -104,13 +105,14 @@ class Logger:
     def fatal(self, message: str, *args) -> None:
         self.log(FATAL, message, *args)
 
-    def exception(self) -> None:
+    def exception(self, *, level: int = DEBUG, message: typing.Optional[str] = None) -> None:
         try:
             tb = traceback.format_exc()
         except Exception:
             tb = '(could not get traceback!)'
 
-        self.log(DEBUG, tb)
+        message = message or 'Exception occurred'
+        self.log(level, f'{message}: {tb}')
 
     def flush(self) -> None:
         pass
