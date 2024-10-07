@@ -51,7 +51,6 @@ TIMEOUT: typing.Final[int] = 5  # 5 seconds is more than enought
 UNKNOWN: typing.Final[str] = 'unknown'
 
 
-
 class RESTError(Exception):
     ERRCODE = 0
 
@@ -84,6 +83,7 @@ NO_PROXY = {
 }
 
 UDS_BASE_URL = 'https://{}/uds/rest/'
+
 
 #
 # Basic UDS Api
@@ -133,9 +133,7 @@ class UDSApi:  # pylint: disable=too-few-public-methods
                 headers=headers,
                 # verify=self._validateCert, Not needed, already in session
                 timeout=TIMEOUT,
-                proxies=NO_PROXY  # type: ignore
-                if disableProxy
-                else None,  # if not proxies wanted, enforce it
+                proxies=NO_PROXY if disableProxy else None,  # type: ignore  # if not proxies wanted, enforce it
             )
 
             if result.ok:
@@ -261,6 +259,9 @@ class UDSServerApi(UDSApi):
         }
         r = self._doPost('initialize', payload)
         os = r['os']
+        if r['token'] is None:
+            raise RESTUnmanagedHostError('Unmanaged host')
+
         # * TO BE REMOVED ON FUTURE VERSIONS *
         # To keep compatibility, store old values on custom data
         # This will be removed in future versions
@@ -283,18 +284,18 @@ class UDSServerApi(UDSApi):
             master_token=r['master_token'],
             token=r['token'],
             unique_id=r['unique_id'].lower() if r['unique_id'] else None,
-            os=types.ActorOsConfigurationType(
-                action=os['action'],
-                name=os['name'],
-                custom=os.get('custom'),
-            )
-            if r['os']
-            else None,
+            os=(
+                types.ActorOsConfigurationType(
+                    action=os['action'],
+                    name=os['name'],
+                    custom=os.get('custom'),
+                )
+                if r['os']
+                else None
+            ),
         )
 
-    def ready(
-        self, own_token: str, secret: str, ip: str, port: int
-    ) -> types.CertificateInfoType:
+    def ready(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
         payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ready', payload)
 
@@ -305,9 +306,7 @@ class UDSServerApi(UDSApi):
             ciphers=result.get('ciphers', ''),
         )
 
-    def notifyIpChange(
-        self, own_token: str, secret: str, ip: str, port: int
-    ) -> types.CertificateInfoType:
+    def notifyIpChange(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
         payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ipchange', payload)
 
@@ -437,9 +436,7 @@ class UDSClientApi(UDSApi, metaclass=tools.Singleton):
         self.post('unregister', payLoad)
         self._callback_url = ''
 
-    def login(
-        self, username: str, sessionType: typing.Optional[str] = None
-    ) -> types.LoginResultInfoType:
+    def login(self, username: str, sessionType: typing.Optional[str] = None) -> types.LoginResultInfoType:
         payLoad = {
             'username': username,
             'session_type': sessionType or UNKNOWN,
