@@ -37,7 +37,7 @@ from .. import types
 
 CONFIGFILE = '/etc/udsactor/udsactor.cfg'
 
-def readConfig() -> types.ActorConfigurationType:
+def read_config() -> types.ActorConfigurationType:
     try:
         cfg = configparser.ConfigParser()
         cfg.read(CONFIGFILE)
@@ -66,7 +66,7 @@ def readConfig() -> types.ActorConfigurationType:
     except Exception:
         return types.ActorConfigurationType('', False)
 
-def writeConfig(config: types.ActorConfigurationType) -> None:
+def write_config(config: types.ActorConfigurationType) -> None:
     cfg = configparser.ConfigParser()
     cfg.add_section('uds')
     uds: configparser.SectionProxy = cfg['uds']

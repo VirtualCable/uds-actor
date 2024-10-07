@@ -47,7 +47,7 @@ from udsactor.log import logger, DEBUG, INFO, ERROR, FATAL
 from udsactor.http import clients_pool, server, cert
 
 # def setup() -> None:
-#     cfg = platform.store.readConfig()
+#     cfg = platform.store.read_config()
 
 #     if logger.logger.windows:
 #         # Logs will also go to windows event log for services
@@ -82,7 +82,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         return True
 
     def __init__(self) -> None:
-        self._cfg = platform.store.readConfig()
+        self._cfg = platform.store.read_config()
         self._interfaces = []
         self._api = rest.UDSServerApi(self._cfg.host, self._cfg.validateCertificate)
         self._secret = secrets.token_urlsafe(33)
