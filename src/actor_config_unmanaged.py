@@ -58,7 +58,7 @@ class UDSConfigDialog(QDialog):
     def __init__(self) -> None:
         QDialog.__init__(self, None)
         # Get local config config
-        self._config = udsactor.platform.store.readConfig()
+        self._config = udsactor.platform.store.read_config()
         self.ui = Ui_UdsActorSetupDialog()
         self.ui.setupUi(self)
         self.ui.host.setText(self._config.host)
@@ -176,7 +176,7 @@ if __name__ == "__main__":
             try:
                 with open(sys.argv[2], 'wb') as export_:
                     pickle.dump(
-                        udsactor.platform.store.readConfig(), export_, protocol=3
+                        udsactor.platform.store.read_config(), export_, protocol=3
                     )
             except Exception as e:
                 print('Error exporting configuration file: {}'.format(e))

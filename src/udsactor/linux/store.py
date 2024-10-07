@@ -39,7 +39,7 @@ from .. import types
 CONFIGFILE = '/etc/udsactor/udsactor.cfg'
 
 
-def readConfig() -> types.ActorConfigurationType:
+def read_config() -> types.ActorConfigurationType:
     try:
         cfg = configparser.ConfigParser()
         cfg.read(CONFIGFILE)

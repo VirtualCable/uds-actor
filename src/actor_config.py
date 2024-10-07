@@ -54,7 +54,7 @@ class UDSConfigDialog(QDialog):
     def __init__(self) -> None:
         QDialog.__init__(self, None)
         # Get local config config
-        config: udsactor.types.ActorConfigurationType = udsactor.platform.store.readConfig()
+        config: udsactor.types.ActorConfigurationType = udsactor.platform.store.read_config()
         self.ui = Ui_UdsActorSetupDialog()
         self.ui.setupUi(self)
         self.ui.host.setText(config.host)
@@ -113,7 +113,7 @@ class UDSConfigDialog(QDialog):
         self.close()
 
     def testUDSServer(self) -> None:
-        config: udsactor.types.ActorConfigurationType = udsactor.platform.store.readConfig()
+        config: udsactor.types.ActorConfigurationType = udsactor.platform.store.read_config()
         if not config.master_token or not config.host:
             self.ui.testButton.setEnabled(False)
             return

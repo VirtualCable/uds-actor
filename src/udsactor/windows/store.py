@@ -38,7 +38,7 @@ import win32security
 from .. import types
 
 PATH: typing.Final[str] = 'Software\\UDSActor'
-BASEKEY: typing.Final[str] = wreg.HKEY_LOCAL_MACHINE
+BASEKEY: typing.Final[int] = wreg.HKEY_LOCAL_MACHINE
 
 def fixRegistryPermissions(handle) -> None:
     # Fix permissions so users can't read this key
@@ -61,7 +61,7 @@ def fixRegistryPermissions(handle) -> None:
         None
     )
 
-def readConfig() -> types.ActorConfigurationType:
+def read_config() -> types.ActorConfigurationType:
     try:
         key = wreg.OpenKey(BASEKEY, PATH, 0, wreg.KEY_QUERY_VALUE)
         data, _ = wreg.QueryValueEx(key, '')
@@ -71,7 +71,7 @@ def readConfig() -> types.ActorConfigurationType:
         return types.ActorConfigurationType('', False)
 
 
-def writeConfig(config: types.ActorConfigurationType) -> None:
+def write_config(config: types.ActorConfigurationType) -> None:
     try:
         key = wreg.OpenKey(BASEKEY, PATH, 0, wreg.KEY_ALL_ACCESS)
     except Exception:
