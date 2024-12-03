@@ -40,6 +40,7 @@ import requests.adapters
 
 from udsactor import types, tools
 from udsactor.version import VERSION, BUILD
+from udsactor.decorators import retry_on_exception
 
 # Default public listen port
 LISTEN_PORT: typing.Final[int] = 43910
@@ -295,6 +296,7 @@ class UDSServerApi(UDSApi):
             ),
         )
 
+    @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def ready(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
         payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ready', payload)
@@ -306,6 +308,7 @@ class UDSServerApi(UDSApi):
             ciphers=result.get('ciphers', ''),
         )
 
+    @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def notifyIpChange(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
         payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ipchange', payload)
@@ -317,6 +320,7 @@ class UDSServerApi(UDSApi):
             ciphers=result.get('ciphers', ''),
         )
 
+    @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def notifyUnmanagedCallback(
         self,
         master_token: str,
@@ -339,6 +343,7 @@ class UDSServerApi(UDSApi):
             ciphers=result.get('ciphers', ''),
         )
 
+    @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def login(
         self,
         actor_type: typing.Optional[str],
@@ -369,6 +374,7 @@ class UDSServerApi(UDSApi):
             session_id=result.get('session_id', ''),
         )
 
+    @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def logout(
         self,
         actor_type: typing.Optional[str],
