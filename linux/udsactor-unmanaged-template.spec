@@ -16,20 +16,20 @@ Vendor: Virtual Cable S.L.U.
 URL: http://www.udsenterprise.com
 Provides: udsactor
 
-%define _rpmdir ../
+%define _rpmdir %{_topdir}/../../
 %define _rpmfilename %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm
 
 
 %install
 curdir=`pwd`
-cd ../..
+cd %{_topdir}/..
 make DESTDIR=$RPM_BUILD_ROOT DISTRO=rh install-udsactor-unmanaged
 cd $curdir
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 curdir=`pwd`
-cd ../..
+cd %{_topdir}/..
 make DESTDIR=$RPM_BUILD_ROOT DISTRO=rh clean
 cd $curdir
 
