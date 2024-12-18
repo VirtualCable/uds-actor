@@ -250,7 +250,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             postCommand: Command to execute after machine is configured
             logLevel: Log level to use
         """
-        data = {
+        data: typing.Dict[str, typing.Any] = {
             'username': username + '@' + auth,
             'hostname': hostname,
             'ip': ip,
@@ -301,7 +301,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         actor_type: typing.Optional[str],
     ) -> types.InitializationResult:
         # Generate id list from netork cards
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'type': actor_type or types.ActorType.MANAGED,
             'token': self.token,
             'version': consts.VERSION,
@@ -356,7 +356,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         interfaces: collections.abc.Iterable[types.InterfaceInfo],
         port: int,
     ) -> types.CertificateInfo:
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
             'token': self.token,
             'secret': consts.OWN_AUTH_TOKEN,
@@ -367,13 +367,23 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
         return types.CertificateInfo.from_dict(result)
 
     async def ready(self, ip: str, port: int) -> types.CertificateInfo:
-        payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
+        payload: typing.Dict[str, typing.Any] = {
+            'token': self.token,
+            'secret': consts.OWN_AUTH_TOKEN,
+            'ip': ip,
+            'port': port,
+        }
         result = await self._do_post(types.ApiType.ACTORV3, 'ready', payload)
 
         return types.CertificateInfo.from_dict(result)
 
     async def notify_new_ip(self, ip: str, port: int) -> types.CertificateInfo:
-        payload = {'token': self.token, 'secret': consts.OWN_AUTH_TOKEN, 'ip': ip, 'port': port}
+        payload: typing.Dict[str, typing.Any] = {
+            'token': self.token,
+            'secret': consts.OWN_AUTH_TOKEN,
+            'ip': ip,
+            'port': port,
+        }
         result = await self._do_post(types.ApiType.ACTORV3, 'ipchange', payload)
 
         return types.CertificateInfo.from_dict(result)
@@ -418,7 +428,7 @@ class BrokerREST:  # pylint: disable=too-few-public-methods
             message: Message to send
             user_service: If present, the uuid of the user service that is sending the message
         """
-        payLoad = {
+        payLoad: typing.Dict[str, typing.Any] = {
             'token': self.token,
             'level': level.value,
             'message': message,
@@ -587,5 +597,9 @@ class PrivateREST:  # pylint: disable=too-few-public-methods
         await self._do_post('user_logout', payload)  # Can be 'ok' or 'notified'
 
     async def log(self, level: types.LogLevel, message: str, userservice_uuid: str | None = None) -> None:
-        payLoad = {'userservice_uuid': userservice_uuid, 'level': level.value, 'message': message}
+        payLoad: typing.Dict[str, typing.Any] = {
+            'userservice_uuid': userservice_uuid,
+            'level': level.value,
+            'message': message,
+        }
         await self._do_post('log', payLoad)  # Ignores result...
