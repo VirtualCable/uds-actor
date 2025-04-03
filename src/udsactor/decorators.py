@@ -17,6 +17,7 @@ def retry_on_exception(
     retryable_exceptions: typing.Optional[typing.List[typing.Type[Exception]]] = None,
     do_log: bool = False,
 ) -> typing.Callable[[FT], FT]:
+    to_retry = retryable_exceptions or [Exception]
     def decorator(func: FT) -> FT:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> typing.Any:
@@ -27,10 +28,7 @@ def retry_on_exception(
                     if do_log:
                         logger.error('Exception raised in function %s: %s', func.__name__, e)
 
-                    # If the exception is not in the list of exceptions to retry, raise it
-                    retryable_exceptions = retryable_exceptions or [Exception]
-
-                    if not any(isinstance(e, exception_type) for exception_type in retryable_exceptions):
+                    if not any(isinstance(e, exception_type) for exception_type in to_retry):
                         raise e
 
                     # if this is the last retry, raise the exception
