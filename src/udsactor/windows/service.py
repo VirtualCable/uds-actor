@@ -66,7 +66,7 @@ class UDSActorSvc(win32serviceutil.ServiceFramework, CommonService):
     _user: typing.Optional[str]
     _hWaitStop: typing.Any
 
-    def __init__(self, args):
+    def __init__(self, args: typing.Any):
         win32serviceutil.ServiceFramework.__init__(self, args)
         CommonService.__init__(self)
 

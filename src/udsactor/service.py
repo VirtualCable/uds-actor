@@ -448,7 +448,6 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
     # Client notifications
     def login(self, username: str, sessionType: typing.Optional[str] = None) -> types.LoginResultInfoType:
         result = types.LoginResultInfoType(ip='', hostname='', deadline=None, max_idle=None, session_id=None)
-        master_token = None
         secret = None
         # If unmanaged, do initialization now, because we don't know before this
         # Also, even if not initialized, get a "login" notification token

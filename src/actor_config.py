@@ -35,7 +35,7 @@ import os
 import logging
 import typing
 
-import PyQt5  # Ensures PyQt is included in the package
+import PyQt5  # Ensures PyQt is included in the package    # pyright: ignore[reportUnusedImport]
 from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 
 import udsactor
@@ -48,6 +48,7 @@ if typing.TYPE_CHECKING:
 
 logger = logging.getLogger('actor')
 
+
 class UDSConfigDialog(QDialog):
     _host: str = ''
 
@@ -56,7 +57,7 @@ class UDSConfigDialog(QDialog):
         # Get local config config
         config: udsactor.types.ActorConfigurationType = udsactor.platform.store.read_config()
         self.ui = Ui_UdsActorSetupDialog()
-        self.ui.setupUi(self)
+        self.ui.setupUi(self)  # pyright: ignore[reportUnknownMemberType]
         self.ui.host.setText(config.host)
         self.ui.validateCertificate.setCurrentIndex(1 if config.validateCertificate else 0)
         self.ui.postConfigCommand.setText(config.post_command or '')
@@ -77,7 +78,9 @@ class UDSConfigDialog(QDialog):
         return udsactor.rest.UDSServerApi(self.ui.host.text(), self.ui.validateCertificate.currentIndex() == 1)
 
     def browse(self, lineEdit: 'QLineEdit', caption: str) -> None:
-        name = QFileDialog.getOpenFileName(parent=self, caption=caption, directory=os.path.dirname(lineEdit.text()))[0]
+        name = QFileDialog.getOpenFileName(
+            parent=self, caption=caption, directory=os.path.dirname(lineEdit.text())
+        )[0]
         if name:
             if ' ' in name:
                 name = '"' + name + '"'
@@ -102,10 +105,18 @@ class UDSConfigDialog(QDialog):
                 for auth in auths:
                     self.ui.authenticators.addItem(auth.auth, userData=auth)
             # Last, add "admin" authenticator (for uds root user)
-            self.ui.authenticators.addItem('Administration', userData=udsactor.types.AuthenticatorType('admin', 'admin', 'admin', 'admin', 1, False))
+            self.ui.authenticators.addItem(
+                'Administration',
+                userData=udsactor.types.AuthenticatorType('admin', 'admin', 'admin', 'admin', 1, False),
+            )
 
     def textChanged(self) -> None:
-        enableButtons = bool(self.ui.host.text() and self.ui.username.text() and self.ui.password.text() and self.ui.authenticators.currentText())
+        enableButtons = bool(
+            self.ui.host.text()
+            and self.ui.username.text()
+            and self.ui.password.text()
+            and self.ui.authenticators.currentText()
+        )
         self.ui.registerButton.setEnabled(enableButtons)
         self.ui.testButton.setEnabled(False)  # Only registered information can be checked
 
@@ -123,22 +134,24 @@ class UDSConfigDialog(QDialog):
                 QMessageBox.information(
                     self,
                     'UDS Test',
-                    'Current configured token seems to be invalid for {}. Please, request a new one.'.format(config.host),
-                    QMessageBox.Ok
+                    'Current configured token seems to be invalid for {}. Please, request a new one.'.format(
+                        config.host
+                    ),
+                    QMessageBox.Ok,  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
                 )
             else:
                 QMessageBox.information(
                     self,
                     'UDS Test',
                     'Configuration for {} seems to be correct.'.format(config.host),
-                    QMessageBox.Ok
+                    QMessageBox.Ok,  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
                 )
         except Exception:
             QMessageBox.information(
                 self,
                 'UDS Test',
                 'Configured host {} seems to be inaccesible.'.format(config.host),
-                QMessageBox.Ok
+                QMessageBox.Ok,  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
             )
 
     def registerWithUDS(self) -> None:
@@ -150,12 +163,12 @@ class UDSConfigDialog(QDialog):
                 self.ui.username.text(),
                 self.ui.password.text(),
                 udsactor.platform.operations.getComputerName(),
-                data.ip or '',           # IP
-                data.mac or '',          # MAC
+                data.ip or '',  # IP
+                data.mac or '',  # MAC
                 self.ui.preCommand.text(),
                 self.ui.runonceCommand.text(),
                 self.ui.postConfigCommand.text(),
-                self.ui.logLevelComboBox.currentIndex()  # Loglevel
+                self.ui.logLevelComboBox.currentIndex(),  # Loglevel
             )
             # Store parameters on register for later use, notify user of registration
             udsactor.platform.store.write_config(
@@ -167,16 +180,26 @@ class UDSConfigDialog(QDialog):
                     pre_command=self.ui.preCommand.text(),
                     post_command=self.ui.postConfigCommand.text(),
                     runonce_command=self.ui.runonceCommand.text(),
-                    log_level=self.ui.logLevelComboBox.currentIndex()
+                    log_level=self.ui.logLevelComboBox.currentIndex(),
                 )
             )
             # Enables test button
             self.ui.testButton.setEnabled(True)
             # Informs the user
-            QMessageBox.information(self, 'UDS Registration', 'Registration with UDS completed.', QMessageBox.Ok)
+            QMessageBox.information(
+                self,
+                'UDS Registration',
+                'Registration with UDS completed.',
+                QMessageBox.Ok,  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
+            )
         except udsactor.rest.RESTError as e:
             self.ui.testButton.setEnabled(False)
-            QMessageBox.critical(self, 'UDS Registration', 'UDS Registration error: {}'.format(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self,
+                'UDS Registration',
+                'UDS Registration error: {}'.format(e),
+                QMessageBox.Ok,  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
+            )
 
 
 if __name__ == "__main__":

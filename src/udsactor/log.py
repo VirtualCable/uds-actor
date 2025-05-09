@@ -45,7 +45,7 @@ if typing.TYPE_CHECKING:
     from . import rest
 
 # Valid logging levels, from UDS Broker (uds.core.utils.log)
-from .loglevel import OTHER, DEBUG, INFO, WARN, ERROR, FATAL
+from .loglevel import OTHER, DEBUG, INFO, WARN, ERROR, FATAL  # pyright: ignore[reportUnusedImport]
 
 
 class Logger:
@@ -71,11 +71,11 @@ class Logger:
         self.remoteLogger = remoteLogger
         self.own_token = own_token
 
-    def enableServiceLogger(self):
+    def enableServiceLogger(self) -> None:
         if self.localLogger.windows:
             self.localLogger.serviceLogger = True
 
-    def log(self, level: typing.Union[str, int], message: str, *args) -> None:
+    def log(self, level: typing.Union[str, int], message: str, *args: typing.Any) -> None:
         level = int(level)
         if level < self.logLevel:  # Skip not wanted messages
             return
@@ -90,19 +90,19 @@ class Logger:
 
         self.localLogger.log(level, msg)
 
-    def debug(self, message: str, *args) -> None:
+    def debug(self, message: str, *args: typing.Any) -> None:
         self.log(DEBUG, message, *args)
 
-    def warn(self, message: str, *args) -> None:
+    def warn(self, message: str, *args: typing.Any) -> None:
         self.log(WARN, message, *args)
 
-    def info(self, message: str, *args) -> None:
+    def info(self, message: str, *args: typing.Any) -> None:
         self.log(INFO, message, *args)
 
-    def error(self, message: str, *args) -> None:
+    def error(self, message: str, *args: typing.Any) -> None:
         self.log(ERROR, message, *args)
 
-    def fatal(self, message: str, *args) -> None:
+    def fatal(self, message: str, *args: typing.Any) -> None:
         self.log(FATAL, message, *args)
 
     def exception(self, *, level: int = DEBUG, message: typing.Optional[str] = None) -> None:

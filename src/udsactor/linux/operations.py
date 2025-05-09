@@ -205,8 +205,8 @@ def joinDomain(custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
     client_software: str = custom.get('client_software', '')
     server_software: str = custom.get('server_software', '')
     membership_software: str = custom.get('membership_software', '')
-    ssl: bool = custom.get('ssl', False)
-    automatic_id_mapping: bool = custom.get('automatic_id_mapping', False)
+    ssl: 'bool|str' = custom.get('ssl', False)
+    automatic_id_mapping: 'bool|str' = custom.get('automatic_id_mapping', False)
 
     if server_software == 'ipa':
         try:
