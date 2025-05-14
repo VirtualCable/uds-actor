@@ -69,6 +69,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
     _secret: str
     _certificate: types.CertificateInfoType
     _http: typing.Optional[server.HTTPServerThread]
+    _clientsPool: clients_pool.UDSActorClientPool
 
     @staticmethod
     def execute(cmdLine: str, section: str) -> bool:
@@ -416,7 +417,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         userName: typing.Optional[str] = None,
         oldPassword: typing.Optional[str] = None,
         newPassword: typing.Optional[str] = None,
-    ) -> None:
+    ) -> bool:
         '''
         Invoked when broker requests a rename action
         '''
@@ -433,10 +434,13 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
 
         if hostName.lower() == name.lower():
             logger.info('Computer name is already {}'.format(hostName))
-            return
+            return False # No need to rename
 
         if platform.operations.renameComputer(name):
             self.reboot()
+        
+        logger.info('Renamed computer to {}'.format(name))
+        return True
 
     def joinDomain(self, name: str, custom: collections.abc.Mapping[str, typing.Any]) -> None:
         '''

@@ -33,6 +33,7 @@ import os
 import configparser
 import base64
 import pickle  # nosec
+import typing
 
 from .. import types
 
@@ -88,7 +89,7 @@ def write_config(config: types.ActorConfigurationType) -> None:
     uds['host'] = config.host
     uds['validate'] = 'yes' if config.validateCertificate else 'no'
 
-    def writeIfValue(val, name):
+    def writeIfValue(val: typing.Any, name: str) -> None:
         if val:
             uds[name] = val
 

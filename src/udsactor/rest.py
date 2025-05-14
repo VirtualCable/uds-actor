@@ -36,7 +36,6 @@ import typing
 import platform
 
 import requests
-import requests.adapters
 
 from udsactor import types, tools
 from udsactor.version import VERSION, BUILD
@@ -198,7 +197,7 @@ class UDSServerApi(UDSApi):
         """
         Raises an exception if could not register, or registers and returns the "authorization token"
         """
-        data = {
+        data: typing.Dict[str, 'str|int'] = {
             'username': username + '@' + auth,
             'hostname': hostname,
             'ip': ip,
@@ -251,7 +250,7 @@ class UDSServerApi(UDSApi):
         actor_type: typing.Optional[str],
     ) -> types.InitializationResultType:
         # Generate id list from netork cards
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'type': actor_type or types.MANAGED,
             'token': token,
             'version': VERSION,
@@ -262,24 +261,6 @@ class UDSServerApi(UDSApi):
         os = r['os']
         if r['token'] is None:
             raise RESTUnmanagedHostError('Unmanaged host')
-
-        # * TO BE REMOVED ON FUTURE VERSIONS *
-        # To keep compatibility, store old values on custom data
-        # This will be removed in future versions
-        # The values stored are:
-        #        username=os.get('username'),
-        #        password=os.get('password'),
-        #        new_password=os.get('new_password'),
-        #        domain=os.get('ad'),
-        #        ou=os.get('ou'),
-        # So update custom data with this info
-        custom = os.get('custom', {})
-        for i in ('username', 'password', 'new_password', 'ad', 'ou'):
-            # ad is converted to domain
-            if i not in os:
-                continue  # Skip if not present on os, do not overwrite custom
-            name = 'domain' if i == 'ad' else i
-            custom[name] = os[i]  # os[i] is present, so force it on custom
 
         return types.InitializationResultType(
             master_token=r['master_token'],
@@ -298,7 +279,7 @@ class UDSServerApi(UDSApi):
 
     @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def ready(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
-        payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
+        payload: typing.Dict[str, typing.Any] = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ready', payload)
 
         return types.CertificateInfoType(
@@ -310,7 +291,7 @@ class UDSServerApi(UDSApi):
 
     @retry_on_exception(3, wait_seconds=2, retryable_exceptions=[RESTConnectionError], do_log=True)
     def notifyIpChange(self, own_token: str, secret: str, ip: str, port: int) -> types.CertificateInfoType:
-        payload = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
+        payload: typing.Dict[str, typing.Any] = {'token': own_token, 'secret': secret, 'ip': ip, 'port': port}
         result = self._doPost('ipchange', payload)
 
         return types.CertificateInfoType(
@@ -328,7 +309,7 @@ class UDSServerApi(UDSApi):
         interfaces: typing.Iterable[types.InterfaceInfoType],
         port: int,
     ) -> types.CertificateInfoType:
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
             'token': master_token,
             'secret': secret,
@@ -357,7 +338,7 @@ class UDSServerApi(UDSApi):
             return types.LoginResultInfoType(
                 ip='0.0.0.0', hostname=UNKNOWN, deadline=None, max_idle=None, session_id=None
             )
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'type': actor_type or types.MANAGED,
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
             'token': token,
@@ -387,7 +368,7 @@ class UDSServerApi(UDSApi):
     ) -> typing.Optional[str]:
         if not token:
             return None
-        payload = {
+        payload: typing.Dict[str, typing.Any] = {
             'type': actor_type or types.MANAGED,
             'id': [{'mac': i.mac, 'ip': i.ip} for i in interfaces],
             'token': token,
@@ -401,7 +382,7 @@ class UDSServerApi(UDSApi):
     def log(self, own_token: str, level: int, message: str) -> None:
         if not own_token:
             return
-        payLoad = {'token': own_token, 'level': level, 'message': message}
+        payLoad: typing.Dict[str, typing.Any] = {'token': own_token, 'level': level, 'message': message}
         self._doPost('log', payLoad)  # Ignores result...
 
     def test(self, master_token: str, actorType: typing.Optional[str]) -> bool:

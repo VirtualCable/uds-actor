@@ -28,6 +28,7 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportPrivateUsage=false
 import typing
 
 from .. import tools
@@ -35,9 +36,8 @@ from . import handler
 
 from ..log import logger
 
-if typing.TYPE_CHECKING:
-    from ..service import CommonService
-
+# if typing.TYPE_CHECKING:
+#     from ..service import CommonService 
 
 class PublicProvider(handler.Handler):
     def post_logout(self) -> typing.Any:
@@ -61,7 +61,7 @@ class PublicProvider(handler.Handler):
             raise Exception('Invalid script parameters')
         if self._params.get('user', False):
             logger.debug('Sending SCRIPT to client')
-            self._service._clientsPool.executeScript(self._params['script'])
+            self._service._clientsPool.execute_script(self._params['script'])
         else:
             # Execute script at server space, that is, here
             # as a parallel thread

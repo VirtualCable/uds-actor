@@ -43,8 +43,10 @@ from ..service import CommonService
 try:
     from setproctitle import setproctitle  # type: ignore
 except ImportError:  # Platform may not include prctl, so in case it's not available, we let the "name" as is
+
     def setproctitle(title: str) -> None:
         pass
+
 
 class UDSActorSvc(daemon.Daemon, CommonService):
 
@@ -62,8 +64,9 @@ class UDSActorSvc(daemon.Daemon, CommonService):
     def joinDomain(  # pylint: disable=unused-argument, too-many-arguments
         self, name: str, custom: collections.abc.Mapping[str, typing.Any]
     ) -> None:
-    
-        self.rename(name)
+
+        if not self.rename(name):  # Already renamed, skip
+            return
 
         logger.debug('Starting joining domain %s with name %s', custom.get('domain', ''), name)
         operations.joinDomain(custom)
@@ -77,7 +80,7 @@ class UDSActorSvc(daemon.Daemon, CommonService):
         if self.is_managed():
             if not self.initialize():
                 self.finish()
-                return # Stop daemon if initializes told to do so
+                return  # Stop daemon if initializes told to do so
 
             # logger.debug('Initialized, setting ready')
             # Initialization is done, set machine to ready for UDS, communicate urls, etc...

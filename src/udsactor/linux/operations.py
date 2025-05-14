@@ -196,6 +196,8 @@ def joinDomain(custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
     if not custom:
         logger.error('Error joining domain: no custom data provided')
         return
+    
+    logger.debug('Joining domain with custom data: %s', custom)
 
     # Read parameters from custom data
     domain: str = custom.get('domain', '')
@@ -225,12 +227,17 @@ def joinDomain(custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
             command += f'--membership-software={membership_software} '
         if ou and server_software != 'ipa':
             command += f'--computer-ou="{ou}" '
-        if ssl == 'y':
+        if ssl in ('y', True):
             command += '--use-ldaps '
-        if automatic_id_mapping == 'n':
+        if automatic_id_mapping in ('n', False):
             command += '--automatic-id-mapping=no '
         command += domain
-        subprocess.run(command, input=password.encode(), shell=True)
+        logger.debug(f'Joining domain {domain} with command: {command}')
+        result = subprocess.run(command, input=password.encode(), shell=True, capture_output=True)
+        if result.returncode == 0:
+            logger.debug(f'Joined domain {domain} successfully')
+        else:
+            logger.error(f'Error joining domain {domain}: {result.stderr.decode()}')
     except Exception as e:
         logger.error(f'Error join machine to domain {domain}: {e}')
 
