@@ -18,9 +18,10 @@ def retry_on_exception(
     do_log: bool = False,
 ) -> typing.Callable[[FT], FT]:
     to_retry = retryable_exceptions or [Exception]
+
     def decorator(func: FT) -> FT:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> typing.Any:
+        def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             for i in range(retries):
                 try:
                     return func(*args, **kwargs)
@@ -35,7 +36,7 @@ def retry_on_exception(
                     if i == retries - 1:
                         raise e
 
-                    time.sleep(wait_seconds)
+                    time.sleep(pow(wait_seconds, i + 1))  # Exponential backoff
 
         return typing.cast(FT, wrapper)
 

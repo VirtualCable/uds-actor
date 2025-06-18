@@ -112,10 +112,10 @@ class HTTPServerHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self.sendJsonResponse(error='Forbidden', code=403)
 
-    def log_error(self, format: str, *args):  # pylint: disable=redefined-builtin
+    def log_error(self, format: str, *args: typing.Any):  # pylint: disable=redefined-builtin
         logger.error(format, *args)
 
-    def log_message(self, format: str, *args):  # pylint: disable=redefined-builtin
+    def log_message(self, format: str, *args: typing.Any):  # pylint: disable=redefined-builtin
         logger.debug(format, *args)
 
 class HTTPServerThread(threading.Thread):
@@ -149,8 +149,8 @@ class HTTPServerThread(threading.Thread):
             self._server = None
 
     def run(self):
-        HTTPServerHandler._app = self._app  # pylint: disable=protected-access
-        HTTPServerHandler._id = self.id  # pylint: disable=protected-access
+        HTTPServerHandler._app = self._app  # pyright: ignore[reportPrivateUsage]
+        HTTPServerHandler._id = self.id  # pyright: ignore[reportPrivateUsage]
 
         self._server = http.server.HTTPServer(('127.0.0.1', 0), HTTPServerHandler)
 

@@ -178,7 +178,7 @@ class UDSServerApi(UDSApi):
                         priority=v['priority'],
                         isCustom=v['isCustom'],
                     )
-        except Exception as e:
+        except Exception:
             pass
 
     def register(
