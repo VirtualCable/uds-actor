@@ -311,7 +311,7 @@ def protectFileForOwnerOnly(filepath: str) -> None:
     Protects a file so only owner can access it on windows
     '''
     try:
-        user, domain, _type = win32security.LookupAccountName('', getCurrentUser())
+        user, _domain, _type = win32security.LookupAccountName('', getCurrentUser())
 
         secDescriptor = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
         dACL = secDescriptor.GetSecurityDescriptorDacl()

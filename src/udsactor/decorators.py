@@ -36,7 +36,9 @@ def retry_on_exception(
                     if i == retries - 1:
                         raise e
 
-                    time.sleep(pow(wait_seconds, i + 1))  # Exponential backoff
+                    time.sleep(wait_seconds * (2 ** min(i, 4)))  # Exponential backoff until 16x
+
+            return func(*args, **kwargs)
 
         return typing.cast(FT, wrapper)
 
