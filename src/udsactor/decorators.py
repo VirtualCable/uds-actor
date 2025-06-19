@@ -3,10 +3,12 @@
 import typing
 import functools
 import time
+import collections.abc
 
 from udsactor.log import logger
 
-FT = typing.TypeVar('FT', bound=typing.Callable[..., typing.Any])
+P = typing.ParamSpec('P')
+R = typing.TypeVar('R')
 
 
 # Retries if an exception is raised, sleeping the given time between retries and at most the given number of retries
@@ -16,18 +18,18 @@ def retry_on_exception(
     wait_seconds: float = 2,
     retryable_exceptions: typing.Optional[typing.List[typing.Type[Exception]]] = None,
     do_log: bool = False,
-) -> typing.Callable[[FT], FT]:
+) -> collections.abc.Callable[[collections.abc.Callable[P, R]], collections.abc.Callable[P, R]]:
     to_retry = retryable_exceptions or [Exception]
 
-    def decorator(func: FT) -> FT:
-        @functools.wraps(func)
+    def decorator(fnc: collections.abc.Callable[P, R]) -> collections.abc.Callable[P, R]:
+        @functools.wraps(fnc)
         def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             for i in range(retries):
                 try:
-                    return func(*args, **kwargs)
+                    return fnc(*args, **kwargs)
                 except Exception as e:
                     if do_log:
-                        logger.error('Exception raised in function %s: %s', func.__name__, e)
+                        logger.error('Exception raised in function %s: %s', fnc.__name__, e)
 
                     if not any(isinstance(e, exception_type) for exception_type in to_retry):
                         raise e
@@ -38,8 +40,8 @@ def retry_on_exception(
 
                     time.sleep(wait_seconds * (2 ** min(i, 4)))  # Exponential backoff until 16x
 
-            return func(*args, **kwargs)
+            return fnc(*args, **kwargs)
 
-        return typing.cast(FT, wrapper)
+        return wrapper
 
     return decorator
