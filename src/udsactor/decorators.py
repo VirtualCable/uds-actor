@@ -23,7 +23,7 @@ def retry_on_exception(
 
     def decorator(fnc: collections.abc.Callable[P, R]) -> collections.abc.Callable[P, R]:
         @functools.wraps(fnc)
-        def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        def wrapper(*args: typing.Any, **kwargs: typing.Any) -> R:
             for i in range(retries):
                 try:
                     return fnc(*args, **kwargs)
@@ -40,6 +40,8 @@ def retry_on_exception(
 
                     time.sleep(wait_seconds * (2 ** min(i, 4)))  # Exponential backoff until 16x
 
+            # retries == 0 allowed, but only use it for testing purposes
+            # because it's a nonsensical decorator otherwise
             return fnc(*args, **kwargs)
 
         return wrapper
