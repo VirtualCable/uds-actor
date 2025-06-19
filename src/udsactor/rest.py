@@ -94,19 +94,22 @@ class UDSApi:  # pylint: disable=too-few-public-methods
     """
 
     _host: str = ''
-    _validateCert: bool = True
+    _check_certificate: bool = True
     _url: str = ''
     _session: 'requests.Session'
+    _timeout: int = TIMEOUT
 
-    def __init__(self, host: str, validateCert: bool) -> None:
+    def __init__(self, host: str, check_certificate: bool, timeout: int = TIMEOUT) -> None:
         self._host = host
-        self._validateCert = validateCert
+        self._check_certificate = check_certificate
         self._url = UDS_BASE_URL.format(self._host)
+        self._timeout = timeout
+
         # Disable logging requests messages except for errors, ...
         logging.getLogger('request').setLevel(logging.CRITICAL)
         logging.getLogger('urllib3').setLevel(logging.ERROR)
 
-        self._session = tools.secure_requests_session(verify=self._validateCert)
+        self._session = tools.secure_requests_session(verify=self._check_certificate)
 
     @property
     def _headers(self) -> typing.MutableMapping[str, str]:
@@ -121,19 +124,18 @@ class UDSApi:  # pylint: disable=too-few-public-methods
     def _doPost(
         self,
         method: str,  # i.e. 'initialize', 'ready', ....
-        payLoad: typing.MutableMapping[str, typing.Any],
+        payload: typing.MutableMapping[str, typing.Any],
         headers: typing.Optional[typing.MutableMapping[str, str]] = None,
-        disableProxy: bool = False,
+        no_proxy: bool = False,
     ) -> typing.Any:
         headers = headers or self._headers
         try:
             result = self._session.post(
                 self._api_url(method),
-                data=json.dumps(payLoad),
+                data=json.dumps(payload),
                 headers=headers,
-                # verify=self._validateCert, Not needed, already in session
-                timeout=TIMEOUT,
-                proxies=NO_PROXY if disableProxy else None,  # type: ignore  # if not proxies wanted, enforce it
+                timeout=self._timeout,
+                proxies=NO_PROXY if no_proxy else None,  # type: ignore  # if not proxies wanted, enforce it
             )
 
             if result.ok:
@@ -398,7 +400,8 @@ class UDSClientApi(UDSApi, metaclass=tools.Singleton):
     _callback_url: str = ''
 
     def __init__(self) -> None:
-        super().__init__('127.0.0.1:{}'.format(LISTEN_PORT), False)
+        # Give a long timeout, so service can do its job with retries, etc..
+        super().__init__('127.0.0.1:{}'.format(LISTEN_PORT), False, timeout=32)
 
         # Replace base url
         self._url = "https://{}/ui/".format(self._host)
@@ -411,7 +414,7 @@ class UDSClientApi(UDSApi, metaclass=tools.Singleton):
         method: str,  # i.e. 'initialize', 'ready', ....
         payLoad: typing.MutableMapping[str, typing.Any],
     ) -> typing.Any:
-        return self._doPost(method=method, payLoad=payLoad, disableProxy=True)
+        return self._doPost(method=method, payload=payLoad, no_proxy=True)
 
     def register(self, callback_url: str) -> None:
         self._callback_url = callback_url
