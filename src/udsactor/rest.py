@@ -44,10 +44,10 @@ from udsactor.decorators import retry_on_exception
 
 # Try to use pip_system_certs, but do not fail if not available
 try:
-    import pip_system_certs.wrapt_requests  # type: ignore
-    pip_system_certs.wrapt_requests.inject_truststore()  # type: ignore
+    import truststore  # type: ignore
+    truststore.inject_into_ssl()  # type: ignore
 except ImportError:
-    # pip_system_certs not available, just continue
+    # just continue
     pass
 
 # Default public listen port
