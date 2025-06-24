@@ -41,6 +41,15 @@ from udsactor import types, tools
 from udsactor.version import VERSION, BUILD
 from udsactor.decorators import retry_on_exception
 
+
+# Try to use pip_system_certs, but do not fail if not available
+try:
+    import pip_system_certs.wrapt_requests  # type: ignore
+    pip_system_certs.wrapt_requests.inject_truststore()  # type: ignore
+except ImportError:
+    # pip_system_certs not available, just continue
+    pass
+
 # Default public listen port
 LISTEN_PORT: typing.Final[int] = 43910
 
