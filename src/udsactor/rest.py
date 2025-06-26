@@ -42,14 +42,6 @@ from udsactor.version import VERSION, BUILD
 from udsactor.decorators import retry_on_exception
 
 
-# Try to use pip_system_certs, but do not fail if not available
-try:
-    import truststore  # type: ignore
-    truststore.inject_into_ssl()  # type: ignore
-except ImportError:
-    # just continue
-    pass
-
 # Default public listen port
 LISTEN_PORT: typing.Final[int] = 43910
 
