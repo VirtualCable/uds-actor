@@ -29,11 +29,9 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 # pylint: disable=invalid-name
-import base64
 import typing
 import json
-import bz2
-import pickle
+import base64
 
 import winreg as wreg
 import win32security
@@ -75,9 +73,7 @@ def read_config() -> types.ActorConfigurationType:
         wreg.CloseKey(key)
 
         # Try to read data, that must be a bz2 compressed json.
-        # If fails, tray the legacy pickle
-        data = bz2.decompress(data)
-        data = json.loads(data)
+        data = json.loads(base64.b64decode(data))
 
         return types.ActorConfigurationType.from_dict(data)
     except Exception:
@@ -92,7 +88,7 @@ def write_config(config: types.ActorConfigurationType) -> None:
 
     fixRegistryPermissions(key.handle)  # type: ignore
 
-    data = bz2.compress(json.dumps(config.as_dict()).encode('utf-8'))
+    data = base64.b64decode(json.dumps(config.as_dict()).encode('utf-8'))
 
     wreg.SetValueEx(key, "", 0, wreg.REG_BINARY, data)
     wreg.CloseKey(key)
