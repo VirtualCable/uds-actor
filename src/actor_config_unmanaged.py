@@ -63,7 +63,7 @@ class UDSConfigDialog(QDialog):
         self.ui.setupUi(self)
         self.ui.host.setText(self._config.host)
         self.ui.validateCertificate.setCurrentIndex(
-            1 if self._config.validateCertificate else 0
+            1 if self._config.check_certificate else 0
         )
         self.ui.logLevelComboBox.setCurrentIndex(self._config.log_level)
         self.ui.serviceToken.setText(self._config.master_token or '')
@@ -95,7 +95,7 @@ class UDSConfigDialog(QDialog):
             return
         try:
             api = udsactor.rest.UDSServerApi(
-                self._config.host, self._config.validateCertificate
+                self._config.host, self._config.check_certificate
             )
             if not api.test(self._config.master_token, udsactor.types.UNMANAGED):
                 QMessageBox.information(
@@ -140,9 +140,9 @@ class UDSConfigDialog(QDialog):
 
         # Store parameters on register for later use, notify user of registration
         self._config = udsactor.types.ActorConfigurationType(
-            actorType=udsactor.types.UNMANAGED,
+            actor_type=udsactor.types.UNMANAGED,
             host=self.ui.host.text(),
-            validateCertificate=self.ui.validateCertificate.currentIndex() == 1,
+            check_certificate=self.ui.validateCertificate.currentIndex() == 1,
             master_token=self.ui.serviceToken.text().strip(),
             restrict_net=restrictNet,
             log_level=self.ui.logLevelComboBox.currentIndex(),

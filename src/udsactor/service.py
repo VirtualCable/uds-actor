@@ -85,7 +85,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
     def __init__(self) -> None:
         self._cfg = platform.store.read_config()
         self._interfaces = []
-        self._api = rest.UDSServerApi(self._cfg.host, self._cfg.validateCertificate)
+        self._api = rest.UDSServerApi(self._cfg.host, self._cfg.check_certificate)
         self._secret = secrets.token_urlsafe(33)
         self._clientsPool = clients_pool.UDSActorClientPool()
         self._certificate = (
@@ -117,7 +117,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
 
     def is_managed(self) -> bool:
         return (
-            self._cfg.actorType != types.UNMANAGED
+            self._cfg.actor_type != types.UNMANAGED
         )  # Only "unmanaged" hosts are unmanaged, the rest are "managed"
 
     def serviceInterfaceInfo(
@@ -297,7 +297,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
                 # If master token is present, initialize and get configuration data
                 if self._cfg.master_token:
                     init_result: types.InitializationResultType = self._api.initialize(
-                        self._cfg.master_token, self._interfaces, self._cfg.actorType
+                        self._cfg.master_token, self._interfaces, self._cfg.actor_type
                     )
                     if not init_result.token:  # Not managed
                         logger.debug('This host is not managed by UDS Broker (ids: %s)', self._interfaces)
@@ -354,7 +354,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
                 if client.session_id:
                     try:
                         self._api.logout(
-                            self._cfg.actorType,
+                            self._cfg.actor_type,
                             self._cfg.own_token,
                             '',
                             client.session_id or 'stop',  # If no session id, pass "stop"
@@ -467,7 +467,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
         token = self._cfg.own_token or self._cfg.master_token
         if token:
             result = self._api.login(
-                self._cfg.actorType,
+                self._cfg.actor_type,
                 token,
                 username,
                 sessionType or '',
@@ -480,7 +480,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
             script = platform.store.invokeScriptOnLogin()
             if script:
                 logger.info('Executing script on login: {}'.format(script))
-                script += f'{username} {sessionType or "unknown"} {self._cfg.actorType}'
+                script += f'{username} {sessionType or "unknown"} {self._cfg.actor_type}'
                 self.execute(script, 'Logon')
 
         return result
@@ -498,7 +498,7 @@ class CommonService:  # pylint: disable=too-many-instance-attributes
             # If logout is not processed (that is, not ok result), the logout has not been processed
             if (
                 self._api.logout(
-                    self._cfg.actorType,
+                    self._cfg.actor_type,
                     token,
                     username,
                     session_id or '',

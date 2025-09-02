@@ -59,7 +59,7 @@ class UDSConfigDialog(QDialog):
         self.ui = Ui_UdsActorSetupDialog()
         self.ui.setupUi(self)  # pyright: ignore[reportUnknownMemberType]
         self.ui.host.setText(config.host)
-        self.ui.validateCertificate.setCurrentIndex(1 if config.validateCertificate else 0)
+        self.ui.validateCertificate.setCurrentIndex(1 if config.check_certificate else 0)
         self.ui.postConfigCommand.setText(config.post_command or '')
         self.ui.preCommand.setText(config.pre_command or '')
         self.ui.runonceCommand.setText(config.runonce_command or '')
@@ -129,7 +129,7 @@ class UDSConfigDialog(QDialog):
             self.ui.testButton.setEnabled(False)
             return
         try:
-            api = udsactor.rest.UDSServerApi(config.host, config.validateCertificate)
+            api = udsactor.rest.UDSServerApi(config.host, config.check_certificate)
             if not api.test(config.master_token, udsactor.types.MANAGED):
                 QMessageBox.information(
                     self,
@@ -173,9 +173,9 @@ class UDSConfigDialog(QDialog):
             # Store parameters on register for later use, notify user of registration
             udsactor.platform.store.write_config(
                 udsactor.types.ActorConfigurationType(
-                    actorType=udsactor.types.MANAGED,
+                    actor_type=udsactor.types.MANAGED,
                     host=self.ui.host.text(),
-                    validateCertificate=self.ui.validateCertificate.currentIndex() == 1,
+                    check_certificate=self.ui.validateCertificate.currentIndex() == 1,
                     master_token=token,
                     pre_command=self.ui.preCommand.text(),
                     post_command=self.ui.postConfigCommand.text(),

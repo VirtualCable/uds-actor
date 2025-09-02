@@ -50,9 +50,9 @@ def read_config() -> types.ActorConfigurationType:
         data = pickle.loads(base64.b64decode(base64Data.encode())) if base64Data else None  # nosec: Read from root controled file, secure
 
         return types.ActorConfigurationType(
-            actorType=uds.get('type', types.MANAGED),
+            actor_type=uds.get('type', types.MANAGED),
             host=uds.get('host', ''),
-            validateCertificate=uds.getboolean('validate', fallback=False),
+            check_certificate=uds.getboolean('validate', fallback=False),
             master_token=uds.get('master_token', None),
             own_token=uds.get('own_token', None),
             restrict_net=uds.get('restrict_net', None),
@@ -71,11 +71,11 @@ def write_config(config: types.ActorConfigurationType) -> None:
     cfg.add_section('uds')
     uds: configparser.SectionProxy = cfg['uds']
     uds['host'] = config.host
-    uds['validate'] = 'yes' if config.validateCertificate else 'no'
+    uds['validate'] = 'yes' if config.check_certificate else 'no'
     def writeIfValue(val, name):
         if val:
             uds[name] = val
-    writeIfValue(config.actorType, 'type')
+    writeIfValue(config.actor_type, 'type')
     writeIfValue(config.master_token, 'master_token')
     writeIfValue(config.own_token, 'own_token')
     writeIfValue(config.restrict_net, 'restrict_net')

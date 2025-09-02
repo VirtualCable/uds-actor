@@ -29,7 +29,10 @@
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
 # pylint: disable=invalid-name
+import base64
 import typing
+import json
+import bz2
 import pickle
 
 import winreg as wreg
@@ -40,9 +43,12 @@ from .. import types
 PATH: typing.Final[str] = 'Software\\UDSActor'
 BASEKEY: typing.Final[int] = wreg.HKEY_LOCAL_MACHINE
 
+
 def fixRegistryPermissions(handle) -> None:
     # Fix permissions so users can't read this key
-    v = win32security.GetSecurityInfo(handle, win32security.SE_REGISTRY_KEY, win32security.DACL_SECURITY_INFORMATION)
+    v = win32security.GetSecurityInfo(
+        handle, win32security.SE_REGISTRY_KEY, win32security.DACL_SECURITY_INFORMATION
+    )
     dacl = v.GetSecurityDescriptorDacl()
     n = 0
     # Remove all normal users access permissions to the registry key
@@ -58,15 +64,22 @@ def fixRegistryPermissions(handle) -> None:
         None,
         None,
         dacl,
-        None
+        None,
     )
+
 
 def read_config() -> types.ActorConfigurationType:
     try:
         key = wreg.OpenKey(BASEKEY, PATH, 0, wreg.KEY_QUERY_VALUE)
         data, _ = wreg.QueryValueEx(key, '')
         wreg.CloseKey(key)
-        return pickle.loads(data)
+
+        # Try to read data, that must be a bz2 compressed json.
+        # If fails, tray the legacy pickle
+        data = bz2.decompress(data)
+        data = json.loads(data)
+
+        return types.ActorConfigurationType.from_dict(data)
     except Exception:
         return types.ActorConfigurationType('', False)
 
@@ -79,7 +92,9 @@ def write_config(config: types.ActorConfigurationType) -> None:
 
     fixRegistryPermissions(key.handle)  # type: ignore
 
-    wreg.SetValueEx(key, "", 0, wreg.REG_BINARY, pickle.dumps(config)) # type: ignore
+    data = bz2.compress(json.dumps(config.as_dict()).encode('utf-8'))
+
+    wreg.SetValueEx(key, "", 0, wreg.REG_BINARY, data)
     wreg.CloseKey(key)
 
 
@@ -95,6 +110,7 @@ def useOldJoinSystem() -> bool:
         data = ''
 
     return data == 'old'
+
 
 def invokeScriptOnLogin() -> str:
     try:
