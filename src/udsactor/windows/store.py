@@ -88,7 +88,7 @@ def write_config(config: types.ActorConfigurationType) -> None:
 
     fixRegistryPermissions(key.handle)  # type: ignore
 
-    data = base64.b64decode(json.dumps(config.as_dict()).encode('utf-8'))
+    data = base64.b64encode(json.dumps(config.as_dict()).encode('utf-8'))
 
     wreg.SetValueEx(key, "", 0, wreg.REG_BINARY, data)
     wreg.CloseKey(key)
