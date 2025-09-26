@@ -1,4 +1,0 @@
-/udsactor-*[1-9].*.spec
-*-stamp
-debian/*.debhelper
-debian/*.substvars
