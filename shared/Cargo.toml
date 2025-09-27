@@ -19,8 +19,22 @@ windows = { version = "0.62.1", features = [
     "Win32_System_Threading",
     "Win32_Graphics_Gdi",
     "Win32_Security",
+    "Win32_UI_Shell",
+    "Win32_System_SystemInformation",
+    "Win32_System_Shutdown",
+    "Win32_System_Registry",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_WindowsProgramming",
+    # We need all three for network adapter enumeration
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_NetworkManagement_Ndis",
 ] }
 widestring = "1.2.0"
+
+[dependencies.macros]
+path = "../macros"
 
 [dependencies]
 # Logging

@@ -51,6 +51,9 @@ async fn main() {
         http::run_server(listener, server_session_manager).await;
     });
 
+    // Send login
+    session_manager.get_api().login("user", None).await.unwrap();
+
     tokio::select! {
     _ = session_manager.wait() => {
         shared::log::info!("Session manager signaled stop, shutting down");
