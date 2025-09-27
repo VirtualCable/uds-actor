@@ -24,10 +24,21 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+
 mod rest;
+mod session;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(windows)]
+mod windows;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
-    // ... your async code here ...
+
+    let _session_manager = session::new_session_manager();
+    //session_manager.wait().await;
 }

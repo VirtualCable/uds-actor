@@ -1,0 +1,27 @@
+We can use:
+    * Login Items (per‑user): Easy, but only for known users. Not suitable for “all users” installations.
+
+    * LaunchAgents (/Library/LaunchAgents): Best option for “all users, at login” in a session context.
+      Place a .plist file in:
+        - ~/Library/LaunchAgents/ → for the current user only.  
+        - /Library/LaunchAgents/ → for all users (runs when any user logs in).
+
+    * LaunchDaemons (/Library/LaunchDaemons): For background daemons that don’t need a user session.
+      Place a .plist in /Library/LaunchDaemons/. This runs at system boot, not user login, so it’s for services that don’t need a GUI.
+
+    * MDM profiles: For enterprise/managed deployments.
+      - In managed environments (enterprise, education), you can push LaunchAgents or Login Items via MDM profiles.
+      - Scales well for fleets of Macs.
+
+* Server (LaunchDaemon)
+    Path: /Library/LaunchDaemons/com.virtualcable.udsserver.plist
+    Runs as root, starts at boot.
+    Handles sensitive data, IPC, or background services.
+    Independent of user sessions.
+
+* Client (LaunchAgent)
+    Path: /Library/LaunchAgents/com.virtualcable.udsclient.plist
+    Runs as the logged‑in user.
+    Connects to the server, handles UI/session‑related tasks.
+
+Look at the plist files beside this file.

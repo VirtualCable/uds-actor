@@ -27,7 +27,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 pub use super::traits::EventLike;
 
 #[cfg(target_os = "windows")]
-pub use crate::windows::event::WindowsEvent;
+pub use crate::windows::WindowsEvent;
 
 #[cfg(target_os = "windows")]
 pub use WindowsEvent as Event;

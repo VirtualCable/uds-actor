@@ -24,6 +24,10 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub mod messages;
-pub mod safe;
-pub(crate) mod event;
+mod event;
+mod safe;
+mod messages;
+
+pub use messages::MsgWindow;
+pub use safe::SafeHandle;
+pub use event::WindowsEvent;
