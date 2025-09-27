@@ -24,3 +24,54 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+
+use serde::{Deserialize, Serialize};
+
+/// Payload for registration
+#[derive(Debug, Clone, Serialize)]
+pub struct RegisterPayload {
+    pub callback_url: String,
+}
+
+/// Payload for unregistration
+#[derive(Debug, Clone, Serialize)]
+pub struct UnregisterPayload {
+    pub callback_url: String,
+}
+
+/// Payload for login
+#[derive(Debug, Clone, Serialize)]
+pub struct LoginPayload {
+    pub username: String,
+    pub session_type: String,
+    pub callback_url: String,
+}
+
+/// Payload for logout
+#[derive(Debug, Clone, Serialize)]
+pub struct LogoutPayload {
+    pub username: String,
+    pub session_type: String,
+    pub callback_url: String,
+    pub session_id: String,
+}
+
+/// Login response
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoginResult {
+    pub ip: String,
+    pub hostname: String,
+    pub deadline: String,
+    pub max_idle: u32,
+    pub session_id: String,
+}
+
+/// Empty payload for ping
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PingPayload {}
+
+/// Ping response
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(transparent)]
+pub struct PongResponse(pub String);

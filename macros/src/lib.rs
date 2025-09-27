@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::{Expr, Token};
+use syn::{ItemFn, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn retry_on_error(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -31,14 +31,20 @@ pub fn retry_on_error(attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#attrs)*
         #vis #sig {
             let mut attempts = 0;
+            let mut backoff = std::time::Duration::from_millis(500);
             loop {
                 let result = (|| #block )();
                 match result {
                     Ok(val) => return Ok(val),
                     Err(e) => {
+                        shared::log::info!("Operation failed: {}. Retrying... (attempt {}/{})", e, attempts + 1, #retries);
                         attempts += 1;
                         if attempts >= #retries {
                             return Err(e);
+                        }
+                        std::thread::sleep(backoff);
+                        if backoff < std::time::Duration::from_secs(8) {
+                            backoff *= 2; // Exponential backoff, with a max of 8 seconds
                         }
                     }
                 }
