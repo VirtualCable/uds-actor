@@ -46,7 +46,7 @@ where
     // timeout thread
     thread::spawn(move || {
         thread::sleep(timeout);
-        let _ = tx.send(None); // si gana el timeout, enviamos None
+    let _ = tx.send(None); // if the timeout wins, send None
     });
 
     match rx.recv() {

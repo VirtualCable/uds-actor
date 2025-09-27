@@ -24,9 +24,9 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::time::Duration;
 
-use reqwest::blocking::Client;
+use std::time::Duration;
+use reqwest::Client;
 
 use super::types::*;
 
@@ -72,36 +72,43 @@ impl ClientRestApi {
         self.session_id = id.to_string();
     }
 
-    fn post<T: serde::Serialize, R: for<'de> serde::Deserialize<'de>>(
-        &self,
-        method: &str,
-        payload: &T,
-    ) -> Result<R, reqwest::Error> {
+    async fn post<T, R>(&self, method: &str, payload: &T) -> Result<R, reqwest::Error>
+    where
+        T: serde::Serialize + ?Sized,
+        R: for<'de> serde::Deserialize<'de>,
+    {
         let url = self.api_url(method);
         debug_dev!("POST to {}", url);
-        let res = self.client.post(&url).json(payload).send()?.json()?;
+        let res = self
+            .client
+            .post(&url)
+            .json(payload)
+            .send()
+            .await?
+            .json()
+            .await?;
         Ok(res)
     }
 
-    pub fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
+    pub async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
         self.set_callback_url(callback_url);
         let payload = RegisterPayload {
             callback_url: self.callback_url.clone(),
         };
-        let _: String = self.post("register", &payload)?;
+        let _: String = self.post("register", &payload).await?;
         Ok(())
     }
 
-    pub fn unregister(&mut self) -> Result<(), reqwest::Error> {
+    pub async fn unregister(&mut self) -> Result<(), reqwest::Error> {
         let payload = UnregisterPayload {
             callback_url: self.callback_url.clone(),
         };
-        let _: String = self.post("unregister", &payload)?;
+        let _: String = self.post("unregister", &payload).await?;
         self.callback_url.clear();
         Ok(())
     }
 
-    pub fn login(
+    pub async fn login(
         &mut self,
         username: &str,
         session_type: Option<&str>,
@@ -111,25 +118,25 @@ impl ClientRestApi {
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
             callback_url: self.callback_url.clone(),
         };
-        let result: LoginResult = self.post("login", &payload)?;
+        let result: LoginResult = self.post("login", &payload).await?;
         self.set_session_id(&result.session_id);
         Ok(result)
     }
 
-    pub fn logout(&self, username: &str, session_type: Option<&str>) -> Result<(), reqwest::Error> {
+    pub async fn logout(&self, username: &str, session_type: Option<&str>) -> Result<(), reqwest::Error> {
         let payload = LogoutPayload {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
             callback_url: self.callback_url.clone(),
             session_id: self.session_id.clone(),
         };
-        let _: String = self.post("logout", &payload)?;
+        let _: String = self.post("logout", &payload).await?;
         Ok(())
     }
 
-    pub fn ping(&self) -> Result<bool, reqwest::Error> {
+    pub async fn ping(&self) -> Result<bool, reqwest::Error> {
         let payload = PingPayload::default();
-        let result: PongResponse = self.post("ping", &payload)?;
+        let result: PongResponse = self.post("ping", &payload).await?;
         Ok(result.0 == "pong")
     }
 }
