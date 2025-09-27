@@ -24,9 +24,6 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-mod rest;
-
-
-fn main() {
-    shared::log::setup_logging("debug", shared::log::LogType::Client);
-}
+pub mod messages;
+pub mod safe;
+pub(crate) mod event;

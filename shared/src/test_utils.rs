@@ -24,9 +24,34 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-mod rest;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
+#[allow(dead_code)]
+pub fn run_with_timeout<F, R>(timeout: Duration, func: F) -> Result<R, &'static str>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let (tx, rx) = mpsc::channel();
 
-fn main() {
-    shared::log::setup_logging("debug", shared::log::LogType::Client);
+    // Main thread to run the function
+    let tx_clone = tx.clone();
+    thread::spawn(move || {
+        let result = func();
+        let _ = tx_clone.send(Some(result));
+    });
+
+    // timeout thread
+    thread::spawn(move || {
+        thread::sleep(timeout);
+        let _ = tx.send(None); // si gana el timeout, enviamos None
+    });
+
+    match rx.recv() {
+        Ok(Some(result)) => Ok(result),
+        Ok(None) => Err("Timeout reached"),
+        Err(_) => Err("Error receiving result"),
+    }
 }

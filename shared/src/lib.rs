@@ -1,4 +1,11 @@
 pub mod log;
+pub mod sync;
+
+#[cfg(target_os = "windows")]
+pub mod windows;
+
+#[cfg(not(target_os = "windows"))]
+pub mod unix;
 
 #[macro_export]
 macro_rules! debug_dev {
@@ -10,3 +17,6 @@ macro_rules! debug_dev {
         }
     };
 }
+
+#[cfg(test)]
+pub mod test_utils;
