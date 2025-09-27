@@ -26,6 +26,13 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 mod rest;
 
+#[cfg(target_os = "windows")]
+mod windows;
+
+
 fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 }
+
+#[cfg(test)]
+pub mod test_utils;
