@@ -29,7 +29,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use chrono::Datelike;
 use winres::WindowsResource;
 
-fn main() {
+fn build_windows() {
     println!("cargo:rerun-if-changed=img/uds.bmp");
 
     let current_year = chrono::Utc::now().year();
@@ -48,7 +48,7 @@ fn main() {
     // Set executable metadata with winres
 
     let mut res = WindowsResource::new();
-    res.set_icon("img/uds.ico");
+    res.set_icon("../img/uds.ico");
 
     res.set_version_info(winres::VersionInfo::FILEVERSION, version);
     res.set_version_info(winres::VersionInfo::PRODUCTVERSION, version);
@@ -68,8 +68,15 @@ fn main() {
     );
     res.set("CompanyName", "Virtual Cable S.L.U.");
 
-    res.append_rc_content(r##"101      BITMAP      DISCARDABLE "img/uds.bmp""##);
+    res.append_rc_content(r##"101      BITMAP      DISCARDABLE "../img/uds.bmp""##);
 
     // Compile resources
     res.compile().unwrap();
+}
+
+fn main() {
+    // Only build windows resources if on windows
+    if cfg!(target_os = "windows") {
+        build_windows();
+    }
 }
