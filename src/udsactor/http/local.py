@@ -28,12 +28,14 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportPrivateUsage=false
 import typing
 
 from udsactor.http import handler, clients_pool
 
 if typing.TYPE_CHECKING:
     from udsactor.service import CommonService  # pyright: ignore[reportUnusedImport]
+
 
 class LocalProvider(handler.Handler):
 
@@ -53,8 +55,9 @@ class LocalProvider(handler.Handler):
         return 'pong'
 
     def post_register(self) -> typing.Any:
-        self._service._clientsPool.register(self._params['callback_url'])  # pyright: ignore[reportPrivateUsage]
+        self._service._clientsPool.register(self._params['callback_url'])
         return 'ok'
 
     def post_unregister(self) -> typing.Any:
-        self._service._clientsPool.unregister(self._params['callback_url'])  # pyright: ignore[reportPrivateUsage]
+        self._service._clientsPool.unregister(self._params['callback_url'])
+        return 'ok'

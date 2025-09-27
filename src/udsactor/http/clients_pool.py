@@ -143,7 +143,7 @@ class UDSActorClientPool(metaclass=tools.Singleton):
     def screenshot(
         self, session_id: typing.Optional[str] = None
     ) -> typing.Optional[str]:  # Screenshot are returned as base64
-        for client, r in self._post(session_id, 'screenshot', {}, timeout=3):
+        for _client, r in self._post(session_id, 'screenshot', {}, timeout=3):
             if not r:
                 continue  # Missing client, so we ignore it
             try:

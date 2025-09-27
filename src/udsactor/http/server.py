@@ -28,6 +28,7 @@
 '''
 @author: Adolfo Gómez, dkmaster at dkmon dot com
 '''
+# pyright: reportPrivateUsage=false
 import os
 import threading
 import http.server
@@ -145,10 +146,10 @@ class HTTPServerHandler(http.server.BaseHTTPRequestHandler):
 
         self.process('post', params)
 
-    def log_error(self, format, *args):  # pylint: disable=redefined-builtin
+    def log_error(self, format: str, *args: typing.Any):  # pylint: disable=redefined-builtin
         logger.error(format, *args)
 
-    def log_message(self, format, *args):  # pylint: disable=redefined-builtin
+    def log_message(self, format: str, *args: typing.Any):  # pylint: disable=redefined-builtin
         logger.debug(format, *args)
 
 
