@@ -1,5 +1,10 @@
 use axum::{Extension, Json, Router, routing::post};
 use base64::engine::{Engine as _, general_purpose::STANDARD};
+
+#[cfg(test)]
+use fake_actions as actions;
+
+#[cfg(not(test))]
 use shared::actions;
 
 use crate::session::SessionManagement;
@@ -25,7 +30,7 @@ async fn screenshot() -> Json<types::ScreenshotResponse> {
 }
 
 async fn script(Json(req): Json<types::ScriptRequest>) -> &'static str {
-    _ = actions::run_script(&req.script);
+    _ = actions::run_script(&req.script).await;
     "ok"
 }
 
@@ -58,6 +63,15 @@ pub async fn run_server(
     if let Err(e) = server.await {
         eprintln!("server error: {e}");
     }
+}
+
+// Test implementations for actions
+#[cfg(test)]
+mod fake_actions {
+    pub async fn logoff() -> Result<(), ()> { Ok(()) }
+    pub async fn screenshot() -> Result<Vec<u8>, ()> { Ok(vec![0x89, 0x50, 0x4E, 0x47]) } // PNG header
+    pub async fn run_script(_s: &str) -> Result<String, ()> { Ok("ok".into()) }
+    pub async fn show_message(_m: &str) -> Result<String, ()> { Ok("ok".into()) }
 }
 
 #[cfg(test)]

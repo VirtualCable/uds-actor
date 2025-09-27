@@ -1,6 +1,8 @@
 use super::*;
 use shared::sync::event::{Event, EventLike};
 use std::sync::Arc;
+use tokio::task::JoinHandle;
+use reqwest::Client;
 
 #[derive(Clone)]
 struct DummySessionManager {
@@ -9,9 +11,7 @@ struct DummySessionManager {
 
 impl DummySessionManager {
     fn new() -> Self {
-        Self {
-            event: Event::new(),
-        }
+        Self { event: Event::new() }
     }
 }
 
@@ -19,11 +19,9 @@ impl DummySessionManager {
 impl crate::session::SessionManagement for DummySessionManager {
     async fn wait(&self) {
         let ev = self.event.clone();
-        tokio::task::spawn_blocking(move || {
-            ev.wait();
-        })
-        .await
-        .unwrap();
+        tokio::task::spawn_blocking(move || ev.wait())
+            .await
+            .unwrap();
     }
 
     async fn is_running(&self) -> bool {
@@ -35,8 +33,14 @@ impl crate::session::SessionManagement for DummySessionManager {
     }
 }
 
-#[tokio::test]
-async fn test_ping() {
+/// Helper que arranca el servidor real en background y devuelve todo lo necesario
+async fn spawn_server(
+) -> (
+    String,                                // base URL (ej. "http://127.0.0.1:12345")
+    Arc<DummySessionManager>,              // el manager para poder hacer stop()
+    JoinHandle<()>,                        // handle del servidor
+    Client,                                // cliente HTTP
+) {
     let manager = Arc::new(DummySessionManager::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -46,62 +50,42 @@ async fn test_ping() {
         run_server(listener, server_manager).await;
     });
 
-    // Petición real
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{}/ping", addr))
-        .send()
-        .await
-        .unwrap();
+    let client = Client::new();
+    (format!("http://{}", addr), manager, handle, client)
+}
+
+#[tokio::test]
+async fn test_ping() {
+    let (base_url, manager, handle, client) = spawn_server().await;
+
+    let res = client.post(format!("{}/ping", base_url))
+        .send().await.unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "pong");
 
-    // Apaga el servidor
     manager.stop().await;
     handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn test_logout() {
-    let manager = Arc::new(DummySessionManager::new());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let (base_url, _manager, handle, client) = spawn_server().await;
 
-    let server_manager = manager.clone();
-    let handle = tokio::spawn(async move {
-        run_server(listener, server_manager).await;
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{}/logout", addr))
-        .send()
-        .await
-        .unwrap();
+    let res = client.post(format!("{}/logout", base_url))
+        .send().await.unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
-    // Server should stop after logout
+    // logout ya hace stop() → el servidor termina solo
     handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn test_screenshot() {
-    let manager = Arc::new(DummySessionManager::new());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let (base_url, manager, handle, client) = spawn_server().await;
 
-    let server_manager = manager.clone();
-    let handle = tokio::spawn(async move {
-        run_server(listener, server_manager).await;
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{}/screenshot", addr))
-        .send()
-        .await
-        .unwrap();
+    let res = client.post(format!("{}/screenshot", base_url))
+        .send().await.unwrap();
     assert_eq!(res.status(), 200);
     let json: serde_json::Value = res.json().await.unwrap();
     let b64 = json["result"].as_str().unwrap();
@@ -117,22 +101,11 @@ async fn test_screenshot() {
 
 #[tokio::test]
 async fn test_script() {
-    let manager = Arc::new(DummySessionManager::new());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let (base_url, manager, handle, client) = spawn_server().await;
 
-    let server_manager = manager.clone();
-    let handle = tokio::spawn(async move {
-        run_server(listener, server_manager).await;
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{}/script", addr))
+    let res = client.post(format!("{}/script", base_url))
         .json(&serde_json::json!({"script": "echo test"}))
-        .send()
-        .await
-        .unwrap();
+        .send().await.unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
@@ -142,22 +115,11 @@ async fn test_script() {
 
 #[tokio::test]
 async fn test_message() {
-    let manager = Arc::new(DummySessionManager::new());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let (base_url, manager, handle, client) = spawn_server().await;
 
-    let server_manager = manager.clone();
-    let handle = tokio::spawn(async move {
-        run_server(listener, server_manager).await;
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{}/message", addr))
+    let res = client.post(format!("{}/message", base_url))
         .json(&serde_json::json!({"message": "hello"}))
-        .send()
-        .await
-        .unwrap();
+        .send().await.unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
