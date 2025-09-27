@@ -26,7 +26,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 mod rest;
 
-
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
+    // ... your async code here ...
 }

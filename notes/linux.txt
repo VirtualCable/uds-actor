@@ -1,0 +1,35 @@
+We can use:
+    * XDG Autostart (system‑wide) 
+      Place a .desktop file in /etc/xdg/autostart/. 
+      This is portable across desktop environments and works for all users, but only in graphical sessions.
+
+    * Systemd user service (global)
+      Install a unit file in /etc/systemd/user/ and enable it with systemctl --global enable.
+      This ensures the app starts very early in the user session, even without a graphical desktop.
+      Recommended if you want robustness and early startup.
+      Needs systemd.
+
+    * /etc/profile.d script
+      Add a script in /etc/profile.d/ to launch the app.
+      This will run for all users when they log into a shell, but it’s not guaranteed for graphical sessions.
+
+    * System service (root) Run the app as a system‑wide daemon via /etc/systemd/system/.
+      This starts at boot, not at user login, so it’s only useful if the app doesn’t need to be tied to a user session.
+
+For Systed user service:
+    systemctl --global enable udsclient.service
+
+unit for systemd user service (save as /etc/systemd/user/udsclient.service):
+```
+[Unit]
+Description=UDS Client
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/udsclient
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```

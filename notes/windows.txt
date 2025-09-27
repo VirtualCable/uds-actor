@@ -1,0 +1,10 @@
+We can use:
+  * Schedule a task with Windows Task Scheduler:
+    schtasks /create /tn "MyApp" /tr "C:\path_to\myapp.exe" /sc onlogon /ru "INTERACTIVE"
+    This is fast, will try to run it "asap" after user logon. We do not need admin rights, so it's fine.
+  * Add a registry entry under:
+    HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run (requires admin rights)
+    current actor uses this approach, but seems to start the app only after some delay (not immediately after logon).
+  * Add a registry entry under:
+    HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run (not possible, we do not know the user on install time)
+    This would be faster than the HKLM approach, but we do not know the user/users at install time.

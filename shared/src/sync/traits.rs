@@ -24,12 +24,40 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::time::Duration;
+use std::{time::Duration};
+#[cfg(feature = "tokio")]
+use std::future::Future;
 
-pub trait EventLike: Clone + std::fmt::Debug {
+pub trait EventLike: Clone + Send + Sync + std::fmt::Debug {
     fn wait(&self);
     fn wait_timeout(&self, timeout: Duration) -> bool;
     fn signal(&self);
     fn reset(&self);
     fn is_set(&self) -> bool;
+
+    #[cfg(feature = "tokio")]
+    fn wait_async(&self) -> impl Future<Output = ()> + Send + 'static
+    where
+        Self: 'static,
+    {
+        let ev = self.clone();
+        async move {
+            tokio::task::spawn_blocking(move || ev.wait())
+                .await
+                .expect("Join error in wait_async()");
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    fn wait_timeout_async(&self, timeout: Duration) -> impl Future<Output = bool> + Send + 'static
+    where
+        Self: 'static,
+    {
+        let ev = self.clone();
+        async move {
+            tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
+                .await
+                .expect("Join error in wait_timeout_async()")
+        }
+    }
 }
