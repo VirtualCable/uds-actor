@@ -25,16 +25,12 @@
 // Author: Adolfo Gómez, dkmaster at dkmon dot com
 
 #![allow(dead_code)]
-use core::slice;
-use std::{
-    ffi::OsString,
-    os::windows::ffi::{OsStrExt, OsStringExt},
-};
+use widestring::{U16CStr, U16CString, U16String};
 use windows::{
-    core::{PCWSTR, PWSTR}, Win32::{
+    Win32::{
         Foundation::{CloseHandle, GetLastError, HANDLE, WIN32_ERROR},
         NetworkManagement::IpHelper::{
-            GetAdaptersAddresses, GET_ADAPTERS_ADDRESSES_FLAGS, IP_ADAPTER_ADDRESSES_LH
+            GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
         },
         Networking::WinSock::AF_INET,
         Security::{
@@ -42,18 +38,21 @@ use windows::{
             TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
         },
         System::{
-            Diagnostics::Debug::{FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM},
+            Diagnostics::Debug::{FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW},
             Shutdown::{
-                ExitWindowsEx, EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, EXIT_WINDOWS_FLAGS, SHUTDOWN_REASON
+                EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, EXIT_WINDOWS_FLAGS, ExitWindowsEx,
+                SHUTDOWN_REASON,
             },
             SystemInformation::{
-                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW, SetComputerNameExW, COMPUTER_NAME_FORMAT, OSVERSIONINFOW
+                COMPUTER_NAME_FORMAT, ComputerNamePhysicalDnsHostname, GetComputerNameExW,
+                GetTickCount, GetVersionExW, OSVERSIONINFOW, SetComputerNameExW,
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
             WindowsProgramming::GetUserNameW,
         },
         UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
-    }
+    },
+    core::{PCWSTR, PWSTR},
 };
 
 use crate::log;
@@ -62,16 +61,9 @@ unsafe fn utf16_ptr_to_string(ptr: *const u16) -> String {
     if ptr.is_null() {
         return "<unknown>".to_string();
     }
-
-    // Busca el final del string (null terminator)
-    let mut len = 0;
-    unsafe {
-        while *ptr.add(len) != 0 {
-            len += 1;
-        }
-    }
-
-    String::from_utf16_lossy(unsafe { slice::from_raw_parts(ptr, len) })
+    // Reinterpret the pointer as a null-terminated UTF-16 string
+    let u16cstr = unsafe { U16CStr::from_ptr_str(ptr) };
+    u16cstr.to_string_lossy()
 }
 
 pub fn check_permissions() -> bool {
@@ -92,9 +84,7 @@ pub fn get_error_message(result_code: WIN32_ERROR) -> String {
             buf.len() as u32,
             None,
         );
-        OsString::from_wide(&buf[..len as usize])
-            .to_string_lossy()
-            .into_owned()
+        U16String::from_vec(buf[..len as usize].to_vec()).to_string_lossy()
     }
 }
 
@@ -109,9 +99,7 @@ pub fn get_computer_name() -> String {
         )
         .is_ok()
         {
-            OsString::from_wide(&buf[..size as usize])
-                .to_string_lossy()
-                .into_owned()
+            utf16_ptr_to_string(buf.as_ptr())
         } else {
             String::new()
         }
@@ -175,13 +163,13 @@ pub fn get_windows_version() -> (u32, u32, u32, u32, String) {
             ..Default::default()
         };
         if GetVersionExW(&mut info).is_ok() {
-            let sz_cstr = OsString::from_wide(&info.szCSDVersion);
+            let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr());
             (
                 info.dwMajorVersion,
                 info.dwMinorVersion,
                 info.dwBuildNumber,
                 info.dwPlatformId,
-                sz_cstr.to_string_lossy().into_owned(),
+                sz_cstr,
             )
         } else {
             (0, 0, 0, 0, String::new())
@@ -196,7 +184,7 @@ pub fn get_version() -> String {
 
 pub fn reboot(flags: Option<EXIT_WINDOWS_FLAGS>) {
     // On tests, return early to not reboot the test machine :D
-	log::debug!("Reboot called with flags: {:?}", flags);
+    log::debug!("Reboot called with flags: {:?}", flags);
 
     if cfg!(test) {
         return;
@@ -235,14 +223,11 @@ pub fn logoff() {
 }
 
 pub fn rename_computer(new_name: &str) -> bool {
-	// On tests, return early to not rename the test machine :D
-	if cfg!(test) {
-		return true;
-	}
-    let wname: Vec<u16> = OsString::from(new_name)
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
+    // On tests, return early to not rename the test machine :D
+    if cfg!(test) {
+        return true;
+    }
+    let wname = U16CString::from_str(new_name).unwrap();
     unsafe {
         if SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr())).is_ok() {
             true
@@ -279,9 +264,7 @@ pub fn get_current_user() -> String {
     let mut size = buf.len() as u32;
     unsafe {
         if GetUserNameW(Some(PWSTR(buf.as_mut_ptr())), &mut size).is_ok() {
-            OsString::from_wide(&buf[..(size as usize - 1)])
-                .to_string_lossy()
-                .into_owned()
+            utf16_ptr_to_string(buf.as_ptr())
         } else {
             String::new()
         }
