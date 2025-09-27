@@ -131,7 +131,7 @@ impl MsgWindow {
 
     fn do_close(hwnd: &HWND) {
         if !hwnd.0.is_null() {
-            log::debug!("🛑 Closing messages window");
+            log::debug!("Closing messages window");
             unsafe {
                 let _ = PostMessageW(Some(*hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
             }
@@ -150,9 +150,9 @@ impl MsgWindow {
         let stop_notify = self.stop_notify.clone();
         let hwnd_for_waiter = hwnd_shared.clone();
         let waiter_thread = std::thread::spawn(move || {
-            log::debug!("🕒 Waiting for stop notification");
+            log::debug!("Waiting for stop notification");
             stop_notify.wait();
-            log::debug!("🛑 Stop notification received, posting quit message");
+            log::debug!("Stop notification received, posting quit message");
             // Do load after stop notification to ensure the window is created
             let hwnd_val = hwnd_for_waiter.load(Ordering::SeqCst);
             if hwnd_val != 0 {
@@ -162,16 +162,16 @@ impl MsgWindow {
         });
 
         let stop_notify = self.stop_notify.clone();
-        log::debug!("🛠️ Creating invisible window for message processing on its own thread");
+        log::debug!("Creating invisible window for message processing on its own thread");
         let hwnd_val = Self::create_invisible_window(stop_notify).0 as isize;
         hwnd_for_msgs.store(hwnd_val, Ordering::SeqCst);
-        log::debug!("🕒 Waiting for messages");
+        log::debug!("Waiting for messages");
         let hwnd = HWND(hwnd_val as _);
         Self::process_messages(&hwnd);
         hwnd_for_msgs.store(0, Ordering::SeqCst); // Clear the hwnd after processing
 
         // If we stop, everyone should do it now also :)
-        log::debug!("🛑 Stop notification received, signaling stop");
+        log::debug!("Stop notification received, signaling stop");
         self.stop_notify.signal();
         // Wait for both threads to finish
         let _ = waiter_thread.join();
@@ -179,9 +179,9 @@ impl MsgWindow {
         // Sleep for a while to ensure the message processing is complete
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        log::debug!("🧹 Destroying invisible window after message processing");
+        log::debug!("Destroying invisible window after message processing");
         Self::destroy_window(&hwnd);
-        log::info!("🛠️ Message window task completed");
+        log::info!("Message window task completed");
     }
 }
 
@@ -199,7 +199,7 @@ extern "system" fn launcher_window_proc(
     unsafe {
         match msg {
             WM_CLOSE => {
-                log::debug!("🔔 Received message: WM_CLOSE {}", msg);
+                log::debug!("Received message: WM_CLOSE {}", msg);
                 if event.is_valid() {
                     event.signal();
                 }
@@ -207,7 +207,7 @@ extern "system" fn launcher_window_proc(
                 LRESULT(0)
             }
             WM_ENDSESSION => {
-                log::debug!("🔔 Received message: WM_ENDSESSION {}", msg);
+                log::debug!("Received message: WM_ENDSESSION {}", msg);
                 // Sleep a while to ensure the message is processed
                 if event.is_valid() {
                     event.signal();
@@ -216,7 +216,7 @@ extern "system" fn launcher_window_proc(
                 // Before posting quit message, we can do some cleanup if needed
                 log::debug!("Waiting for cleanup before quitting");
                 std::thread::sleep(std::time::Duration::from_millis(1500));
-                log::debug!("🛑 Ending session, posting quit message");
+                log::debug!("Ending session, posting quit message");
                 PostQuitMessage(0);
                 LRESULT(0)
             }

@@ -27,7 +27,6 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::sync::Arc;
 use windows::{
     Win32::Foundation::{CloseHandle, HANDLE},
-    core::Result,
 };
 
 #[derive(Debug)]
@@ -98,15 +97,13 @@ impl Drop for HandleInner {
 }
 
 // Implement only From for HANDLE -> SafeHandle (owned)
-impl TryFrom<HANDLE> for SafeHandle {
-    type Error = windows::core::Error;
-
-    fn try_from(handle: HANDLE) -> Result<Self> {
-        Ok(SafeHandle::new(handle))
+impl From<HANDLE> for SafeHandle {
+    fn from(handle: HANDLE) -> Self {
+        SafeHandle::new(handle)
     }
 }
 
-// AsRef para obtener el HANDLE sin mover
+// Dereference to HANDLE
 impl AsRef<HANDLE> for SafeHandle {
     fn as_ref(&self) -> &HANDLE {
         &self.inner.handle
@@ -115,17 +112,12 @@ impl AsRef<HANDLE> for SafeHandle {
 
 impl std::fmt::Display for SafeHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SafeHandle({:p})", self.inner.handle.0)
+        write!(f, "SafeHandle({:p}, {})", self.inner.handle.0, self.inner.owned)
     }
 }
 
 impl Default for SafeHandle {
     fn default() -> Self {
-        SafeHandle {
-            inner: Arc::new(HandleInner {
-                handle: HANDLE::default(),
-                owned: true,
-            }),
-        }
+        Self::new(HANDLE::default()) // Invalid handle, owned but does nothing on drop
     }
 }
