@@ -5,6 +5,7 @@ use shared::{
     windows::MsgWindow,
 };
 
+#[allow(dead_code)]
 pub struct WindowsSessionManager {
     stop_event: Event,
 }
@@ -38,8 +39,8 @@ impl SessionManagement for WindowsSessionManager {
     }
 }
 
-pub fn new_session_manager() -> impl SessionManagement {
-    WindowsSessionManager::new()
+pub fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+    std::sync::Arc::new(WindowsSessionManager::new())
 }
 
 #[cfg(test)]

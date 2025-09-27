@@ -25,6 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 
+mod http;
 mod rest;
 mod session;
 
@@ -39,6 +40,25 @@ mod windows;
 async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 
-    let _session_manager = session::new_session_manager();
-    //session_manager.wait().await;
+    let session_manager = session::new_session_manager();
+    let server_session_manager = session_manager.clone();
+
+    // Listener for the HTTP server
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+        .await
+        .unwrap();
+    let server_task = tokio::spawn(async move {
+        http::run_server(listener, server_session_manager).await;
+    });
+
+    tokio::select! {
+    _ = session_manager.wait() => {
+        shared::log::info!("Session manager signaled stop, shutting down");
+    }
+    res = server_task => {
+        if let Err(e) = res {
+            shared::log::error!("Server task failed: {}", e);
+        }
+    }
+    }
 }

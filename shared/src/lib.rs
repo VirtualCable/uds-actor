@@ -27,6 +27,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 pub mod log;
 pub mod sync;
 
+pub mod actions;
+
 #[cfg(target_os = "windows")]
 pub mod windows;
 

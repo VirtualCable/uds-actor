@@ -24,10 +24,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+pub mod actions;
+
 mod event;
 mod safe;
-mod messages;
+mod msgwindow;
 
-pub use messages::MsgWindow;
+pub use msgwindow::MsgWindow;
 pub use safe::SafeHandle;
 pub use event::WindowsEvent;

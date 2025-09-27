@@ -20,6 +20,9 @@ async-trait = "0.1.89"
 
 fltk = { version = "^1.5", features = ["fltk-bundled"] }
 
+axum = { version = "0.8.4", features = ["json", "tokio"] }
+base64 = "0.22.1"
+
 [build-dependencies]
 chrono = "0.4.42"
 winres = "0.1.12"
@@ -27,3 +30,5 @@ winres = "0.1.12"
 
 [dev-dependencies]
 mockito = "1.7.0"
+tower = "0.5.2"
+hyper = "1.7.0"

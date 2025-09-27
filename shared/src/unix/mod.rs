@@ -24,4 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub mod  event;
+mod event;
+pub mod actions;
+
+pub use event::UnixEvent;
