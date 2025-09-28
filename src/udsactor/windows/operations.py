@@ -202,6 +202,7 @@ def joinDomain(domain: str, ou: str, account: str, password: str, executeInOneSt
     # Machine found in another ou, use it and warn this on log
     if res == 2224:
         flags = DWORD(NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN)
+        
         res = ctypes.windll.netapi32.NetJoinDomain(  # type: ignore
             None, lpDomain, None, lpAccount, lpPassword, flags
         )
