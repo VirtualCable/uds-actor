@@ -28,6 +28,7 @@
 use std::process::Command;
 
 use widestring::{U16CStr, U16CString};
+use anyhow::Context;
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HANDLE},
@@ -69,22 +70,22 @@ use windows::{
 
 use crate::log;
 
-unsafe fn utf16_ptr_to_string(ptr: *const u16) -> String {
+unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
     if ptr.is_null() {
-        return "<unknown>".to_string();
+        return Ok("<unknown>".to_string());
     }
     // Reinterpret the pointer as a null-terminated UTF-16 string
     let u16cstr = unsafe { U16CStr::from_ptr_str(ptr) };
-    u16cstr.to_string_lossy()
+    Ok(u16cstr.to_string_lossy())
 }
 
-pub fn check_permissions() -> bool {
+pub fn check_permissions() -> anyhow::Result<bool> {
     // Use IsUserAnAdmin from shell32
     use windows::Win32::UI::Shell::IsUserAnAdmin;
-    unsafe { IsUserAnAdmin().as_bool() }
+    Ok(unsafe { IsUserAnAdmin().as_bool() })
 }
 
-fn get_network_info() -> Vec<(String, String, String)> {
+fn get_network_info() -> anyhow::Result<Vec<(String, String, String)>> {
     let mut buf_len: u32 = 32_768;
     let mut buf = vec![0u8; buf_len as usize];
     let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
@@ -100,7 +101,7 @@ fn get_network_info() -> Vec<(String, String, String)> {
     };
 
     if ret != 0 {
-        return vec![];
+        return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", ret));
     }
 
     let mut results = vec![];
@@ -109,7 +110,11 @@ fn get_network_info() -> Vec<(String, String, String)> {
             let adapter = &*adapters_ptr;
 
             let name = if !adapter.FriendlyName.is_null() {
-                utf16_ptr_to_string(adapter.FriendlyName.0)
+                // SAFETY: adapter.FriendlyName is a PWSTR-like wrapper; .0 is *mut u16
+                match utf16_ptr_to_string(adapter.FriendlyName.0 as *const u16) {
+                    Ok(s) => s,
+                    Err(_) => "<unknown>".to_string(),
+                }
             } else {
                 "<unknown>".to_string()
             };
@@ -127,10 +132,10 @@ fn get_network_info() -> Vec<(String, String, String)> {
         }
     }
 
-    results
+    Ok(results)
 }
 
-pub fn get_computer_name() -> String {
+pub fn get_computer_name() -> anyhow::Result<String> {
     let mut buf = [0u16; 512];
     let mut size = buf.len() as u32;
     unsafe {
@@ -141,14 +146,16 @@ pub fn get_computer_name() -> String {
         )
         .is_ok()
         {
-            utf16_ptr_to_string(buf.as_ptr())
+            // SAFETY: buf is populated by the Win32 call and null-terminated
+            let s = utf16_ptr_to_string(buf.as_ptr())?;
+            Ok(s)
         } else {
-            String::new()
+            Ok(String::new())
         }
     }
 }
 
-pub fn get_domain_name() -> windows::core::Result<Option<String>> {
+pub fn get_domain_name() -> anyhow::Result<Option<String>> {
     unsafe {
         let mut buffer = PWSTR::null();
         let mut status = NetSetupUnknownStatus;
@@ -157,12 +164,12 @@ pub fn get_domain_name() -> windows::core::Result<Option<String>> {
         let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
 
         if ret != 0 {
-            return Err(windows::core::Error::from_thread());
+            return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
         }
 
         // Convertir el PWSTR devuelto a String
         let domain = if !buffer.is_null() {
-            let s = windows::core::PWSTR(buffer.0).to_string()?;
+            let s = utf16_ptr_to_string(buffer.0 as *const u16)?;
             // Liberar memoria asignada por NetGetJoinInformation
             NetApiBufferFree(Some(buffer.0 as _));
             s
@@ -179,21 +186,20 @@ pub fn get_domain_name() -> windows::core::Result<Option<String>> {
     }
 }
 
-pub fn rename_computer(new_name: &str) -> bool {
+pub fn rename_computer(new_name: &str) -> anyhow::Result<()> {
     // On tests, return early to not rename the test machine :D
     if cfg!(test) {
-        return true;
+        return Ok(());
     }
-    let wname = U16CString::from_str(new_name).unwrap();
+    let wname = U16CString::from_str(new_name)
+        .context("failed to convert new computer name to UTF-16")?;
     unsafe {
         if let Err(e) = SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr()))
         {
-            log::error!("Failed to rename computer: {}", e.message());
-            false
-        } else {
-            true
+            return Err(anyhow::anyhow!("Failed to rename computer: {}", e));
         }
     }
+    Ok(())
 }
 
 pub fn join_domain(
@@ -202,7 +208,7 @@ pub fn join_domain(
     account: &str,
     password: &str,
     execute_in_one_step: bool,
-) -> windows::core::Result<()> {
+)-> anyhow::Result<()> {
     unsafe {
         // Construir credenciales estilo user@domain si hace falta
         let mut account_str = account.to_string();
@@ -222,10 +228,16 @@ pub fn join_domain(
         }
 
         // Convert to utf16
-        let lp_domain = U16CString::from_str(domain).unwrap();
-        let lp_ou = ou.map(|s| U16CString::from_str(s).unwrap());
-        let lp_account = U16CString::from_str(&account_str).unwrap();
-        let lp_password = U16CString::from_str(password).unwrap();
+        let lp_domain = U16CString::from_str(domain)
+            .context("failed to convert domain to UTF-16")?;
+        let lp_ou = match ou {
+            Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
+            None => None,
+        };
+        let lp_account = U16CString::from_str(&account_str)
+            .context("failed to convert account to UTF-16")?;
+        let lp_password = U16CString::from_str(password)
+            .context("failed to convert password to UTF-16")?;
 
         // Call
         let mut res = NetJoinDomain(
@@ -258,7 +270,7 @@ pub fn join_domain(
         if res == 0 {
             Ok(())
         } else {
-            Err(windows::core::Error::from_thread())
+            Err(anyhow::anyhow!("NetJoinDomain failed: {}", res))
         }
     }
 }
@@ -267,11 +279,11 @@ pub fn change_user_password(
     user: &str,
     old_password: &str,
     new_password: &str,
-) -> windows::core::Result<()> {
+) -> anyhow::Result<()> {
     unsafe {
-        let user_w = U16CString::from_str(user).unwrap();
-        let old_w = U16CString::from_str(old_password).unwrap();
-        let new_w = U16CString::from_str(new_password).unwrap();
+        let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
+        let old_w = U16CString::from_str(old_password).context("invalid old password UTF-16")?;
+        let new_w = U16CString::from_str(new_password).context("invalid new password UTF-16")?;
 
         let res = NetUserChangePassword(
             PCWSTR::null(), // NULL = máquina local
@@ -283,43 +295,43 @@ pub fn change_user_password(
         if res == 0 {
             Ok(())
         } else {
-            Err(windows::core::Error::from_thread())
+            Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
         }
     }
 }
 
-pub fn get_windows_version() -> (u32, u32, u32, u32, String) {
+pub fn get_windows_version() -> anyhow::Result<(u32, u32, u32, u32, String)> {
     unsafe {
         let mut info = OSVERSIONINFOW {
             dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
             ..Default::default()
         };
         if GetVersionExW(&mut info).is_ok() {
-            let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr());
-            (
+            let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr())?;
+            Ok((
                 info.dwMajorVersion,
                 info.dwMinorVersion,
                 info.dwBuildNumber,
                 info.dwPlatformId,
                 sz_cstr,
-            )
+            ))
         } else {
-            (0, 0, 0, 0, String::new())
+            Err(anyhow::anyhow!("GetVersionExW failed"))
         }
     }
 }
 
-pub fn get_os_version() -> String {
-    let (major, minor, build, _platform, csd) = get_windows_version();
-    format!("Windows-{}.{} Build {} ({})", major, minor, build, csd)
+pub fn get_os_version() -> anyhow::Result<String> {
+    let (major, minor, build, _platform, csd) = get_windows_version()?;
+    Ok(format!("Windows-{}.{} Build {} ({})", major, minor, build, csd))
 }
 
-pub fn reboot(flags: Option<EXIT_WINDOWS_FLAGS>) {
+pub fn reboot(flags: Option<EXIT_WINDOWS_FLAGS>) -> anyhow::Result<()> {
     // On tests, return early to not reboot the test machine :D
     log::debug!("Reboot called with flags: {:?}", flags);
 
     if cfg!(test) {
-        return;
+        return Ok(());
     }
 
     let flags = flags.unwrap_or(EWX_FORCEIFHUNG | EWX_REBOOT);
@@ -341,25 +353,28 @@ pub fn reboot(flags: Option<EXIT_WINDOWS_FLAGS>) {
         }
         _ = ExitWindowsEx(flags, SHUTDOWN_REASON(0));
     }
+    Ok(())
 }
 
-pub fn logoff() {
+pub fn logoff() -> anyhow::Result<()> {
     log::debug!("Logoff called");
     // On tests, return early to not logoff the test machine :D
     if cfg!(test) {
-        return;
+        return Ok(());
     }
     unsafe {
         _ = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
     }
+    Ok(())
 }
 
-pub fn init_idle_timer() {
+pub fn init_idle_timer() -> anyhow::Result<()> {
     // Just a stub for compatibility with other OSes
     // On Windows, we don't need to initialize anything
+    Ok(())
 }
 
-pub fn get_idle_duration() -> f64 {
+pub fn get_idle_duration() -> anyhow::Result<f64> {
     unsafe {
         let mut lii = LASTINPUTINFO {
             cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
@@ -372,34 +387,33 @@ pub fn get_idle_duration() -> f64 {
                 current += 0x1_0000_0000; // Handle overflow of GetTickCount
             }
             let millis = current - dwtime;
-            millis as f64 / 1000.0
+            Ok(millis as f64 / 1000.0)
         } else {
-            0.0
+            Ok(0.0)
         }
     }
 }
 
-pub fn get_current_user() -> String {
+pub fn get_current_user() -> anyhow::Result<String> {
     let mut buf = [0u16; 256];
     let mut size = buf.len() as u32;
     unsafe {
         if GetUserNameW(Some(PWSTR(buf.as_mut_ptr())), &mut size).is_ok() {
-            utf16_ptr_to_string(buf.as_ptr())
+            let s = utf16_ptr_to_string(buf.as_ptr())?;
+            Ok(s)
         } else {
-            String::new()
+            Ok(String::new())
         }
     }
 }
 
-pub fn get_session_type() -> String {
+pub fn get_session_type() -> anyhow::Result<String> {
     let env_var = std::env::var("SESSIONNAME");
     if let Ok(session_name) = env_var {
-        return session_name;
+        return Ok(session_name);
     }
-    {
-        log::warn!("SESSIONNAME environment variable is not set");
-        "unknown".to_string()
-    }
+    log::warn!("SESSIONNAME environment variable is not set");
+    Ok("unknown".to_string())
 }
 
 pub fn force_time_sync() -> anyhow::Result<()> {
@@ -417,7 +431,8 @@ pub fn force_time_sync() -> anyhow::Result<()> {
 pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
     unsafe {
         // Convertir ruta a UTF-16
-        let path_w = U16CString::from_str(path).unwrap();
+        let path_w = U16CString::from_str(path)
+            .context("failed to convert path to UTF-16 for SetNamedSecurityInfoW")?;
 
         // 1. Resolver SID del usuario actual
         let mut sid: [u8; 256] = [0; 256];
@@ -426,10 +441,10 @@ pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
         let mut domain_size = domain.len() as u32;
         let mut sid_name_use = SidTypeUnknown;
 
-        let user = get_current_user();
-        let user_w = U16CString::from_str(&user).unwrap();
+        let user = get_current_user()?;
+        let user_w = U16CString::from_str(&user).context("failed to convert username to UTF-16")?;
 
-        if let Err(e) = LookupAccountNameW(
+        LookupAccountNameW(
             None,
             PCWSTR(user_w.as_ptr()),
             Some(PSID(sid.as_mut_ptr() as _)),
@@ -437,22 +452,22 @@ pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
             Some(PWSTR(domain.as_mut_ptr())),
             &mut domain_size,
             &mut sid_name_use,
-        ) {
-            log::error!("Failed to lookup account name: {}", e.message());
-            return Err(e.into());
-        }
+        )
+        .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
 
         // 2. Crear ACL con una ACE que da acceso total al SID
         let mut acl_buf = vec![0u8; 1024];
         let acl = acl_buf.as_mut_ptr() as *mut ACL;
-        InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)?;
+        InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)
+            .map_err(|e| anyhow::anyhow!("InitializeAcl failed: {}", e))?;
 
         AddAccessAllowedAce(
             acl,
             ACL_REVISION,
             FILE_ALL_ACCESS.0,
             PSID(sid.as_mut_ptr() as _),
-        )?;
+        )
+        .map_err(|e| anyhow::anyhow!("AddAccessAllowedAce failed: {}", e))?;
 
         // 3. Aplicar la nueva DACL al fichero
         let err = SetNamedSecurityInfoW(
@@ -466,8 +481,7 @@ pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
         );
 
         if err.0 != 0 {
-            log::error!("Failed to set security info: {}", err.0);
-            return Err(windows::core::Error::from_thread().into());
+            return Err(anyhow::anyhow!("SetNamedSecurityInfoW failed: {}", err.0));
         }
 
         Ok(())
