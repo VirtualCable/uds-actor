@@ -25,27 +25,39 @@
 // Author: Adolfo Gómez, dkmaster at dkmon dot com
 
 #![allow(dead_code)]
-use widestring::{U16CStr, U16CString, U16String};
+use std::process::Command;
+
+use widestring::{U16CStr, U16CString};
 use windows::{
     Win32::{
-        Foundation::{CloseHandle, GetLastError, HANDLE, WIN32_ERROR},
-        NetworkManagement::IpHelper::{
-            GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+        Foundation::{CloseHandle, HANDLE},
+        NetworkManagement::{
+            IpHelper::{
+                GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+            },
+            NetManagement::{
+                NETSETUP_ACCT_CREATE, NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN,
+                NETSETUP_JOIN_WITH_NEW_NAME, NetApiBufferFree, NetGetJoinInformation,
+                NetJoinDomain, NetSetupDomainName, NetSetupUnknownStatus, NetUserChangePassword,
+            },
         },
         Networking::WinSock::AF_INET,
         Security::{
-            AdjustTokenPrivileges, LookupPrivilegeValueW, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME,
-            TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+            ACL, ACL_REVISION, AddAccessAllowedAce, AdjustTokenPrivileges,
+            Authorization::{SE_FILE_OBJECT, SetNamedSecurityInfoW},
+            DACL_SECURITY_INFORMATION, InitializeAcl, LookupAccountNameW, LookupPrivilegeValueW,
+            PSID, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME, SidTypeUnknown, TOKEN_ADJUST_PRIVILEGES,
+            TOKEN_PRIVILEGES, TOKEN_QUERY,
         },
+        Storage::FileSystem::FILE_ALL_ACCESS,
         System::{
-            Diagnostics::Debug::{FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW},
             Shutdown::{
                 EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, EXIT_WINDOWS_FLAGS, ExitWindowsEx,
                 SHUTDOWN_REASON,
             },
             SystemInformation::{
-                COMPUTER_NAME_FORMAT, ComputerNamePhysicalDnsHostname, GetComputerNameExW,
-                GetTickCount, GetVersionExW, OSVERSIONINFOW, SetComputerNameExW,
+                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW,
+                OSVERSIONINFOW, SetComputerNameExW,
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
             WindowsProgramming::GetUserNameW,
@@ -70,40 +82,6 @@ pub fn check_permissions() -> bool {
     // Use IsUserAnAdmin from shell32
     use windows::Win32::UI::Shell::IsUserAnAdmin;
     unsafe { IsUserAnAdmin().as_bool() }
-}
-
-pub fn get_error_message(result_code: WIN32_ERROR) -> String {
-    let mut buf = [0u16; 512];
-    unsafe {
-        let len = FormatMessageW(
-            FORMAT_MESSAGE_FROM_SYSTEM,
-            None,
-            result_code.0,
-            0,
-            PWSTR(buf.as_mut_ptr()),
-            buf.len() as u32,
-            None,
-        );
-        U16String::from_vec(buf[..len as usize].to_vec()).to_string_lossy()
-    }
-}
-
-pub fn get_computer_name() -> String {
-    let mut buf = [0u16; 512];
-    let mut size = buf.len() as u32;
-    unsafe {
-        if GetComputerNameExW(
-            COMPUTER_NAME_FORMAT(5),
-            Some(PWSTR(buf.as_mut_ptr())),
-            &mut size,
-        )
-        .is_ok()
-        {
-            utf16_ptr_to_string(buf.as_ptr())
-        } else {
-            String::new()
-        }
-    }
 }
 
 fn get_network_info() -> Vec<(String, String, String)> {
@@ -152,8 +130,162 @@ fn get_network_info() -> Vec<(String, String, String)> {
     results
 }
 
-pub fn get_domain_name() -> String {
-    String::new()
+pub fn get_computer_name() -> String {
+    let mut buf = [0u16; 512];
+    let mut size = buf.len() as u32;
+    unsafe {
+        if GetComputerNameExW(
+            ComputerNamePhysicalDnsHostname,
+            Some(PWSTR(buf.as_mut_ptr())),
+            &mut size,
+        )
+        .is_ok()
+        {
+            utf16_ptr_to_string(buf.as_ptr())
+        } else {
+            String::new()
+        }
+    }
+}
+
+pub fn get_domain_name() -> windows::core::Result<Option<String>> {
+    unsafe {
+        let mut buffer = PWSTR::null();
+        let mut status = NetSetupUnknownStatus;
+
+        // lpServer = None → máquina local
+        let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
+
+        if ret != 0 {
+            return Err(windows::core::Error::from_thread());
+        }
+
+        // Convertir el PWSTR devuelto a String
+        let domain = if !buffer.is_null() {
+            let s = windows::core::PWSTR(buffer.0).to_string()?;
+            // Liberar memoria asignada por NetGetJoinInformation
+            NetApiBufferFree(Some(buffer.0 as _));
+            s
+        } else {
+            String::new()
+        };
+
+        // Only return if joined to a domain
+        if status == NetSetupDomainName {
+            Ok(Some(domain))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+pub fn rename_computer(new_name: &str) -> bool {
+    // On tests, return early to not rename the test machine :D
+    if cfg!(test) {
+        return true;
+    }
+    let wname = U16CString::from_str(new_name).unwrap();
+    unsafe {
+        if let Err(e) = SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr()))
+        {
+            log::error!("Failed to rename computer: {}", e.message());
+            false
+        } else {
+            true
+        }
+    }
+}
+
+pub fn join_domain(
+    domain: &str,
+    ou: Option<&str>,
+    account: &str,
+    password: &str,
+    execute_in_one_step: bool,
+) -> windows::core::Result<()> {
+    unsafe {
+        // Construir credenciales estilo user@domain si hace falta
+        let mut account_str = account.to_string();
+        if !account.contains('@') && !account.contains('\\') {
+            if domain.contains('.') {
+                account_str = format!("{}@{}", account, domain);
+            } else {
+                account_str = format!("{}\\{}", domain, account);
+            }
+        }
+
+        // Flags
+        let mut flags =
+            NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+        if execute_in_one_step {
+            flags |= NETSETUP_JOIN_WITH_NEW_NAME;
+        }
+
+        // Convert to utf16
+        let lp_domain = U16CString::from_str(domain).unwrap();
+        let lp_ou = ou.map(|s| U16CString::from_str(s).unwrap());
+        let lp_account = U16CString::from_str(&account_str).unwrap();
+        let lp_password = U16CString::from_str(password).unwrap();
+
+        // Call
+        let mut res = NetJoinDomain(
+            PCWSTR::null(),
+            PCWSTR(lp_domain.as_ptr()),
+            lp_ou
+                .as_ref()
+                .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+            PCWSTR(lp_account.as_ptr()),
+            PCWSTR(lp_password.as_ptr()),
+            flags,
+        );
+
+        // If the error is "already joined", try again with less flags (no create account, use existing)
+        // This may happen if the account already exists on another ou
+        if res == 2224 {
+            let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+            res = NetJoinDomain(
+                PCWSTR::null(),
+                PCWSTR(lp_domain.as_ptr()),
+                lp_ou
+                    .as_ref()
+                    .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                PCWSTR(lp_account.as_ptr()),
+                PCWSTR(lp_password.as_ptr()),
+                flags,
+            );
+        }
+
+        if res == 0 {
+            Ok(())
+        } else {
+            Err(windows::core::Error::from_thread())
+        }
+    }
+}
+
+pub fn change_user_password(
+    user: &str,
+    old_password: &str,
+    new_password: &str,
+) -> windows::core::Result<()> {
+    unsafe {
+        let user_w = U16CString::from_str(user).unwrap();
+        let old_w = U16CString::from_str(old_password).unwrap();
+        let new_w = U16CString::from_str(new_password).unwrap();
+
+        let res = NetUserChangePassword(
+            PCWSTR::null(), // NULL = máquina local
+            PCWSTR(user_w.as_ptr()),
+            PCWSTR(old_w.as_ptr()),
+            PCWSTR(new_w.as_ptr()),
+        );
+
+        if res == 0 {
+            Ok(())
+        } else {
+            Err(windows::core::Error::from_thread())
+        }
+    }
 }
 
 pub fn get_windows_version() -> (u32, u32, u32, u32, String) {
@@ -177,7 +309,7 @@ pub fn get_windows_version() -> (u32, u32, u32, u32, String) {
     }
 }
 
-pub fn get_version() -> String {
+pub fn get_os_version() -> String {
     let (major, minor, build, _platform, csd) = get_windows_version();
     format!("Windows-{}.{} Build {} ({})", major, minor, build, csd)
 }
@@ -222,21 +354,9 @@ pub fn logoff() {
     }
 }
 
-pub fn rename_computer(new_name: &str) -> bool {
-    // On tests, return early to not rename the test machine :D
-    if cfg!(test) {
-        return true;
-    }
-    let wname = U16CString::from_str(new_name).unwrap();
-    unsafe {
-        if SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr())).is_ok() {
-            true
-        } else {
-            let error = get_error_message(GetLastError());
-            log::error!("Failed to rename computer: {}", error);
-            false
-        }
-    }
+pub fn init_idle_timer() {
+    // Just a stub for compatibility with other OSes
+    // On Windows, we don't need to initialize anything
 }
 
 pub fn get_idle_duration() -> f64 {
@@ -279,5 +399,77 @@ pub fn get_session_type() -> String {
     {
         log::warn!("SESSIONNAME environment variable is not set");
         "unknown".to_string()
+    }
+}
+
+pub fn force_time_sync() -> anyhow::Result<()> {
+    let status = Command::new(r"C:\Windows\System32\w32tm.exe")
+        .arg("/resync")
+        .status()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("w32tm /resync failed with {:?}", status);
+    }
+}
+
+pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
+    unsafe {
+        // Convertir ruta a UTF-16
+        let path_w = U16CString::from_str(path).unwrap();
+
+        // 1. Resolver SID del usuario actual
+        let mut sid: [u8; 256] = [0; 256];
+        let mut sid_size = sid.len() as u32;
+        let mut domain: [u16; 256] = [0; 256];
+        let mut domain_size = domain.len() as u32;
+        let mut sid_name_use = SidTypeUnknown;
+
+        let user = get_current_user();
+        let user_w = U16CString::from_str(&user).unwrap();
+
+        if let Err(e) = LookupAccountNameW(
+            None,
+            PCWSTR(user_w.as_ptr()),
+            Some(PSID(sid.as_mut_ptr() as _)),
+            &mut sid_size,
+            Some(PWSTR(domain.as_mut_ptr())),
+            &mut domain_size,
+            &mut sid_name_use,
+        ) {
+            log::error!("Failed to lookup account name: {}", e.message());
+            return Err(e.into());
+        }
+
+        // 2. Crear ACL con una ACE que da acceso total al SID
+        let mut acl_buf = vec![0u8; 1024];
+        let acl = acl_buf.as_mut_ptr() as *mut ACL;
+        InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)?;
+
+        AddAccessAllowedAce(
+            acl,
+            ACL_REVISION,
+            FILE_ALL_ACCESS.0,
+            PSID(sid.as_mut_ptr() as _),
+        )?;
+
+        // 3. Aplicar la nueva DACL al fichero
+        let err = SetNamedSecurityInfoW(
+            PCWSTR(path_w.as_ptr()),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            Some(acl),
+            None,
+        );
+
+        if err.0 != 0 {
+            log::error!("Failed to set security info: {}", err.0);
+            return Err(windows::core::Error::from_thread().into());
+        }
+
+        Ok(())
     }
 }
