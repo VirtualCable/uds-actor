@@ -42,7 +42,12 @@ async fn message(Json(req): Json<types::MessageRequest>) -> &'static str {
 pub async fn run_server(
     listener: tokio::net::TcpListener,
     platform: Platform,
-) {
+) -> anyhow::Result<()> {
+    // Register with server
+    let api = platform.api();
+    let callback_url = format!("http://{}", listener.local_addr().unwrap());
+    api.write().await.register(&callback_url).await?;
+
     let app = Router::new()
         .route("/ping", post(ping))
         .route("/logout", post(logout))
@@ -60,18 +65,30 @@ pub async fn run_server(
         platform.session_manager().wait().await;
     });
 
-    if let Err(e) = server.await {
-        eprintln!("server error: {e}");
-    }
+    let res = server
+        .await
+        .map_err(|e| anyhow::anyhow!("Server error: {}", e));
+
+    // Unregister from server
+    let _ = api.write().await.unregister().await;
+    res
 }
 
 // Test implementations for actions
 #[cfg(test)]
 mod fake_actions {
-    pub async fn logoff() -> Result<(), ()> { Ok(()) }
-    pub async fn screenshot() -> Result<Vec<u8>, ()> { Ok(vec![0x89, 0x50, 0x4E, 0x47]) } // PNG header
-    pub async fn run_script(_s: &str) -> Result<String, ()> { Ok("ok".into()) }
-    pub async fn show_message(_m: &str) -> Result<String, ()> { Ok("ok".into()) }
+    pub async fn logoff() -> Result<(), ()> {
+        Ok(())
+    }
+    pub async fn screenshot() -> Result<Vec<u8>, ()> {
+        Ok(vec![0x89, 0x50, 0x4E, 0x47])
+    } // PNG header
+    pub async fn run_script(_s: &str) -> Result<String, ()> {
+        Ok("ok".into())
+    }
+    pub async fn show_message(_m: &str) -> Result<String, ()> {
+        Ok("ok".into())
+    }
 }
 
 #[cfg(test)]

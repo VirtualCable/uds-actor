@@ -34,14 +34,14 @@ use serde_json::json;
 
 // Helper to create a ClientRestApi pointing to mockito server
 // Helper to create a mockito server and a ClientRestApi pointing to it
-async fn setup_server_and_api() -> (mockito::ServerGuard, ClientRestApi) {
+async fn setup_server_and_api() -> (mockito::ServerGuard, ClientRestSession) {
     log::setup_logging("debug", log::LogType::Tests);
 
     info!("Setting up mock server and API client");
     let server = Server::new_async().await;
     let url = server.url();
     // Pass the base url (without /ui) to the API
-    (server, ClientRestApi::new(&url, false))
+    (server, ClientRestSession::new(&url, false))
 }
 
 
@@ -87,7 +87,7 @@ async fn test_login() {
         callback_url: "cb".to_string(),
     };
 
-    let login_resp_str = r#"{"ip": "127.0.0.1", "hostname": "localhost", "deadline": "2025-01-01T00:00:00Z", "max_idle": 300, "session_id": "sessid"}"#;
+    let login_resp_str = r#"{"ip": "127.0.0.1", "hostname": "localhost", "deadline": 10000, "max_idle": 300, "session_id": "sessid"}"#;
     let _m = server
         .mock("POST", "/ui/login")
         .match_header("content-type", "application/json")

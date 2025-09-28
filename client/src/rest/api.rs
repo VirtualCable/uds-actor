@@ -25,16 +25,38 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 
-use std::time::Duration;
 use reqwest::Client;
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
 
 use super::types::*;
 
 use shared::debug_dev;
 
+/// Trait that abstracts the REST client functionality for easier testing.
+#[allow(dead_code)]
+#[async_trait]
+pub trait ClientRest: Send + Sync {
+    async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error>;
+    async fn unregister(&mut self) -> Result<(), reqwest::Error>;
+    async fn login(
+        &mut self,
+        username: &str,
+        session_type: Option<&str>,
+    ) -> Result<LoginResponse, reqwest::Error>;
+    async fn logout(
+        &self,
+        username: &str,
+        session_type: Option<&str>,
+    ) -> Result<(), reqwest::Error>;
+    async fn ping(&self) -> Result<bool, reqwest::Error>;
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub(crate) struct ClientRestApi {
+pub(crate) struct ClientRestSession {
     client: Client,
     base_url: String,
     session_id: String,
@@ -42,7 +64,7 @@ pub(crate) struct ClientRestApi {
 }
 
 #[allow(dead_code)]
-impl ClientRestApi {
+impl ClientRestSession {
     /// Creates a new ClientRestApi. `base_url` should NOT include the trailing `/ui`.
     pub fn new(base_url: &str, verify_cert: bool) -> Self {
         let client = Client::builder()
@@ -53,7 +75,7 @@ impl ClientRestApi {
 
         let base_url = format!("{}/ui/", base_url.trim_end_matches('/'));
 
-        ClientRestApi {
+        ClientRestSession {
             client,
             base_url,
             session_id: String::new(),
@@ -90,8 +112,11 @@ impl ClientRestApi {
             .await?;
         Ok(res)
     }
+}
 
-    pub async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
+#[async_trait]
+impl ClientRest for ClientRestSession {
+    async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
         self.set_callback_url(callback_url);
         let payload = RegisterRequest {
             callback_url: self.callback_url.clone(),
@@ -100,7 +125,7 @@ impl ClientRestApi {
         Ok(())
     }
 
-    pub async fn unregister(&mut self) -> Result<(), reqwest::Error> {
+    async fn unregister(&mut self) -> Result<(), reqwest::Error> {
         let payload = UnregisterRequest {
             callback_url: self.callback_url.clone(),
         };
@@ -109,7 +134,7 @@ impl ClientRestApi {
         Ok(())
     }
 
-    pub async fn login(
+    async fn login(
         &mut self,
         username: &str,
         session_type: Option<&str>,
@@ -124,7 +149,11 @@ impl ClientRestApi {
         Ok(result)
     }
 
-    pub async fn logout(&self, username: &str, session_type: Option<&str>) -> Result<(), reqwest::Error> {
+    async fn logout(
+        &self,
+        username: &str,
+        session_type: Option<&str>,
+    ) -> Result<(), reqwest::Error> {
         let payload = LogoutRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
@@ -135,9 +164,15 @@ impl ClientRestApi {
         Ok(())
     }
 
-    pub async fn ping(&self) -> Result<bool, reqwest::Error> {
+    async fn ping(&self) -> Result<bool, reqwest::Error> {
         let payload = PingRequest::default();
         let result: PingResponse = self.post("ping", &payload).await?;
         Ok(result.0 == "pong")
     }
+}
+
+/// Create a new shared, thread-safe client implementing `ClientRest`.
+#[allow(dead_code)]
+pub fn new_client_rest_api() -> Arc<tokio::sync::RwLock<dyn ClientRest>> {
+    Arc::new(tokio::sync::RwLock::new(ClientRestSession::new("https://127.0.0.1:43910", false)))
 }

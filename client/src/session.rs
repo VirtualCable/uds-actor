@@ -1,6 +1,6 @@
 #[async_trait::async_trait]
 #[allow(dead_code)]
-pub trait SessionManagement {
+pub trait SessionManagement: Send + Sync {
     async fn wait(&self);
     // Returns true if the session is still running after the timeout
     async fn wait_timeout(&self, timeout: std::time::Duration) -> bool;

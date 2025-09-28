@@ -7,7 +7,7 @@
 // The Windows implementation will convert those into the appropriate
 // Windows-specific types.
 
-pub trait Operations {
+pub trait Operations: Send + Sync {
     fn check_permissions(&self) -> anyhow::Result<bool>;
 
     fn get_computer_name(&self) -> anyhow::Result<String>;

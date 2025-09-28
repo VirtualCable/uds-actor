@@ -44,10 +44,10 @@ impl crate::session::SessionManagement for DummySessionManager {
 
 /// Helper que arranca el servidor real en background y devuelve todo lo necesario
 async fn spawn_server() -> (
-    String,         // base URL (ej. "http://127.0.0.1:12345")
-    Platform,       // el manager para poder hacer stop()
-    JoinHandle<()>, // handle del servidor
-    Client,         // cliente HTTP
+    String,                         // base URL (ej. "http://127.0.0.1:12345")
+    Platform,                       // el manager para poder hacer stop()
+    JoinHandle<anyhow::Result<()>>, // handle del servidor
+    Client,                         // cliente HTTP
 ) {
     let manager = Arc::new(DummySessionManager::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -55,9 +55,7 @@ async fn spawn_server() -> (
 
     let platform = crate::platform::Platform::new_with_params(Some(manager.clone()), None, None);
     let plaform_task = platform.clone();
-    let handle = tokio::spawn(async move {
-        run_server(listener, plaform_task).await;
-    });
+    let handle = tokio::spawn(async move { run_server(listener, plaform_task).await });
 
     let client = Client::new();
     (format!("http://{}", addr), platform, handle, client)
@@ -76,7 +74,7 @@ async fn test_ping() {
     assert_eq!(res.text().await.unwrap(), "pong");
 
     platform.session_manager().stop().await;
-    handle.await.unwrap();
+    assert!(handle.await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -92,7 +90,7 @@ async fn test_logout() {
     assert_eq!(res.text().await.unwrap(), "ok");
 
     // logout ya hace stop() → el servidor termina solo
-    handle.await.unwrap();
+    assert!(handle.await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -114,7 +112,7 @@ async fn test_screenshot() {
     assert!(decoded.starts_with(&[0x89, 0x50, 0x4E, 0x47]));
 
     platform.session_manager().stop().await;
-    handle.await.unwrap();
+    assert!(handle.await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -131,7 +129,7 @@ async fn test_script() {
     assert_eq!(res.text().await.unwrap(), "ok");
 
     platform.session_manager().stop().await;
-    handle.await.unwrap();
+    assert!(handle.await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -148,5 +146,5 @@ async fn test_message() {
     assert_eq!(res.text().await.unwrap(), "ok");
 
     platform.session_manager().stop().await;
-    handle.await.unwrap();
+    assert!(handle.await.unwrap().is_ok());
 }
