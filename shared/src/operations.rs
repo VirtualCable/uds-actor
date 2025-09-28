@@ -66,3 +66,6 @@ pub trait Operations {
 // module).
 #[cfg(target_os = "windows")]
 pub use crate::windows::operations::WindowsOperations as WindowsOperationsImpl;
+
+#[cfg(target_family = "unix")]
+pub use crate::unix::operations::UnixOperations as UnixOperationsImpl;
