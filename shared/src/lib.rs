@@ -35,6 +35,8 @@ pub mod windows;
 #[cfg(not(target_os = "windows"))]
 pub mod unix;
 
+pub mod operations;
+
 #[macro_export]
 macro_rules! debug_dev {
     ($($arg:tt)*) => {

@@ -27,8 +27,8 @@
 #![allow(dead_code)]
 use std::process::Command;
 
-use widestring::{U16CStr, U16CString};
 use anyhow::Context;
+use widestring::{U16CStr, U16CString};
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HANDLE},
@@ -52,10 +52,7 @@ use windows::{
         },
         Storage::FileSystem::FILE_ALL_ACCESS,
         System::{
-            Shutdown::{
-                EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, EXIT_WINDOWS_FLAGS, ExitWindowsEx,
-                SHUTDOWN_REASON,
-            },
+            Shutdown::{EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, ExitWindowsEx, SHUTDOWN_REASON},
             SystemInformation::{
                 ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW,
                 OSVERSIONINFOW, SetComputerNameExW,
@@ -79,183 +76,130 @@ unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
     Ok(u16cstr.to_string_lossy())
 }
 
-pub fn check_permissions() -> anyhow::Result<bool> {
-    // Use IsUserAnAdmin from shell32
-    use windows::Win32::UI::Shell::IsUserAnAdmin;
-    Ok(unsafe { IsUserAnAdmin().as_bool() })
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WindowsOperations;
+
+impl WindowsOperations {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
-fn get_network_info() -> anyhow::Result<Vec<(String, String, String)>> {
-    let mut buf_len: u32 = 32_768;
-    let mut buf = vec![0u8; buf_len as usize];
-    let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
-
-    let ret = unsafe {
-        GetAdaptersAddresses(
-            AF_INET.0 as _,
-            GET_ADAPTERS_ADDRESSES_FLAGS(0),
-            None,
-            Some(adapters_ptr),
-            &mut buf_len,
-        )
-    };
-
-    if ret != 0 {
-        return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", ret));
+impl crate::operations::Operations for WindowsOperations {
+    fn check_permissions(&self) -> anyhow::Result<bool> {
+        // Use IsUserAnAdmin from shell32
+        use windows::Win32::UI::Shell::IsUserAnAdmin;
+        Ok(unsafe { IsUserAnAdmin().as_bool() })
     }
 
-    let mut results = vec![];
-    unsafe {
-        while !adapters_ptr.is_null() {
-            let adapter = &*adapters_ptr;
-
-            let name = if !adapter.FriendlyName.is_null() {
-                // SAFETY: adapter.FriendlyName is a PWSTR-like wrapper; .0 is *mut u16
-                match utf16_ptr_to_string(adapter.FriendlyName.0 as *const u16) {
-                    Ok(s) => s,
-                    Err(_) => "<unknown>".to_string(),
-                }
+    fn get_computer_name(&self) -> anyhow::Result<String> {
+        let mut buf = [0u16; 512];
+        let mut size = buf.len() as u32;
+        unsafe {
+            if GetComputerNameExW(
+                ComputerNamePhysicalDnsHostname,
+                Some(PWSTR(buf.as_mut_ptr())),
+                &mut size,
+            )
+            .is_ok()
+            {
+                // SAFETY: buf is populated by the Win32 call and null-terminated
+                let s = utf16_ptr_to_string(buf.as_ptr())?;
+                Ok(s)
             } else {
-                "<unknown>".to_string()
-            };
-
-            let mac = (0..adapter.PhysicalAddressLength)
-                .map(|i| format!("{:02X}", adapter.PhysicalAddress[i as usize]))
-                .collect::<Vec<_>>()
-                .join(":");
-
-            // Aquí podrías recorrer adapter.FirstUnicastAddress para obtener IPs
-
-            results.push((name, mac, "<ip>".to_string())); // IP real omitida por simplicidad
-
-            adapters_ptr = adapter.Next;
-        }
-    }
-
-    Ok(results)
-}
-
-pub fn get_computer_name() -> anyhow::Result<String> {
-    let mut buf = [0u16; 512];
-    let mut size = buf.len() as u32;
-    unsafe {
-        if GetComputerNameExW(
-            ComputerNamePhysicalDnsHostname,
-            Some(PWSTR(buf.as_mut_ptr())),
-            &mut size,
-        )
-        .is_ok()
-        {
-            // SAFETY: buf is populated by the Win32 call and null-terminated
-            let s = utf16_ptr_to_string(buf.as_ptr())?;
-            Ok(s)
-        } else {
-            Ok(String::new())
-        }
-    }
-}
-
-pub fn get_domain_name() -> anyhow::Result<Option<String>> {
-    unsafe {
-        let mut buffer = PWSTR::null();
-        let mut status = NetSetupUnknownStatus;
-
-        // lpServer = None → máquina local
-        let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
-
-        if ret != 0 {
-            return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
-        }
-
-        // Convertir el PWSTR devuelto a String
-        let domain = if !buffer.is_null() {
-            let s = utf16_ptr_to_string(buffer.0 as *const u16)?;
-            // Liberar memoria asignada por NetGetJoinInformation
-            NetApiBufferFree(Some(buffer.0 as _));
-            s
-        } else {
-            String::new()
-        };
-
-        // Only return if joined to a domain
-        if status == NetSetupDomainName {
-            Ok(Some(domain))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-pub fn rename_computer(new_name: &str) -> anyhow::Result<()> {
-    // On tests, return early to not rename the test machine :D
-    if cfg!(test) {
-        return Ok(());
-    }
-    let wname = U16CString::from_str(new_name)
-        .context("failed to convert new computer name to UTF-16")?;
-    unsafe {
-        if let Err(e) = SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr()))
-        {
-            return Err(anyhow::anyhow!("Failed to rename computer: {}", e));
-        }
-    }
-    Ok(())
-}
-
-pub fn join_domain(
-    domain: &str,
-    ou: Option<&str>,
-    account: &str,
-    password: &str,
-    execute_in_one_step: bool,
-)-> anyhow::Result<()> {
-    unsafe {
-        // Construir credenciales estilo user@domain si hace falta
-        let mut account_str = account.to_string();
-        if !account.contains('@') && !account.contains('\\') {
-            if domain.contains('.') {
-                account_str = format!("{}@{}", account, domain);
-            } else {
-                account_str = format!("{}\\{}", domain, account);
+                Ok(String::new())
             }
         }
+    }
 
-        // Flags
-        let mut flags =
-            NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
-        if execute_in_one_step {
-            flags |= NETSETUP_JOIN_WITH_NEW_NAME;
+    fn get_domain_name(&self) -> anyhow::Result<Option<String>> {
+        unsafe {
+            let mut buffer = PWSTR::null();
+            let mut status = NetSetupUnknownStatus;
+
+            // lpServer = None → máquina local
+            let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
+
+            if ret != 0 {
+                return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
+            }
+
+            // Convertir el PWSTR devuelto a String
+            let domain = if !buffer.is_null() {
+                let s = utf16_ptr_to_string(buffer.0 as *const u16)?;
+                // Liberar memoria asignada por NetGetJoinInformation
+                NetApiBufferFree(Some(buffer.0 as _));
+                s
+            } else {
+                String::new()
+            };
+
+            // Only return if joined to a domain
+            if status == NetSetupDomainName {
+                Ok(Some(domain))
+            } else {
+                Ok(None)
+            }
         }
+    }
 
-        // Convert to utf16
-        let lp_domain = U16CString::from_str(domain)
-            .context("failed to convert domain to UTF-16")?;
-        let lp_ou = match ou {
-            Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
-            None => None,
-        };
-        let lp_account = U16CString::from_str(&account_str)
-            .context("failed to convert account to UTF-16")?;
-        let lp_password = U16CString::from_str(password)
-            .context("failed to convert password to UTF-16")?;
+    fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
+        // On tests, return early to not rename the test machine :D
+        if cfg!(test) {
+            return Ok(());
+        }
+        let wname = U16CString::from_str(new_name)
+            .context("failed to convert new computer name to UTF-16")?;
+        unsafe {
+            if let Err(e) =
+                SetComputerNameExW(ComputerNamePhysicalDnsHostname, PCWSTR(wname.as_ptr()))
+            {
+                return Err(anyhow::anyhow!("Failed to rename computer: {}", e));
+            }
+        }
+        Ok(())
+    }
 
-        // Call
-        let mut res = NetJoinDomain(
-            PCWSTR::null(),
-            PCWSTR(lp_domain.as_ptr()),
-            lp_ou
-                .as_ref()
-                .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
-            PCWSTR(lp_account.as_ptr()),
-            PCWSTR(lp_password.as_ptr()),
-            flags,
-        );
+    fn join_domain(
+        &self,
+        domain: &str,
+        ou: Option<&str>,
+        account: &str,
+        password: &str,
+        execute_in_one_step: bool,
+    ) -> anyhow::Result<()> {
+        unsafe {
+            // Construir credenciales estilo user@domain si hace falta
+            let mut account_str = account.to_string();
+            if !account.contains('@') && !account.contains('\\') {
+                if domain.contains('.') {
+                    account_str = format!("{}@{}", account, domain);
+                } else {
+                    account_str = format!("{}\\{}", domain, account);
+                }
+            }
 
-        // If the error is "already joined", try again with less flags (no create account, use existing)
-        // This may happen if the account already exists on another ou
-        if res == 2224 {
-            let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
-            res = NetJoinDomain(
+            // Flags
+            let mut flags =
+                NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+            if execute_in_one_step {
+                flags |= NETSETUP_JOIN_WITH_NEW_NAME;
+            }
+
+            // Convert to utf16
+            let lp_domain =
+                U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
+            let lp_ou = match ou {
+                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
+                None => None,
+            };
+            let lp_account = U16CString::from_str(&account_str)
+                .context("failed to convert account to UTF-16")?;
+            let lp_password =
+                U16CString::from_str(password).context("failed to convert password to UTF-16")?;
+
+            // Call
+            let mut res = NetJoinDomain(
                 PCWSTR::null(),
                 PCWSTR(lp_domain.as_ptr()),
                 lp_ou
@@ -265,225 +209,303 @@ pub fn join_domain(
                 PCWSTR(lp_password.as_ptr()),
                 flags,
             );
-        }
 
-        if res == 0 {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("NetJoinDomain failed: {}", res))
-        }
-    }
-}
+            // If the error is "already joined", try again with less flags (no create account, use existing)
+            // This may happen if the account already exists on another ou
+            if res == 2224 {
+                let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+                res = NetJoinDomain(
+                    PCWSTR::null(),
+                    PCWSTR(lp_domain.as_ptr()),
+                    lp_ou
+                        .as_ref()
+                        .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                    PCWSTR(lp_account.as_ptr()),
+                    PCWSTR(lp_password.as_ptr()),
+                    flags,
+                );
+            }
 
-pub fn change_user_password(
-    user: &str,
-    old_password: &str,
-    new_password: &str,
-) -> anyhow::Result<()> {
-    unsafe {
-        let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
-        let old_w = U16CString::from_str(old_password).context("invalid old password UTF-16")?;
-        let new_w = U16CString::from_str(new_password).context("invalid new password UTF-16")?;
-
-        let res = NetUserChangePassword(
-            PCWSTR::null(), // NULL = máquina local
-            PCWSTR(user_w.as_ptr()),
-            PCWSTR(old_w.as_ptr()),
-            PCWSTR(new_w.as_ptr()),
-        );
-
-        if res == 0 {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
+            if res == 0 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("NetJoinDomain failed: {}", res))
+            }
         }
     }
-}
 
-pub fn get_windows_version() -> anyhow::Result<(u32, u32, u32, u32, String)> {
-    unsafe {
-        let mut info = OSVERSIONINFOW {
-            dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
-            ..Default::default()
-        };
-        if GetVersionExW(&mut info).is_ok() {
-            let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr())?;
-            Ok((
-                info.dwMajorVersion,
-                info.dwMinorVersion,
-                info.dwBuildNumber,
-                info.dwPlatformId,
-                sz_cstr,
-            ))
-        } else {
-            Err(anyhow::anyhow!("GetVersionExW failed"))
+    fn change_user_password(
+        &self,
+        user: &str,
+        old_password: &str,
+        new_password: &str,
+    ) -> anyhow::Result<()> {
+        unsafe {
+            let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
+            let old_w =
+                U16CString::from_str(old_password).context("invalid old password UTF-16")?;
+            let new_w =
+                U16CString::from_str(new_password).context("invalid new password UTF-16")?;
+
+            let res = NetUserChangePassword(
+                PCWSTR::null(), // NULL = máquina local
+                PCWSTR(user_w.as_ptr()),
+                PCWSTR(old_w.as_ptr()),
+                PCWSTR(new_w.as_ptr()),
+            );
+
+            if res == 0 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
+            }
         }
     }
-}
 
-pub fn get_os_version() -> anyhow::Result<String> {
-    let (major, minor, build, _platform, csd) = get_windows_version()?;
-    Ok(format!("Windows-{}.{} Build {} ({})", major, minor, build, csd))
-}
-
-pub fn reboot(flags: Option<EXIT_WINDOWS_FLAGS>) -> anyhow::Result<()> {
-    // On tests, return early to not reboot the test machine :D
-    log::debug!("Reboot called with flags: {:?}", flags);
-
-    if cfg!(test) {
-        return Ok(());
+    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
+        unsafe {
+            let mut info = OSVERSIONINFOW {
+                dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
+                ..Default::default()
+            };
+            if GetVersionExW(&mut info).is_ok() {
+                let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr())?;
+                Ok((
+                    info.dwMajorVersion,
+                    info.dwMinorVersion,
+                    info.dwBuildNumber,
+                    info.dwPlatformId,
+                    sz_cstr,
+                ))
+            } else {
+                Err(anyhow::anyhow!("GetVersionExW failed"))
+            }
+        }
     }
 
-    let flags = flags.unwrap_or(EWX_FORCEIFHUNG | EWX_REBOOT);
-    unsafe {
-        let hproc = GetCurrentProcess();
-        let mut htok = HANDLE::default();
-        if OpenProcessToken(hproc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut htok).is_ok() {
-            let mut tp = TOKEN_PRIVILEGES::default();
-            let mut luid = Default::default();
-            if LookupPrivilegeValueW(None, SE_SHUTDOWN_NAME, &mut luid).is_ok() {
-                tp.PrivilegeCount = 1;
-                tp.Privileges[0].Luid = luid;
-                tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-                if let Err(e) = AdjustTokenPrivileges(htok, false, Some(&tp), 0, None, None) {
-                    log::error!("Failed to adjust token privileges: {}", e.message());
+    fn get_os_version(&self) -> anyhow::Result<String> {
+        let (major, minor, build, _platform, csd) = self.get_windows_version()?;
+        Ok(format!(
+            "Windows-{}.{} Build {} ({})",
+            major, minor, build, csd
+        ))
+    }
+
+    fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
+        // On tests, return early to not reboot the test machine :D
+        log::debug!("Reboot called with flags: {:?}", flags);
+
+        if cfg!(test) {
+            return Ok(());
+        }
+
+        use windows::Win32::System::Shutdown::EXIT_WINDOWS_FLAGS;
+        let wflags = flags.map(EXIT_WINDOWS_FLAGS);
+        let flags = wflags.unwrap_or(EWX_FORCEIFHUNG | EWX_REBOOT);
+        unsafe {
+            let hproc = GetCurrentProcess();
+            let mut htok = HANDLE::default();
+            if OpenProcessToken(hproc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut htok).is_ok() {
+                let mut tp = TOKEN_PRIVILEGES::default();
+                let mut luid = Default::default();
+                if LookupPrivilegeValueW(None, SE_SHUTDOWN_NAME, &mut luid).is_ok() {
+                    tp.PrivilegeCount = 1;
+                    tp.Privileges[0].Luid = luid;
+                    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+                    if let Err(e) = AdjustTokenPrivileges(htok, false, Some(&tp), 0, None, None) {
+                        log::error!("Failed to adjust token privileges: {}", e.message());
+                    }
                 }
+                _ = CloseHandle(htok);
             }
-            _ = CloseHandle(htok);
+            _ = ExitWindowsEx(flags, SHUTDOWN_REASON(0));
         }
-        _ = ExitWindowsEx(flags, SHUTDOWN_REASON(0));
+        Ok(())
     }
-    Ok(())
-}
 
-pub fn logoff() -> anyhow::Result<()> {
-    log::debug!("Logoff called");
-    // On tests, return early to not logoff the test machine :D
-    if cfg!(test) {
-        return Ok(());
+    fn logoff(&self) -> anyhow::Result<()> {
+        log::debug!("Logoff called");
+        // On tests, return early to not logoff the test machine :D
+        if cfg!(test) {
+            return Ok(());
+        }
+        unsafe {
+            _ = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
+        }
+        Ok(())
     }
-    unsafe {
-        _ = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
+
+    fn init_idle_timer(&self) -> anyhow::Result<()> {
+        // Just a stub for compatibility with other OSes
+        // On Windows, we don't need to initialize anything
+        Ok(())
     }
-    Ok(())
-}
 
-pub fn init_idle_timer() -> anyhow::Result<()> {
-    // Just a stub for compatibility with other OSes
-    // On Windows, we don't need to initialize anything
-    Ok(())
-}
+    fn get_idle_duration(&self) -> anyhow::Result<f64> {
+        unsafe {
+            let mut lii = LASTINPUTINFO {
+                cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+                dwTime: 0,
+            };
+            if GetLastInputInfo(&mut lii as *mut _).as_bool() {
+                let mut current: u64 = GetTickCount() as u64;
+                let dwtime = lii.dwTime as u64;
+                if current < dwtime {
+                    current += 0x1_0000_0000; // Handle overflow of GetTickCount
+                }
+                let millis = current - dwtime;
+                Ok(millis as f64 / 1000.0)
+            } else {
+                Ok(0.0)
+            }
+        }
+    }
 
-pub fn get_idle_duration() -> anyhow::Result<f64> {
-    unsafe {
-        let mut lii = LASTINPUTINFO {
-            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
-            dwTime: 0,
+    fn get_current_user(&self) -> anyhow::Result<String> {
+        log::debug!("Get current user called");
+        let mut buf = [0u16; 256];
+        let mut size = buf.len() as u32;
+        unsafe {
+            if GetUserNameW(Some(PWSTR(buf.as_mut_ptr())), &mut size).is_ok() {
+                let s = utf16_ptr_to_string(buf.as_ptr())?;
+                Ok(s)
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+
+    fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>> {
+        let mut buf_len: u32 = 32_768;
+        let mut buf = vec![0u8; buf_len as usize];
+        let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
+
+        let ret = unsafe {
+            GetAdaptersAddresses(
+                AF_INET.0 as _,
+                GET_ADAPTERS_ADDRESSES_FLAGS(0),
+                None,
+                Some(adapters_ptr),
+                &mut buf_len,
+            )
         };
-        if GetLastInputInfo(&mut lii as *mut _).as_bool() {
-            let mut current: u64 = GetTickCount() as u64;
-            let dwtime = lii.dwTime as u64;
-            if current < dwtime {
-                current += 0x1_0000_0000; // Handle overflow of GetTickCount
+
+        if ret != 0 {
+            return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", ret));
+        }
+
+        let mut results = vec![];
+        unsafe {
+            while !adapters_ptr.is_null() {
+                let adapter = &*adapters_ptr;
+
+                let name = if !adapter.FriendlyName.is_null() {
+                    // SAFETY: adapter.FriendlyName is a PWSTR-like wrapper; .0 is *mut u16
+                    match utf16_ptr_to_string(adapter.FriendlyName.0 as *const u16) {
+                        Ok(s) => s,
+                        Err(_) => "<unknown>".to_string(),
+                    }
+                } else {
+                    "<unknown>".to_string()
+                };
+
+                let mac = (0..adapter.PhysicalAddressLength)
+                    .map(|i| format!("{:02X}", adapter.PhysicalAddress[i as usize]))
+                    .collect::<Vec<_>>()
+                    .join(":");
+
+                // Aquí podrías recorrer adapter.FirstUnicastAddress para obtener IPs
+
+                results.push((name, mac, "<ip>".to_string())); // IP real omitida por simplicidad
+
+                adapters_ptr = adapter.Next;
             }
-            let millis = current - dwtime;
-            Ok(millis as f64 / 1000.0)
+        }
+
+        Ok(results)
+    }
+
+    fn get_session_type(&self) -> anyhow::Result<String> {
+        log::debug!("Get session type called");
+        let env_var = std::env::var("SESSIONNAME");
+        if let Ok(session_name) = env_var {
+            return Ok(session_name);
+        }
+        log::warn!("SESSIONNAME environment variable is not set");
+        Ok("unknown".to_string())
+    }
+
+    fn force_time_sync(&self) -> anyhow::Result<()> {
+        log::debug!("Force time sync called");
+        let status = Command::new(r"C:\Windows\System32\w32tm.exe")
+            .arg("/resync")
+            .status()?;
+
+        if status.success() {
+            Ok(())
         } else {
-            Ok(0.0)
+            anyhow::bail!("w32tm /resync failed with {:?}", status);
         }
     }
-}
 
-pub fn get_current_user() -> anyhow::Result<String> {
-    let mut buf = [0u16; 256];
-    let mut size = buf.len() as u32;
-    unsafe {
-        if GetUserNameW(Some(PWSTR(buf.as_mut_ptr())), &mut size).is_ok() {
-            let s = utf16_ptr_to_string(buf.as_ptr())?;
-            Ok(s)
-        } else {
-            Ok(String::new())
+    fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()> {
+        unsafe {
+            // Convertir ruta a UTF-16
+            let path_w = U16CString::from_str(path)
+                .context("failed to convert path to UTF-16 for SetNamedSecurityInfoW")?;
+
+            // 1. Resolver SID del usuario actual
+            let mut sid: [u8; 256] = [0; 256];
+            let mut sid_size = sid.len() as u32;
+            let mut domain: [u16; 256] = [0; 256];
+            let mut domain_size = domain.len() as u32;
+            let mut sid_name_use = SidTypeUnknown;
+
+            let user = self.get_current_user()?;
+            let user_w =
+                U16CString::from_str(&user).context("failed to convert username to UTF-16")?;
+
+            LookupAccountNameW(
+                None,
+                PCWSTR(user_w.as_ptr()),
+                Some(PSID(sid.as_mut_ptr() as _)),
+                &mut sid_size,
+                Some(PWSTR(domain.as_mut_ptr())),
+                &mut domain_size,
+                &mut sid_name_use,
+            )
+            .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
+
+            // 2. Crear ACL con una ACE que da acceso total al SID
+            let mut acl_buf = vec![0u8; 1024];
+            let acl = acl_buf.as_mut_ptr() as *mut ACL;
+            InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)
+                .map_err(|e| anyhow::anyhow!("InitializeAcl failed: {}", e))?;
+
+            AddAccessAllowedAce(
+                acl,
+                ACL_REVISION,
+                FILE_ALL_ACCESS.0,
+                PSID(sid.as_mut_ptr() as _),
+            )
+            .map_err(|e| anyhow::anyhow!("AddAccessAllowedAce failed: {}", e))?;
+
+            // 3. Aplicar la nueva DACL al fichero
+            let err = SetNamedSecurityInfoW(
+                PCWSTR(path_w.as_ptr()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                Some(acl),
+                None,
+            );
+
+            if err.0 != 0 {
+                return Err(anyhow::anyhow!("SetNamedSecurityInfoW failed: {}", err.0));
+            }
+
+            Ok(())
         }
-    }
-}
-
-pub fn get_session_type() -> anyhow::Result<String> {
-    let env_var = std::env::var("SESSIONNAME");
-    if let Ok(session_name) = env_var {
-        return Ok(session_name);
-    }
-    log::warn!("SESSIONNAME environment variable is not set");
-    Ok("unknown".to_string())
-}
-
-pub fn force_time_sync() -> anyhow::Result<()> {
-    let status = Command::new(r"C:\Windows\System32\w32tm.exe")
-        .arg("/resync")
-        .status()?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!("w32tm /resync failed with {:?}", status);
-    }
-}
-
-pub fn protect_file_for_owner_only(path: &str) -> anyhow::Result<()> {
-    unsafe {
-        // Convertir ruta a UTF-16
-        let path_w = U16CString::from_str(path)
-            .context("failed to convert path to UTF-16 for SetNamedSecurityInfoW")?;
-
-        // 1. Resolver SID del usuario actual
-        let mut sid: [u8; 256] = [0; 256];
-        let mut sid_size = sid.len() as u32;
-        let mut domain: [u16; 256] = [0; 256];
-        let mut domain_size = domain.len() as u32;
-        let mut sid_name_use = SidTypeUnknown;
-
-        let user = get_current_user()?;
-        let user_w = U16CString::from_str(&user).context("failed to convert username to UTF-16")?;
-
-        LookupAccountNameW(
-            None,
-            PCWSTR(user_w.as_ptr()),
-            Some(PSID(sid.as_mut_ptr() as _)),
-            &mut sid_size,
-            Some(PWSTR(domain.as_mut_ptr())),
-            &mut domain_size,
-            &mut sid_name_use,
-        )
-        .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
-
-        // 2. Crear ACL con una ACE que da acceso total al SID
-        let mut acl_buf = vec![0u8; 1024];
-        let acl = acl_buf.as_mut_ptr() as *mut ACL;
-        InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)
-            .map_err(|e| anyhow::anyhow!("InitializeAcl failed: {}", e))?;
-
-        AddAccessAllowedAce(
-            acl,
-            ACL_REVISION,
-            FILE_ALL_ACCESS.0,
-            PSID(sid.as_mut_ptr() as _),
-        )
-        .map_err(|e| anyhow::anyhow!("AddAccessAllowedAce failed: {}", e))?;
-
-        // 3. Aplicar la nueva DACL al fichero
-        let err = SetNamedSecurityInfoW(
-            PCWSTR(path_w.as_ptr()),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            None,
-            None,
-            Some(acl),
-            None,
-        );
-
-        if err.0 != 0 {
-            return Err(anyhow::anyhow!("SetNamedSecurityInfoW failed: {}", err.0));
-        }
-
-        Ok(())
     }
 }
