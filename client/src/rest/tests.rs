@@ -24,7 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use crate::rest::types::{LoginPayload, LogoutPayload};
+use crate::rest::types::{LoginRequest, LogoutRequest};
 
 use super::api::*;
 use shared::log::{self, info};
@@ -81,7 +81,7 @@ async fn test_unregister() {
 async fn test_login() {
     let (mut server, mut api) = setup_server_and_api().await;
 
-    let login_payload = LoginPayload {
+    let login_payload = LoginRequest {
         username: "user".to_string(),
         session_type: "type".to_string(),
         callback_url: "cb".to_string(),
@@ -108,7 +108,7 @@ async fn test_login() {
 #[tokio::test]
 async fn test_logout() {
     let (mut server, mut api) = setup_server_and_api().await;
-    let logout_payload = LogoutPayload {
+    let logout_payload = LogoutRequest {
         username: "user".to_string(),
         session_type: "type".to_string(),
         callback_url: "cb".to_string(),

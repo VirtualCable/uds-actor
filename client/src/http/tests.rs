@@ -1,8 +1,8 @@
 use super::*;
+use reqwest::Client;
 use shared::sync::event::{Event, EventLike};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use reqwest::Client;
 
 #[derive(Clone)]
 struct DummySessionManager {
@@ -11,7 +11,9 @@ struct DummySessionManager {
 
 impl DummySessionManager {
     fn new() -> Self {
-        Self { event: Event::new() }
+        Self {
+            event: Event::new(),
+        }
     }
 }
 
@@ -31,48 +33,61 @@ impl crate::session::SessionManagement for DummySessionManager {
     async fn stop(&self) {
         self.event.signal();
     }
+
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        let ev = self.event.clone();
+        tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
+            .await
+            .unwrap()
+    }
 }
 
 /// Helper que arranca el servidor real en background y devuelve todo lo necesario
-async fn spawn_server(
-) -> (
-    String,                                // base URL (ej. "http://127.0.0.1:12345")
-    Arc<DummySessionManager>,              // el manager para poder hacer stop()
-    JoinHandle<()>,                        // handle del servidor
-    Client,                                // cliente HTTP
+async fn spawn_server() -> (
+    String,         // base URL (ej. "http://127.0.0.1:12345")
+    Platform,       // el manager para poder hacer stop()
+    JoinHandle<()>, // handle del servidor
+    Client,         // cliente HTTP
 ) {
     let manager = Arc::new(DummySessionManager::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let server_manager = manager.clone();
+    let platform = crate::platform::Platform::new_with_params(Some(manager.clone()), None, None);
+    let plaform_task = platform.clone();
     let handle = tokio::spawn(async move {
-        run_server(listener, server_manager).await;
+        run_server(listener, plaform_task).await;
     });
 
     let client = Client::new();
-    (format!("http://{}", addr), manager, handle, client)
+    (format!("http://{}", addr), platform, handle, client)
 }
 
 #[tokio::test]
 async fn test_ping() {
-    let (base_url, manager, handle, client) = spawn_server().await;
+    let (base_url, platform, handle, client) = spawn_server().await;
 
-    let res = client.post(format!("{}/ping", base_url))
-        .send().await.unwrap();
+    let res = client
+        .post(format!("{}/ping", base_url))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "pong");
 
-    manager.stop().await;
+    platform.session_manager().stop().await;
     handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn test_logout() {
-    let (base_url, _manager, handle, client) = spawn_server().await;
+    let (base_url, _platform, handle, client) = spawn_server().await;
 
-    let res = client.post(format!("{}/logout", base_url))
-        .send().await.unwrap();
+    let res = client
+        .post(format!("{}/logout", base_url))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
@@ -82,10 +97,13 @@ async fn test_logout() {
 
 #[tokio::test]
 async fn test_screenshot() {
-    let (base_url, manager, handle, client) = spawn_server().await;
+    let (base_url, platform, handle, client) = spawn_server().await;
 
-    let res = client.post(format!("{}/screenshot", base_url))
-        .send().await.unwrap();
+    let res = client
+        .post(format!("{}/screenshot", base_url))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(res.status(), 200);
     let json: serde_json::Value = res.json().await.unwrap();
     let b64 = json["result"].as_str().unwrap();
@@ -95,34 +113,40 @@ async fn test_screenshot() {
     // PNG header check
     assert!(decoded.starts_with(&[0x89, 0x50, 0x4E, 0x47]));
 
-    manager.stop().await;
+    platform.session_manager().stop().await;
     handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn test_script() {
-    let (base_url, manager, handle, client) = spawn_server().await;
+    let (base_url, platform, handle, client) = spawn_server().await;
 
-    let res = client.post(format!("{}/script", base_url))
+    let res = client
+        .post(format!("{}/script", base_url))
         .json(&serde_json::json!({"script": "echo test"}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
-    manager.stop().await;
+    platform.session_manager().stop().await;
     handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn test_message() {
-    let (base_url, manager, handle, client) = spawn_server().await;
+    let (base_url, platform, handle, client) = spawn_server().await;
 
-    let res = client.post(format!("{}/message", base_url))
+    let res = client
+        .post(format!("{}/message", base_url))
         .json(&serde_json::json!({"message": "hello"}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
 
-    manager.stop().await;
+    platform.session_manager().stop().await;
     handle.await.unwrap();
 }

@@ -47,7 +47,7 @@ pub trait Operations {
 
     fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>>;
 
-    fn get_idle_duration(&self) -> anyhow::Result<f64>;
+    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration>;
 
     fn get_current_user(&self) -> anyhow::Result<String>;
 
@@ -65,7 +65,7 @@ pub trait Operations {
 // `Operations`, I can change it (but that will shadow the trait name in this
 // module).
 #[cfg(target_os = "windows")]
-pub use crate::windows::operations::WindowsOperations as WindowsOperationsImpl;
+pub use crate::windows::operations::new_operations as new_operations;
 
 #[cfg(target_family = "unix")]
-pub use crate::unix::operations::UnixOperations as UnixOperationsImpl;
+pub use crate::windows::operations::new_operations as new_operations;

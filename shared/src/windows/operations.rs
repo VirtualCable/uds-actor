@@ -76,6 +76,10 @@ unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
     Ok(u16cstr.to_string_lossy())
 }
 
+pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+    std::sync::Arc::new(WindowsOperations::new())
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WindowsOperations;
 
@@ -341,7 +345,7 @@ impl crate::operations::Operations for WindowsOperations {
         Ok(())
     }
 
-    fn get_idle_duration(&self) -> anyhow::Result<f64> {
+    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
         unsafe {
             let mut lii = LASTINPUTINFO {
                 cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
@@ -354,9 +358,9 @@ impl crate::operations::Operations for WindowsOperations {
                     current += 0x1_0000_0000; // Handle overflow of GetTickCount
                 }
                 let millis = current - dwtime;
-                Ok(millis as f64 / 1000.0)
+                Ok(std::time::Duration::from_millis(millis))
             } else {
-                Ok(0.0)
+                Ok(std::time::Duration::from_secs(0))
             }
         }
     }

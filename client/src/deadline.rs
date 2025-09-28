@@ -24,54 +24,43 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+use crate::platform;
 
-use serde::{Deserialize, Serialize};
+pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<()> {
+    let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
+    let deadline = if deadline > std::time::Duration::from_secs(300) {
+        deadline - std::time::Duration::from_secs(300)
+    } else {
+        std::time::Duration::from_secs(0)
+    };
+    // If no deadline, just wait until signaled
+    if deadline.as_secs() == 0 {
+        // Wait until signaled
+        platform.session_manager().wait().await;
+        return Ok(());
+    }
 
-/// Payload for registration
-#[derive(Debug, Clone, Serialize)]
-pub struct RegisterRequest {
-    pub callback_url: String,
+    // Deadline timer, simply wait until deadline is reached inside the session_manager
+    // But leave a 5 mins to notify before deadline
+    if platform.session_manager().wait_timeout(deadline).await {
+        shared::log::info!("Deadline notification reached, notifying user");
+
+        // Notify user
+        // TODO: Implement notification using fltk (notification must not block)
+        // For now, just log it
+        shared::log::info!("Notifying user about deadline");
+
+        // Wait 5 minutes more or until signaled
+        if platform
+            .session_manager()
+            .wait_timeout(std::time::Duration::from_secs(300))
+            .await
+        {
+            shared::log::info!("Session still running after deadline, stopping session");
+            // Stop session
+            platform.session_manager().stop().await;
+        }
+    }
+
+    Ok(())
 }
-
-/// Payload for unregistration
-#[derive(Debug, Clone, Serialize)]
-pub struct UnregisterRequest {
-    pub callback_url: String,
-}
-
-/// Payload for login
-#[derive(Debug, Clone, Serialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub session_type: String,
-    pub callback_url: String,
-}
-
-/// Payload for logout
-#[derive(Debug, Clone, Serialize)]
-pub struct LogoutRequest {
-    pub username: String,
-    pub session_type: String,
-    pub callback_url: String,
-    pub session_id: String,
-}
-
-/// Login response
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
-pub struct LoginResponse {
-    pub ip: String,
-    pub hostname: String,
-    pub deadline: Option<u32>,  // Stamp, in seconds, when the session will expire
-    pub max_idle: Option<u32>, // Max idle time in seconds
-    pub session_id: String,
-}
-
-/// Empty payload for ping
-#[derive(Debug, Clone, Serialize, Default)]
-pub struct PingRequest {}
-
-/// Ping response
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(transparent)]
-pub struct PingResponse(pub String);

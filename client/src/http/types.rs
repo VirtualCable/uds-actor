@@ -1,8 +1,8 @@
-use crate::session::SessionManagement;
+use crate::platform::Platform;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub session_manager: std::sync::Arc<dyn SessionManagement + Send + Sync>,
+    pub platform: Platform,
 }
 
 #[derive(serde::Deserialize)]

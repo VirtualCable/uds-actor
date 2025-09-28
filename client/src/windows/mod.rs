@@ -37,6 +37,10 @@ impl SessionManagement for WindowsSessionManager {
         self.stop_event.signal();
         log::debug!("Windows session close event signaled");
     }
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        let ev = self.stop_event.clone();
+        ev.wait_timeout_async(timeout).await
+    }
 }
 
 pub fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
@@ -51,8 +55,7 @@ mod tests {
     async fn test_windows_session_close() {
         let session_close = WindowsSessionManager::new();
         let event = session_close.stop_event.clone();
-        let _fake_closer =
-        tokio::spawn(async move {
+        let _fake_closer = tokio::spawn(async move {
             session_close.wait().await;
         });
         // Esperamos un poco para simular la espera
@@ -60,6 +63,5 @@ mod tests {
         event.signal();
         // Esperamos un poco para asegurarnos de que el evento se ha manejado
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        
     }
 }

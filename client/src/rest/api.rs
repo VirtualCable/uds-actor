@@ -32,6 +32,7 @@ use super::types::*;
 
 use shared::debug_dev;
 
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub(crate) struct ClientRestApi {
     client: Client,
@@ -92,7 +93,7 @@ impl ClientRestApi {
 
     pub async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
         self.set_callback_url(callback_url);
-        let payload = RegisterPayload {
+        let payload = RegisterRequest {
             callback_url: self.callback_url.clone(),
         };
         let _: String = self.post("register", &payload).await?;
@@ -100,7 +101,7 @@ impl ClientRestApi {
     }
 
     pub async fn unregister(&mut self) -> Result<(), reqwest::Error> {
-        let payload = UnregisterPayload {
+        let payload = UnregisterRequest {
             callback_url: self.callback_url.clone(),
         };
         let _: String = self.post("unregister", &payload).await?;
@@ -112,19 +113,19 @@ impl ClientRestApi {
         &mut self,
         username: &str,
         session_type: Option<&str>,
-    ) -> Result<LoginResult, reqwest::Error> {
-        let payload = LoginPayload {
+    ) -> Result<LoginResponse, reqwest::Error> {
+        let payload = LoginRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
             callback_url: self.callback_url.clone(),
         };
-        let result: LoginResult = self.post("login", &payload).await?;
+        let result: LoginResponse = self.post("login", &payload).await?;
         self.set_session_id(&result.session_id);
         Ok(result)
     }
 
     pub async fn logout(&self, username: &str, session_type: Option<&str>) -> Result<(), reqwest::Error> {
-        let payload = LogoutPayload {
+        let payload = LogoutRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
             callback_url: self.callback_url.clone(),
@@ -135,8 +136,8 @@ impl ClientRestApi {
     }
 
     pub async fn ping(&self) -> Result<bool, reqwest::Error> {
-        let payload = PingPayload::default();
-        let result: PongResponse = self.post("ping", &payload).await?;
+        let payload = PingRequest::default();
+        let result: PingResponse = self.post("ping", &payload).await?;
         Ok(result.0 == "pong")
     }
 }

@@ -7,7 +7,7 @@ use fake_actions as actions;
 #[cfg(not(test))]
 use shared::actions;
 
-use crate::session::SessionManagement;
+use crate::platform::Platform;
 
 mod types;
 
@@ -18,7 +18,7 @@ async fn ping() -> &'static str {
 async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
     let _ = actions::logoff().await;
     // Notify session manager to stop
-    state.session_manager.stop().await;
+    state.platform.session_manager().stop().await;
     "ok"
 }
 
@@ -41,7 +41,7 @@ async fn message(Json(req): Json<types::MessageRequest>) -> &'static str {
 
 pub async fn run_server(
     listener: tokio::net::TcpListener,
-    manager: std::sync::Arc<dyn SessionManagement + Send + Sync>,
+    platform: Platform,
 ) {
     let app = Router::new()
         .route("/ping", post(ping))
@@ -50,14 +50,14 @@ pub async fn run_server(
         .route("/script", post(script))
         .route("/message", post(message))
         .layer(Extension(types::AppState {
-            session_manager: manager.clone(),
+            platform: platform.clone(),
         }));
 
     let addr = listener.local_addr().unwrap();
     println!("Listening on http://{}", addr);
 
     let server = axum::serve(listener, app).with_graceful_shutdown(async move {
-        manager.wait().await;
+        platform.session_manager().wait().await;
     });
 
     if let Err(e) = server.await {

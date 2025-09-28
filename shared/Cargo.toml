@@ -6,10 +6,6 @@ edition = "2024"
 [lib]
 path = "src/lib.rs"
 
-[features]
-# Default features
-tokio = ["dep:tokio"]
-
 # Windows dependencies
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.1", features = [
@@ -48,7 +44,7 @@ tracing-log = "0.2.0"
 anyhow = "1.0.100"
 
 
-tokio = { version = "1.47.1", optional = true, features = [
+tokio = { version = "1.47.1", features = [
     "macros",
     "rt",
     "time",

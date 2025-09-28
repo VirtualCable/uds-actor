@@ -73,7 +73,6 @@ fn event_reset() {
     assert!(!ev.is_set());
 }
 
-#[cfg(feature = "tokio")]
 #[tokio::test]
 async fn event_signal_and_wait_async() {
     let ev = Event::new();
@@ -94,7 +93,6 @@ async fn event_signal_and_wait_async() {
     assert!(ev.is_set());
 }
 
-#[cfg(feature = "tokio")]
 #[tokio::test]
 async fn event_wait_timeout_async() {
     let ev = Event::new();

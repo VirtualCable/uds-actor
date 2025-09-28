@@ -29,39 +29,80 @@ mod http;
 mod rest;
 mod session;
 
-#[cfg(all(unix, not(target_os = "macos")))]
-mod linux;
-#[cfg(target_os = "macos")]
-mod macos;
+mod platform;
+
+#[cfg(unix)]
+mod unix;
 #[cfg(windows)]
 mod windows;
+
+// Checkers
+mod deadline;
+mod idle;
+
+async fn send_login(platform: &platform::Platform) -> anyhow::Result<rest::types::LoginResponse> {
+    // Send login
+    let username = platform.operations().get_current_user()?;
+    let session_type = platform.operations().get_session_type()?;
+
+    platform
+        .api()
+        .login(&username, Some(&session_type))
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to login: {}", e)
+        })
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 
-    let session_manager = session::new_session_manager();
-    let server_session_manager = session_manager.clone();
+    let platform = platform::Platform::new();
+    let server_platform = platform.clone();
 
     // Listener for the HTTP server
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
         .unwrap();
     let server_task = tokio::spawn(async move {
-        http::run_server(listener, server_session_manager).await;
+        http::run_server(listener, server_platform).await;
     });
+    
+    let login_info = match send_login(&platform).await {
+        Ok(info) => info,
+        Err(e) => {
+            shared::log::error!("Login failed: {}", e);
+            return;
+        }
+    };
+    shared::log::info!("Login successful: {:?}", login_info);
 
-    // Send login
-    session_manager.get_api().login("user", None).await.unwrap();
-
+    let session_manager = platform.session_manager();
     tokio::select! {
-    _ = session_manager.wait() => {
-        shared::log::info!("Session manager signaled stop, shutting down");
-    }
-    res = server_task => {
-        if let Err(e) = res {
-            shared::log::error!("Server task failed: {}", e);
+        _ = session_manager.wait() => {
+            shared::log::info!("Session manager signaled stop, shutting down");
+        }
+        res = server_task => {
+            if let Err(e) = res {
+                shared::log::error!("Server task failed: {}", e);
+            }
+        }
+        res = idle::task(login_info.max_idle, platform.clone()) => {
+            if let Err(e) = res {
+                shared::log::error!("Idle check task failed: {}", e);
+            }
+        }
+        res = deadline::task(login_info.deadline, platform.clone()) => {
+            if let Err(e) = res {
+                shared::log::error!("Deadline check task failed: {}", e);
+            }
         }
     }
+
+    // If session is still running, stop it
+    if session_manager.is_running().await {
+        session_manager.stop().await;
+        shared::log::info!("Session stopped");
     }
 }
