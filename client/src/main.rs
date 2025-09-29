@@ -69,7 +69,6 @@ async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 
     let platform = platform::Platform::new();
-    let server_platform = platform.clone();
 
     // Listener for the HTTP server
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
@@ -77,8 +76,7 @@ async fn main() {
         .unwrap();
 
     // Local server registers the callback, so it neesds to be started before login
-    let server_task =
-        tokio::spawn(async move { http::run_server(listener, server_platform).await });
+    let server_task = tokio::spawn(http::run_server(listener, platform.clone()));
 
     let login_info = match send_login(&platform).await {
         Ok(info) => info,
@@ -91,13 +89,9 @@ async fn main() {
 
     let idle_task = tokio::spawn(tasks::idle::task(login_info.max_idle, platform.clone()));
 
-    let platform_for_deadline = platform.clone();
-    let deadline_task = tokio::spawn(async move {
-        tasks::deadline::task(login_info.deadline, platform_for_deadline).await
-    });
+    let deadline_task = tokio::spawn(tasks::deadline::task(login_info.deadline, platform.clone()));
 
-    let platform_for_alive = platform.clone();
-    let alive_task = tokio::spawn(async move { tasks::alive::task(platform_for_alive).await });
+    let alive_task = tokio::spawn(tasks::alive::task(platform.clone()));
 
     let session_manager = platform.session_manager();
     // Await for session end
