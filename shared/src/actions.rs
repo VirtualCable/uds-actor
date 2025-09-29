@@ -7,7 +7,6 @@ pub trait Actions: Send + Sync {
     async fn logoff(&self) -> anyhow::Result<()>;
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>>;
     async fn run_script(&self, script: &str) -> anyhow::Result<String>;
-    async fn show_message(&self, message: &str) -> anyhow::Result<String>;
 
     // Default implementation for notifying the user: closes dialogs and shows
     // a notification dialog. Implementations may override if platform-specific

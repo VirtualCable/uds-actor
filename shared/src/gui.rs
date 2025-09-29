@@ -146,7 +146,7 @@ fn messagebox(
     Ok(*result.lock().unwrap())
 }
 
-/// Async helper: muestra un diálogo con solo Ok, no devuelve nada
+/// Async helper: shows a dialog with only Ok, does not return anything
 pub async fn message_dialog(title: &str, message: &str) -> anyhow::Result<MessageBoxResult> {
     let title = title.to_string();
     let message = message.to_string();
@@ -157,7 +157,7 @@ pub async fn message_dialog(title: &str, message: &str) -> anyhow::Result<Messag
     .unwrap_or_else(|_| Err(anyhow::Error::msg("Task Join Error")))
 }
 
-/// Async helper: muestra un diálogo Yes/No y devuelve el resultado
+/// Async helper: shows a Yes/No dialog and returns the result
 pub async fn yesno_dialog(title: &str, message: &str) -> anyhow::Result<MessageBoxResult> {
     let title = title.to_string();
     let message = message.to_string();

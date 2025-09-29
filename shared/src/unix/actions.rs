@@ -35,11 +35,6 @@ impl Actions for UnixActions {
         Ok("".to_string())
     }
 
-    async fn show_message(&self, message: &str) -> anyhow::Result<String> {
-        log::info!("Show message requested: {}", message);
-        // TODO: Show message on Unix
-        Ok("not implemented".to_string())
-    }
 }
 
 pub fn new_actions() -> Arc<impl Actions> {

@@ -43,7 +43,7 @@ async fn message(
     Extension(state): Extension<types::AppState>,
     Json(req): Json<types::MessageRequest>,
 ) -> &'static str {
-    let _ = state.platform.actions().show_message(&req.message).await;
+    let _ = state.platform.actions().notify_user(&req.message).await;
     "ok"
 }
 

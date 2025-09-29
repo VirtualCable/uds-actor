@@ -25,7 +25,7 @@ impl Platform {
         }
     }
 
-    pub fn session_manager(&self) -> Arc<dyn SessionManagement + Send + Sync> {
+    pub fn session_manager(&self) -> Arc<dyn SessionManagement> {
         self.session_manager.clone()
     }
 
@@ -33,21 +33,21 @@ impl Platform {
         self.api.clone()
     }
 
-    pub fn operations(&self) -> Arc<dyn shared::operations::Operations + Send + Sync> {
+    pub fn operations(&self) -> Arc<dyn shared::operations::Operations> {
         self.operations.clone()
     }
 
-    pub fn actions(&self) -> Arc<dyn shared::actions::Actions + Send + Sync> {
+    pub fn actions(&self) -> Arc<dyn shared::actions::Actions> {
         self.actions.clone()
     }
 
     // Only for tests
     #[cfg(test)]
     pub fn new_with_params(
-        session_manager: Option<Arc<dyn SessionManagement + Send + Sync>>,
+        session_manager: Option<Arc<dyn SessionManagement>>,
         api: Option<Arc<tokio::sync::RwLock<dyn ClientRest>>>,
-        operations: Option<Arc<dyn shared::operations::Operations + Send + Sync>>,
-        actions: Option<Arc<dyn shared::actions::Actions + Send + Sync>>,
+        operations: Option<Arc<dyn shared::operations::Operations>>,
+        actions: Option<Arc<dyn shared::actions::Actions>>,
     ) -> Self {
         let session_manager =
             session_manager.unwrap_or_else(|| crate::session::new_session_manager());
