@@ -26,6 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub mod log;
 pub mod sync;
+pub mod gui;
 
 pub mod actions;
 

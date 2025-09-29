@@ -120,4 +120,7 @@ async fn main() {
     {
         shared::log::warn!("Some tasks did not shut down in time, aborting...");
     }
+
+    // Ensure GUI is shutdown. If not done, and any window is open, process will hang until window is closed
+    shared::gui::shutdown().await;
 }

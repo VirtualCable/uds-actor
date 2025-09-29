@@ -43,6 +43,9 @@ tracing-log = "0.2.0"
 
 anyhow = "1.0.100"
 
+# Gui
+fltk = { version = "^1.5", features = ["fltk-bundled"] }
+
 
 tokio = { version = "1.47.1", features = [
     "macros",

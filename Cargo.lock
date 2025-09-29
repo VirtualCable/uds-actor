@@ -1452,6 +1452,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fltk",
  "macros",
  "tokio",
  "tracing",
@@ -1837,7 +1838,6 @@ dependencies = [
  "axum",
  "base64",
  "chrono",
- "fltk",
  "hyper",
  "macros",
  "mockito",

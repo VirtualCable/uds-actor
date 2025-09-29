@@ -19,8 +19,6 @@ serde_json = "1.0.145"
 anyhow = "1.0.88"
 async-trait = "0.1.89"
 
-fltk = { version = "^1.5", features = ["fltk-bundled"] }
-
 axum = { version = "0.8.4", features = ["json", "tokio"] }
 base64 = "0.22.1"
 
