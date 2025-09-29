@@ -33,7 +33,7 @@ use async_trait::async_trait;
 
 use super::types::*;
 
-use shared::debug_dev;
+use shared::{debug_dev, log::debug};
 
 /// Trait that abstracts the REST client functionality for easier testing.
 #[allow(dead_code)]
@@ -117,6 +117,7 @@ impl ClientRestSession {
 #[async_trait]
 impl ClientRest for ClientRestSession {
     async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
+        debug!("Registering with callback URL: {}", callback_url);
         self.set_callback_url(callback_url);
         let payload = RegisterRequest {
             callback_url: self.callback_url.clone(),
@@ -126,6 +127,7 @@ impl ClientRest for ClientRestSession {
     }
 
     async fn unregister(&mut self) -> Result<(), reqwest::Error> {
+        debug!("Unregistering with callback URL: {}", self.callback_url);
         let payload = UnregisterRequest {
             callback_url: self.callback_url.clone(),
         };
@@ -139,10 +141,10 @@ impl ClientRest for ClientRestSession {
         username: &str,
         session_type: Option<&str>,
     ) -> Result<LoginResponse, reqwest::Error> {
+        debug!("Logging in user: {}", username);
         let payload = LoginRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
-            callback_url: self.callback_url.clone(),
         };
         let result: LoginResponse = self.post("login", &payload).await?;
         self.set_session_id(&result.session_id);
@@ -154,6 +156,7 @@ impl ClientRest for ClientRestSession {
         username: &str,
         session_type: Option<&str>,
     ) -> Result<(), reqwest::Error> {
+        debug!("Logging out user: {}", username);
         let payload = LogoutRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
@@ -165,8 +168,10 @@ impl ClientRest for ClientRestSession {
     }
 
     async fn ping(&self) -> Result<bool, reqwest::Error> {
+        debug!("Pinging server...");
         let payload = PingRequest::default();
         let result: PingResponse = self.post("ping", &payload).await?;
+        debug!("Ping response: {:?}", result);
         Ok(result.0 == "pong")
     }
 }

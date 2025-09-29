@@ -43,7 +43,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
     loop {
         // Deadline timer, simply wait until deadline is reached inside the session_manager
         // But leave a 5 mins to notify before deadline
-        if platform.session_manager().wait_timeout(deadline).await {
+        if !platform.session_manager().wait_timeout(deadline).await {
             shared::log::info!("Deadline notification reached, notifying user");
 
             // Notify user
@@ -68,6 +68,9 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
                 shared::log::info!("Session still running after deadline, stopping session");
                 break; // End task
             }
+        } else {
+            shared::log::info!("Session signaled or closed, stopping deadline task");
+            break;
         }
     }
     // Notify session manager to stop session

@@ -44,7 +44,6 @@ pub struct UnregisterRequest {
 pub struct LoginRequest {
     pub username: String,
     pub session_type: String,
-    pub callback_url: String,
 }
 
 /// Payload for logout

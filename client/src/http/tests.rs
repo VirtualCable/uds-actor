@@ -53,7 +53,7 @@ async fn spawn_server() -> (
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let platform = crate::platform::Platform::new_with_params(Some(manager.clone()), None, None);
+    let platform = crate::platform::Platform::new_with_params(Some(manager.clone()), None, None, None);
     let plaform_task = platform.clone();
     let handle = tokio::spawn(async move { run_server(listener, plaform_task).await });
 

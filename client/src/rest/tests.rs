@@ -84,7 +84,6 @@ async fn test_login() {
     let login_payload = LoginRequest {
         username: "user".to_string(),
         session_type: "type".to_string(),
-        callback_url: "cb".to_string(),
     };
 
     let login_resp_str = r#"{"ip": "127.0.0.1", "hostname": "localhost", "deadline": 10000, "max_idle": 300, "session_id": "sessid"}"#;
@@ -96,7 +95,6 @@ async fn test_login() {
         .with_body(login_resp_str) // Just return session_id as string
         .create_async()
         .await;
-    api.set_callback_url("cb");
     api.set_session_id("sessid");
     let res = api.login("user", Some("type")).await;
     assert!(res.is_ok(), "Login failed: {:?}", res);

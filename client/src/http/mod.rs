@@ -1,12 +1,6 @@
 use axum::{Extension, Json, Router, routing::post};
 use base64::engine::{Engine as _, general_purpose::STANDARD};
 
-#[cfg(test)]
-use fake_actions as actions;
-
-#[cfg(not(test))]
-use shared::actions;
-
 use crate::platform::Platform;
 
 mod types;
@@ -16,27 +10,45 @@ async fn ping() -> &'static str {
 }
 
 async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
-    let _ = actions::logoff().await;
+    let _ = state.platform.actions().logoff().await;
     // Notify session manager to stop
     state.platform.session_manager().stop().await;
+    _ = state.platform.operations().logoff();
     "ok"
 }
 
-async fn screenshot() -> Json<types::ScreenshotResponse> {
-    let data = actions::screenshot().await.unwrap_or_default();
+async fn screenshot(
+    Extension(state): Extension<types::AppState>,
+) -> Json<types::ScreenshotResponse> {
+    let data = state
+        .platform
+        .actions()
+        .screenshot()
+        .await
+        .unwrap_or_default();
     // Encode to base64 using the standard engine
     let encoded = STANDARD.encode(&data);
     Json(types::ScreenshotResponse { result: encoded })
 }
 
-async fn script(Json(req): Json<types::ScriptRequest>) -> &'static str {
-    _ = actions::run_script(&req.script).await;
+async fn script(
+    Extension(state): Extension<types::AppState>,
+    Json(req): Json<types::ScriptRequest>,
+) -> &'static str {
+    _ = state.platform.actions().run_script(&req.script).await;
     "ok"
 }
 
-async fn message(Json(req): Json<types::MessageRequest>) -> &'static str {
-    let _ = actions::show_message(&req.message).await;
+async fn message(
+    Extension(state): Extension<types::AppState>,
+    Json(req): Json<types::MessageRequest>,
+) -> &'static str {
+    let _ = state.platform.actions().show_message(&req.message).await;
     "ok"
+}
+
+pub async fn callback_url(listener: &tokio::net::TcpListener) -> String {
+    format!("http://{}", listener.local_addr().unwrap())
 }
 
 pub async fn run_server(
@@ -45,8 +57,14 @@ pub async fn run_server(
 ) -> anyhow::Result<()> {
     // Register with server
     let api = platform.api();
-    let callback_url = format!("http://{}", listener.local_addr().unwrap());
-    api.write().await.register(&callback_url).await?;
+    let callback_url = callback_url(&listener).await;
+
+    // If cannot register, set stop and return
+    if let Err(err) = api.write().await.register(&callback_url).await {
+        shared::log::error!("Failed to register with server: {}", err);
+        platform.session_manager().stop().await;
+        return Err(anyhow::anyhow!("Failed to register with server: {}", err));
+    }
 
     let app = Router::new()
         .route("/ping", post(ping))
@@ -72,23 +90,6 @@ pub async fn run_server(
     // Unregister from server
     let _ = api.write().await.unregister().await;
     res
-}
-
-// Test implementations for actions
-#[cfg(test)]
-mod fake_actions {
-    pub async fn logoff() -> Result<(), ()> {
-        Ok(())
-    }
-    pub async fn screenshot() -> Result<Vec<u8>, ()> {
-        Ok(vec![0x89, 0x50, 0x4E, 0x47])
-    } // PNG header
-    pub async fn run_script(_s: &str) -> Result<String, ()> {
-        Ok("ok".into())
-    }
-    pub async fn show_message(_m: &str) -> Result<String, ()> {
-        Ok("ok".into())
-    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 pub trait SessionManagement: Send + Sync {
     async fn wait(&self);
-    // Returns true if the session is still running after the timeout
+    /// Returns true if the event was signaled, false if the timeout expired
     async fn wait_timeout(&self, timeout: std::time::Duration) -> bool;
     async fn is_running(&self) -> bool;
     async fn stop(&self);
