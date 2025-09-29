@@ -50,6 +50,14 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
             // TODO: Implement notification using fltk (notification must not block)
             // For now, just log it
             shared::log::info!("Notifying user about deadline");
+            
+            shared::gui::ensure_dialogs_closed().await; // Ensure no other dialogs are active
+            shared::gui::message_dialog(
+                "Deadline Notification",
+                "This session will be stopped in 5 minutes.\nPlease save your work.",
+            )
+            .await
+            .ok();
 
             // Wait 5 minutes more or until signaled
             if platform

@@ -60,7 +60,15 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
 
         // Notify user:
         // TODO: implement notification using fltk (for portability)
-        if idle.as_secs() > 0 && !notified {
+        if !notified && idle > max_idle.saturating_sub(std::time::Duration::from_secs(300)) {
+            shared::gui::ensure_dialogs_closed().await; // Ensure no other dialogs are active
+            shared::gui::message_dialog(
+                "Idle Notification",
+                "You have been idle for a while. If no action is taken, the session will be stopped within 5 minutes.",
+            )
+            .await
+            .ok();
+
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
         }

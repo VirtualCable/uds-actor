@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageBoxResult {
     Ok,
-    Yes,
     No,
 }
 
@@ -13,7 +12,6 @@ impl std::fmt::Display for MessageBoxResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MessageBoxResult::Ok => write!(f, "Ok"),
-            MessageBoxResult::Yes => write!(f, "Yes"),
             MessageBoxResult::No => write!(f, "No"),
         }
     }
@@ -56,7 +54,7 @@ fn messagebox(
 
     // Fixed font and size
     let font = Font::Helvetica;
-    let font_size = 16;
+    let font_size = 14;
     // Ensure the font is set
     draw::set_font(font, font_size);
     // Measure character height with some padding
@@ -72,7 +70,7 @@ fn messagebox(
         .max()
         .unwrap_or(200);
 
-    let width = (max_width + 32).max(240);  // give some padding, minimum 240
+    let width = (max_width + 32).max(240); // give some padding, minimum 240
     let height = (lines.len() as i32 * char_height) + 100;
 
     crate::log::debug!(
@@ -123,7 +121,7 @@ fn messagebox(
             yes.set_callback({
                 let cb_result = cb_result.clone();
                 move |_| {
-                    *cb_result.lock().unwrap() = MessageBoxResult::Yes;
+                    *cb_result.lock().unwrap() = MessageBoxResult::Ok;
                     app.quit();
                 }
             });
@@ -170,27 +168,60 @@ pub async fn yesno_dialog(title: &str, message: &str) -> anyhow::Result<MessageB
     .unwrap_or_else(|_| Err(anyhow::Error::msg("Task Join Error")))
 }
 
+/// Async closer: signal shutdown and wait until any active messagebox is gone
+pub async fn ensure_dialogs_closed() {
+    // Signal shutdown
+    SHUTDOWN.store(true, Ordering::SeqCst);
+
+    // Poll MESSAGEBOX_ACTIVE up to 10 times, 100ms each
+    // Should be enough to close any active messagebox
+    let mut closed = false;
+    for _ in 0..10 {
+        if !MESSAGEBOX_ACTIVE.load(Ordering::SeqCst) {
+            closed = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    if !closed {
+        crate::log::warn!("ensure_window_slot: Timeout waiting for messagebox to close");
+    }
+
+    // Reset shutdown flag so new dialogs can open
+    SHUTDOWN.store(false, Ordering::SeqCst);
+}
+
 pub async fn shutdown() {
     SHUTDOWN.store(true, Ordering::SeqCst);
 }
 
 fn split_message(msg: &str, max_len: usize) -> Vec<String> {
     let mut lines = Vec::new();
-    let mut current = msg.trim();
 
-    while !current.is_empty() {
-        if current.len() <= max_len {
-            lines.push(current.to_string());
-            break;
+    // First split by explicit newlines
+    for paragraph in msg.split('\n') {
+        let mut current = paragraph.trim();
+
+        while !current.is_empty() {
+            if current.len() <= max_len {
+                lines.push(current.to_string());
+                break;
+            }
+            // find last whitespace before max_len
+            let split_at = current[..max_len]
+                .rfind(char::is_whitespace)
+                .unwrap_or(max_len);
+            let (line, rest) = current.split_at(split_at);
+            lines.push(line.trim().to_string());
+            current = rest.trim();
         }
-        // find last whitespace before max_len
-        let split_at = current[..max_len]
-            .rfind(char::is_whitespace)
-            .unwrap_or(max_len);
-        let (line, rest) = current.split_at(split_at);
-        lines.push(line.trim().to_string());
-        current = rest.trim();
+
+        // If the paragraph was empty, preserve the blank line
+        if paragraph.is_empty() {
+            lines.push(String::new());
+        }
     }
+
     lines
 }
 
