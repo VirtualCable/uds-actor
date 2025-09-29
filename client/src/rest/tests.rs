@@ -123,7 +123,9 @@ async fn test_logout() {
         .await;
     api.set_callback_url(&logout_payload.callback_url);
     api.set_session_id(&logout_payload.session_id);
-    let res = api.logout("user", Some("type")).await.is_ok();
+    api.set_username(&logout_payload.username);
+    api.set_session_type(&logout_payload.session_type);
+    let res = api.logout().await.is_ok();
     assert!(res, "Logout failed: {:?}", res);
 }
 

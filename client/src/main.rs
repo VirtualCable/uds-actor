@@ -53,13 +53,11 @@ async fn send_login(platform: &platform::Platform) -> anyhow::Result<rest::types
 }
 
 async fn send_logout(platform: &platform::Platform) -> anyhow::Result<()> {
-    let username = platform.operations().get_current_user()?;
-    let session_type = platform.operations().get_session_type()?;
     let api = platform.api();
 
     api.write()
         .await
-        .logout(&username, Some(&session_type))
+        .logout()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to logout: {}", e))
 }

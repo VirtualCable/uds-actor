@@ -46,11 +46,7 @@ pub trait ClientRest: Send + Sync {
         username: &str,
         session_type: Option<&str>,
     ) -> Result<LoginResponse, reqwest::Error>;
-    async fn logout(
-        &self,
-        username: &str,
-        session_type: Option<&str>,
-    ) -> Result<(), reqwest::Error>;
+    async fn logout(&self) -> Result<(), reqwest::Error>;
     async fn ping(&self) -> Result<bool, reqwest::Error>;
 }
 
@@ -61,6 +57,8 @@ pub(crate) struct ClientRestSession {
     base_url: String,
     session_id: String,
     callback_url: String,
+    username: String,
+    session_type: String,
 }
 
 #[allow(dead_code)]
@@ -80,6 +78,8 @@ impl ClientRestSession {
             base_url,
             session_id: String::new(),
             callback_url: String::new(),
+            username: String::new(),
+            session_type: String::new(),
         }
     }
 
@@ -93,6 +93,14 @@ impl ClientRestSession {
 
     pub(super) fn set_session_id(&mut self, id: &str) {
         self.session_id = id.to_string();
+    }
+
+    pub(super) fn set_username(&mut self, username: &str) {
+        self.username = username.to_string();
+    }
+
+    pub(super) fn set_session_type(&mut self, session_type: &str) {
+        self.session_type = session_type.to_string();
     }
 
     async fn post<T, R>(&self, method: &str, payload: &T) -> Result<R, reqwest::Error>
@@ -148,18 +156,18 @@ impl ClientRest for ClientRestSession {
         };
         let result: LoginResponse = self.post("login", &payload).await?;
         self.set_session_id(&result.session_id);
+        self.set_username(username);
+        self.set_session_type(session_type.unwrap_or("UNKNOWN"));
+        debug!("Login response: {:?}", result);
+
         Ok(result)
     }
 
-    async fn logout(
-        &self,
-        username: &str,
-        session_type: Option<&str>,
-    ) -> Result<(), reqwest::Error> {
-        debug!("Logging out user: {}", username);
+    async fn logout(&self) -> Result<(), reqwest::Error> {
+        debug!("Logging out user: {}", self.username);
         let payload = LogoutRequest {
-            username: username.to_string(),
-            session_type: session_type.unwrap_or("UNKNOWN").to_string(),
+            username: self.username.clone(),
+            session_type: self.session_type.clone(),
             callback_url: self.callback_url.clone(),
             session_id: self.session_id.clone(),
         };
@@ -179,5 +187,8 @@ impl ClientRest for ClientRestSession {
 /// Create a new shared, thread-safe client implementing `ClientRest`.
 #[allow(dead_code)]
 pub fn new_client_rest_api() -> Arc<tokio::sync::RwLock<dyn ClientRest>> {
-    Arc::new(tokio::sync::RwLock::new(ClientRestSession::new("https://127.0.0.1:43910", false)))
+    Arc::new(tokio::sync::RwLock::new(ClientRestSession::new(
+        "https://127.0.0.1:43910",
+        false,
+    )))
 }

@@ -66,8 +66,6 @@ impl ClientRest for FakeApi {
     }
     async fn logout(
         &self,
-        _username: &str,
-        _session_type: Option<&str>,
     ) -> Result<(), reqwest::Error> {
         Ok(())
     }
