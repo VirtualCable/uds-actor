@@ -61,13 +61,10 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
         // Notify user:
         // TODO: implement notification using fltk (for portability)
         if !notified && idle > max_idle.saturating_sub(std::time::Duration::from_secs(300)) {
-            shared::gui::ensure_dialogs_closed().await; // Ensure no other dialogs are active
-            shared::gui::message_dialog(
-                "Idle Notification",
-                "You have been idle for a while. If no action is taken, the session will be stopped within 5 minutes.",
-            )
-            .await
-            .ok();
+            platform.actions()
+                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped within 5 minutes.")
+                .await
+                .ok();
 
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
@@ -77,10 +74,58 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
             break;
         }
         // Wait inside the session_manager for a while (1 second or until signaled)
-        session_manager.wait_timeout(std::time::Duration::from_secs(1)).await;
+        session_manager
+            .wait_timeout(std::time::Duration::from_secs(1))
+            .await;
     }
     // Notify session manager to stop session
     platform.session_manager().stop().await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Tests for idle task
+    use crate::testing::fake::create_platform;
+
+    #[tokio::test]
+    async fn test_idle_task_idle() {
+        let platform = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+
+        // Run idle task in a separate task with a short max_idle (10 seconds)
+        let res = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::task(Some(1), platform),
+        )
+        .await;
+        session_manager.stop().await; // Ensure session is stopped in any case
+
+        assert!(res.is_ok(), "Idle task timed out: {:?}", res);
+    }
+
+    #[tokio::test]
+    async fn test_idle_task_no_idle() {
+        let platform = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+
+        // Run idle task in a separate task with no max_idle
+        let idle_handle = tokio::spawn(async move {
+            let res = super::task(None, platform).await;
+            shared::log::info!("Idle task finished with result: {:?}", res);
+        });
+        // Wait a bit to ensure idle task has started
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert!(session_manager.is_running().await);
+        // Wait a bit more, to ensure we are inside the wait
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert!(session_manager.is_running().await);
+        // Now stop the session
+        session_manager.stop().await;
+        shared::log::info!("Session stop requested");
+        // Wait for idle task to finish, at most 5 seconds
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), idle_handle).await;
+        assert!(!session_manager.is_running().await);
+    }
 }

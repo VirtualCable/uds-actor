@@ -53,3 +53,33 @@ pub async fn task(platform: platform::Platform) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+
+#[cfg(test)]
+mod tests {
+    // Tests for alive task
+    use crate::testing::fake::create_platform;
+
+    #[tokio::test]
+    async fn test_alive_task() {
+        let platform = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+
+        // Run alive task in a separate task
+        let alive_handle = tokio::spawn(async move {
+            let res = super::task(platform).await;
+            shared::log::info!("Alive task finished with result: {:?}", res);
+        });
+
+        // Wait a bit to ensure alive task has started
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert!(session_manager.is_running().await);
+
+        // Now stop the session
+        session_manager.stop().await;
+        shared::log::info!("Session stop requested");
+        // Wait for alive task to finish
+        let _ = alive_handle.await;
+        assert!(!session_manager.is_running().await);
+    }
+}

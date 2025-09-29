@@ -77,7 +77,7 @@ async fn main() {
 
 async fn run(platform: platform::Platform) {
     // Listener for the HTTP server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .unwrap();
 

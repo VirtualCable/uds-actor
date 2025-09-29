@@ -28,10 +28,13 @@ use crate::platform;
 
 pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<()> {
     let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
-    let deadline = if deadline > std::time::Duration::from_secs(300) {
-        deadline - std::time::Duration::from_secs(300)
+    let (deadline, remaining) = if deadline > std::time::Duration::from_secs(300) {
+        (
+            deadline - std::time::Duration::from_secs(300),
+            std::time::Duration::from_secs(300),
+        )
     } else {
-        std::time::Duration::from_secs(0)
+        (deadline, std::time::Duration::from_secs(0)) // If less than 5 mins, just keep it as is
     };
     // If no deadline, just wait until signaled
     if deadline.as_secs() == 0 {
@@ -40,41 +43,73 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
         return Ok(());
     }
 
-    loop {
-        // Deadline timer, simply wait until deadline is reached inside the session_manager
-        // But leave a 5 mins to notify before deadline
-        if !platform.session_manager().wait_timeout(deadline).await {
-            shared::log::info!("Deadline notification reached, notifying user");
+    // Deadline timer, simply wait until deadline is reached inside the session_manager
+    // But leave a 5 mins to notify before deadline
+    if !platform.session_manager().wait_timeout(deadline).await {
+        shared::log::info!("Deadline notification reached, notifying user");
 
-            // Notify user
-            // TODO: Implement notification using fltk (notification must not block)
-            // For now, just log it
-            shared::log::info!("Notifying user about deadline");
-            
-            shared::gui::ensure_dialogs_closed().await; // Ensure no other dialogs are active
-            shared::gui::message_dialog(
-                "Deadline Notification",
-                "This session will be stopped in 5 minutes.\nPlease save your work.",
-            )
+        platform
+            .actions()
+            .notify_user("This session will be stopped in 5 minutes.\nPlease save your work.")
             .await
             .ok();
 
-            // Wait 5 minutes more or until signaled
-            if platform
-                .session_manager()
-                .wait_timeout(std::time::Duration::from_secs(300))
-                .await
-            {
-                shared::log::info!("Session still running after deadline, stopping session");
-                break; // End task
-            }
-        } else {
-            shared::log::info!("Session signaled or closed, stopping deadline task");
-            break;
-        }
+        // Wait remaining minutes more or until signaled
+        let _ = platform.session_manager().wait_timeout(remaining).await;
+        shared::log::info!("Session still running after deadline, stopping session");
+    } else {
+        shared::log::info!("Session signaled or closed, stopping deadline task");
     }
+
     // Notify session manager to stop session
     platform.session_manager().stop().await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Tests for deadline task
+    use crate::testing::fake::create_platform;
+
+    #[tokio::test]
+    async fn test_deadline_task_deadline() {
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+        let platform = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+
+        // Run deadline task in a separate task with a short deadline (10 seconds)
+        let res = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::task(Some(1), platform),
+        )
+        .await;
+        session_manager.stop().await; // Ensure session is stopped
+
+        assert!(res.is_ok(), "Deadline task timed out: {:?}", res);
+    }
+
+    #[tokio::test]
+    async fn test_deadline_task_no_deadline() {
+        let platform = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+        // Run deadline task in a separate task with no deadline
+        let deadline_handle = tokio::spawn(async move {
+            let res = super::task(None, platform).await;
+            shared::log::info!("Deadline task finished with result: {:?}", res);
+        });
+        // Wait a bit to ensure deadline task has started
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert!(session_manager.is_running().await);
+        // Wait a bit more, to ensure we are inside the wait
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert!(session_manager.is_running().await);
+
+        // Now stop the session
+        session_manager.stop().await;
+        shared::log::info!("Session stop requested");
+        // Wait for deadline task to finish, at most 5 seconds
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), deadline_handle).await;
+        assert!(!session_manager.is_running().await);
+    }
 }
