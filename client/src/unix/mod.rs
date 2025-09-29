@@ -1,9 +1,11 @@
-use crate::session_close::SessionManagement;
+use tokio::signal::unix::{SignalKind, signal};
+
 use shared::{
     log,
     sync::event::{Event, EventLike},
 };
-use tokio::signal::unix::{signal, SignalKind};
+
+use crate::session::SessionManagement;
 
 pub struct UnixSessionManager {
     stop_event: Event,
@@ -45,10 +47,14 @@ impl SessionManagement for UnixSessionManager {
         self.stop_event.signal();
         log::debug!("Unix session close event signaled");
     }
+
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        self.stop_event.wait_timeout(timeout)
+    }
 }
 
-pub fn new_session_manager() -> impl SessionManagement {
-    UnixSessionManager::new()
+pub fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+    std::sync::Arc::new(UnixSessionManager::new())
 }
 
 #[cfg(test)]

@@ -26,13 +26,16 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub use super::traits::EventLike;
 
+// Windows implementation
 #[cfg(target_os = "windows")]
 pub use crate::windows::WindowsEvent;
 
 #[cfg(target_os = "windows")]
 pub use WindowsEvent as Event;
 
+// Unix implementation (Linux, Mac, BSD, etc)
 #[cfg(not(target_os = "windows"))]
-pub use crate::unix::event::UnixEvent;
+pub use crate::unix::UnixEvent;
+
 #[cfg(not(target_os = "windows"))]
 pub use UnixEvent as Event;

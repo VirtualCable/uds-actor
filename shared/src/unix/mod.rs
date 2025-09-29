@@ -26,5 +26,6 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 mod event;
 pub mod actions;
+pub mod operations;
 
 pub use event::UnixEvent;

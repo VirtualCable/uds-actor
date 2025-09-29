@@ -1,8 +1,9 @@
-// Minimal UnixOperations stub implementation.
-// Each method logs its parameters and returns a safe default value.
-
-use anyhow::Context;
+// TODO: finish Unix implementation
 use crate::log;
+
+pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+    std::sync::Arc::new(UnixOperations::new())
+}
 
 pub struct UnixOperations;
 
@@ -38,7 +39,7 @@ impl crate::operations::Operations for UnixOperations {
         domain: &str,
         ou: Option<&str>,
         account: &str,
-        password: &str,
+        _password: &str,
         execute_in_one_step: bool,
     ) -> anyhow::Result<()> {
         log::debug!(
@@ -54,13 +55,10 @@ impl crate::operations::Operations for UnixOperations {
     fn change_user_password(
         &self,
         user: &str,
-        old_password: &str,
-        new_password: &str,
+        _old_password: &str,
+        _new_password: &str,
     ) -> anyhow::Result<()> {
-        log::debug!(
-            "UnixOperations::change_user_password called: user={}",
-            user
-        );
+        log::debug!("UnixOperations::change_user_password called: user={}", user);
         Ok(())
     }
 
@@ -94,9 +92,9 @@ impl crate::operations::Operations for UnixOperations {
         Ok(vec![])
     }
 
-    fn get_idle_duration(&self) -> anyhow::Result<f64> {
+    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
         log::debug!("UnixOperations::get_idle_duration called");
-        Ok(0.0)
+        Ok(std::time::Duration::new(0, 0))
     }
 
     fn get_current_user(&self) -> anyhow::Result<String> {
@@ -115,7 +113,10 @@ impl crate::operations::Operations for UnixOperations {
     }
 
     fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()> {
-        log::debug!("UnixOperations::protect_file_for_owner_only called: {}", path);
+        log::debug!(
+            "UnixOperations::protect_file_for_owner_only called: {}",
+            path
+        );
         Ok(())
     }
 }

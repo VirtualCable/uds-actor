@@ -13,4 +13,4 @@ pub use crate::windows::new_session_manager;
 
 // Linux and macOS implementation are identical
 #[cfg(unix)]
-pub use crate::windows::new_session_manager;
+pub use crate::unix::new_session_manager;
