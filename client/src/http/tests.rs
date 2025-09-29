@@ -14,7 +14,7 @@ async fn spawn_server() -> (
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let platform = crate::tests::fake::create_platform(None, None, None, None).await;
+    let platform = crate::testing::fake::create_platform(None, None, None, None).await;
     let platform_task = platform.clone();
     let handle = tokio::spawn(async move { run_server(listener, platform_task).await });
     let client = Client::new();

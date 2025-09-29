@@ -1,9 +1,7 @@
-pub mod fake;
+use crate::testing::fake::create_platform;
 
 #[tokio::test]
 async fn test_run_no_server() {
-    // With no server listening, just test that run starts and stops correctly
-    shared::log::setup_logging("debug", shared::log::LogType::Tests);
     // Execute run function. As long as there is no server running on localhost, it will fail to login (Before registering)
     let platform = crate::platform::Platform::new(); // Default platform, no fake api
     let session_manager = platform.session_manager();
@@ -19,7 +17,7 @@ async fn test_run_no_server() {
 async fn test_run() {
     shared::log::setup_logging("debug", shared::log::LogType::Tests);
     // Start a mock server to allow login
-    let platform = fake::create_platform(None, None, None, None).await;
+    let platform = create_platform(None, None, None, None).await;
 
     let session_manager = platform.session_manager();
 

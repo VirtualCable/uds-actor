@@ -127,5 +127,8 @@ async fn run(platform: platform::Platform) {
 
 // Faking modules for tests
 #[cfg(test)]
-mod tests;
+pub mod testing;
+
+#[cfg(test)]
+pub mod tests;
 

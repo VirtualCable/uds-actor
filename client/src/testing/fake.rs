@@ -161,6 +161,12 @@ impl FakeOperations {
     }
 }
 
+impl Default for FakeOperations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl shared::operations::Operations for FakeOperations {
     fn check_permissions(&self) -> anyhow::Result<bool> {
         let mut inner = self.inner.write().unwrap();
