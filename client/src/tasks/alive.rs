@@ -26,7 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
 
-pub async fn task(platform: platform::Platform) -> anyhow::Result<()> {
+pub async fn task(platform: platform::Platform) -> anyhow::Result<Option<String>> {
     // Ping our server every 15 seconds to let it know we are alive
     let api = platform.api();
     let session_manager = platform.session_manager();
@@ -45,13 +45,15 @@ pub async fn task(platform: platform::Platform) -> anyhow::Result<()> {
             }
             Err(e) => {
                 shared::log::error!("Failed to ping server: {}", e);
+                // If ping fails, we stop the session
+                return Ok(Some("Service comms failed".to_string()));
             }
         }
     }
     // Notify session manager to stop session
     platform.session_manager().stop().await;
 
-    Ok(())
+    Ok(None)
 }
 
 
@@ -62,7 +64,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_alive_task() {
-        let platform = create_platform(None, None, None, None).await;
+        let (platform, _platform) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run alive task in a separate task

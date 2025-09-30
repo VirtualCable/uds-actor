@@ -39,15 +39,15 @@ use shared::{debug_dev, log::debug};
 #[allow(dead_code)]
 #[async_trait]
 pub trait ClientRest: Send + Sync {
-    async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error>;
-    async fn unregister(&mut self) -> Result<(), reqwest::Error>;
+    async fn register(&mut self, callback_url: &str) -> anyhow::Result<()>;
+    async fn unregister(&mut self) -> anyhow::Result<()>;
     async fn login(
         &mut self,
         username: &str,
         session_type: Option<&str>,
-    ) -> Result<LoginResponse, reqwest::Error>;
-    async fn logout(&self) -> Result<(), reqwest::Error>;
-    async fn ping(&self) -> Result<bool, reqwest::Error>;
+    ) -> anyhow::Result<LoginResponse>;
+    async fn logout(&self, reason: Option<&str>) -> anyhow::Result<()>;
+    async fn ping(&self) -> anyhow::Result<bool>;
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +68,7 @@ impl ClientRestSession {
         let client = Client::builder()
             .timeout(Duration::from_secs(32))
             .danger_accept_invalid_certs(!verify_cert)
+            .connection_verbose(cfg!(debug_assertions))
             .build()
             .expect("Failed to build HTTP client");
 
@@ -103,7 +104,7 @@ impl ClientRestSession {
         self.session_type = session_type.to_string();
     }
 
-    async fn post<T, R>(&self, method: &str, payload: &T) -> Result<R, reqwest::Error>
+    async fn post<T, R>(&self, method: &str, payload: &T) -> anyhow::Result<R>
     where
         T: serde::Serialize + ?Sized,
         R: for<'de> serde::Deserialize<'de>,
@@ -124,22 +125,22 @@ impl ClientRestSession {
 
 #[async_trait]
 impl ClientRest for ClientRestSession {
-    async fn register(&mut self, callback_url: &str) -> Result<(), reqwest::Error> {
+    async fn register(&mut self, callback_url: &str) -> anyhow::Result<()> {
         debug!("Registering with callback URL: {}", callback_url);
         self.set_callback_url(callback_url);
         let payload = RegisterRequest {
             callback_url: self.callback_url.clone(),
         };
-        let _: String = self.post("register", &payload).await?;
+        let _: ApiResponse<String> = self.post("register", &payload).await?;
         Ok(())
     }
 
-    async fn unregister(&mut self) -> Result<(), reqwest::Error> {
+    async fn unregister(&mut self) -> anyhow::Result<()> {
         debug!("Unregistering with callback URL: {}", self.callback_url);
         let payload = UnregisterRequest {
             callback_url: self.callback_url.clone(),
         };
-        let _: String = self.post("unregister", &payload).await?;
+        let _: ApiResponse<String> = self.post("unregister", &payload).await?;
         self.callback_url.clear();
         Ok(())
     }
@@ -148,37 +149,46 @@ impl ClientRest for ClientRestSession {
         &mut self,
         username: &str,
         session_type: Option<&str>,
-    ) -> Result<LoginResponse, reqwest::Error> {
+    ) -> anyhow::Result<LoginResponse> {
         debug!("Logging in user: {}", username);
         let payload = LoginRequest {
             username: username.to_string(),
             session_type: session_type.unwrap_or("UNKNOWN").to_string(),
         };
-        let result: LoginResponse = self.post("login", &payload).await?;
+        let response: ApiResponse<LoginResponse> = self.post("login", &payload).await?;
+        let result = response.result()?;
+
         self.set_session_id(&result.session_id);
         self.set_username(username);
         self.set_session_type(session_type.unwrap_or("UNKNOWN"));
-        debug!("Login response: {:?}", result);
 
         Ok(result)
     }
 
-    async fn logout(&self) -> Result<(), reqwest::Error> {
+    async fn logout(&self, reason: Option<&str>) -> anyhow::Result<()> {
         debug!("Logging out user: {}", self.username);
+        // Currently, reason is appended to the username.
+        // Here, username is for logging purposes only, so it's ok.
+        let username = if let Some(r) = reason {
+            format!("{} ({})", self.username, r)
+        } else {
+            self.username.clone()
+        };
         let payload = LogoutRequest {
-            username: self.username.clone(),
+            username,
             session_type: self.session_type.clone(),
             callback_url: self.callback_url.clone(),
             session_id: self.session_id.clone(),
         };
-        let _: String = self.post("logout", &payload).await?;
+        let _: ApiResponse<String> = self.post("logout", &payload).await?;
         Ok(())
     }
 
-    async fn ping(&self) -> Result<bool, reqwest::Error> {
+    async fn ping(&self) -> anyhow::Result<bool> {
         debug!("Pinging server...");
         let payload = PingRequest::default();
-        let result: PingResponse = self.post("ping", &payload).await?;
+        let response: ApiResponse<PingResponse> = self.post("ping", &payload).await?;
+        let result = response.result()?;
         debug!("Ping response: {:?}", result);
         Ok(result.0 == "pong")
     }

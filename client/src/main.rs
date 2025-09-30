@@ -24,6 +24,8 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod http;
 mod rest;
@@ -52,12 +54,12 @@ async fn send_login(platform: &platform::Platform) -> anyhow::Result<rest::types
         .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))
 }
 
-async fn send_logout(platform: &platform::Platform) -> anyhow::Result<()> {
+async fn send_logout(platform: &platform::Platform, reason: Option<&str>) -> anyhow::Result<()> {
     let api = platform.api();
 
     api.write()
         .await
-        .logout()
+        .logout(reason)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to logout: {}", e))
 }
@@ -75,9 +77,7 @@ async fn main() {
 
 async fn run(platform: platform::Platform) {
     // Listener for the HTTP server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     let login_info = match send_login(&platform).await {
         Ok(info) => info,
@@ -101,22 +101,30 @@ async fn run(platform: platform::Platform) {
     // Await for session end
     session_manager.wait().await;
 
-    send_logout(&platform).await.unwrap_or_else(|e| {
-        shared::log::error!("Logout failed: {}", e);
-    });
-
     // Join with a timeout all tasks to avoid hanging forever
     let join_timeout = std::time::Duration::from_secs(5);
+    let mut reason = None;
     if tokio::time::timeout(join_timeout, async {
         let _ = server_task.await;
-        let _ = idle_task.await;
-        let _ = deadline_task.await;
-        let _ = alive_task.await;
+        for task in [idle_task, deadline_task, alive_task] {
+            let res = task.await;
+            if let Ok(Ok(Some(r))) = res {
+                reason = Some(r);
+                break;
+            }
+        }
     })
     .await
     .is_err()
     {
         shared::log::warn!("Some tasks did not shut down in time, aborting...");
+    }
+
+    // Send logout
+    if let Err(e) = send_logout(&platform, reason.as_deref()).await {
+        shared::log::error!("Logout failed: {}", e);
+    } else {
+        shared::log::info!("Logout successful");
     }
 
     // Ensure GUI is shutdown. If not done, and any window is open, process will hang until window is closed
@@ -129,4 +137,3 @@ pub mod testing;
 
 #[cfg(test)]
 pub mod tests;
-

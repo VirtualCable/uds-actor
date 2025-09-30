@@ -55,6 +55,36 @@ pub struct LogoutRequest {
     pub session_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiResponse<T> {
+    pub result: T,
+    pub error: Option<String>,
+}
+
+impl<T> ApiResponse<T> {
+    // If error is some and not empty, return Err
+    pub fn is_error(&self) -> bool {
+        if let Some(err) = &self.error {
+            !err.is_empty()
+        } else {
+            false
+        }
+    }
+
+    // Return the error as a reqwest::Error (using a generic error for demonstration)
+    pub fn error(&self) -> anyhow::Error {
+        anyhow::anyhow!(self.error.clone().unwrap_or_default())
+    }
+
+    pub fn result(self) -> anyhow::Result<T> {
+        if self.is_error() {
+            Err(self.error())
+        } else {    
+            Ok(self.result)
+        }
+    }
+}
+
 /// Login response
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]

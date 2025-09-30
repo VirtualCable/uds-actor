@@ -52,9 +52,9 @@ async fn test_register() {
         .mock("POST", "/ui/register")
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(json!({"callback_url": "http://callback"})))
-        .with_body("\"ok\"")
+        .with_body("{\"result\": \"ok\"}")
         .with_status(200)
-        .create_async()
+        .create_async() 
         .await;
     let response = api.register("http://callback").await;
     assert!(response.is_ok(), "Register failed: {:?}", response);
@@ -68,7 +68,7 @@ async fn test_unregister() {
         .mock("POST", "/ui/unregister")
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(json!({"callback_url": "http://callback"})))
-        .with_body("\"ok\"")
+        .with_body("{\"result\": \"ok\"}")
         .with_status(200)
         .create_async()
         .await;
@@ -86,7 +86,7 @@ async fn test_login() {
         session_type: "type".to_string(),
     };
 
-    let login_resp_str = r#"{"ip": "127.0.0.1", "hostname": "localhost", "deadline": 10000, "max_idle": 300, "session_id": "sessid"}"#;
+    let login_resp_str = r#"{"result": {"ip": "127.0.0.1", "hostname": "localhost", "deadline": 10000, "max_idle": 300, "session_id": "sessid"}, "error": null}"#;
     let _m = server
         .mock("POST", "/ui/login")
         .match_header("content-type", "application/json")
@@ -118,14 +118,14 @@ async fn test_logout() {
         .match_header("content-type", "application/json")
         .match_body(Matcher::PartialJson(json!(logout_payload)))
         .with_status(200)
-        .with_body("\"ok\"")
+        .with_body("{\"result\": \"ok\"}")
         .create_async()
         .await;
     api.set_callback_url(&logout_payload.callback_url);
     api.set_session_id(&logout_payload.session_id);
     api.set_username(&logout_payload.username);
     api.set_session_type(&logout_payload.session_type);
-    let res = api.logout().await.is_ok();
+    let res = api.logout(None).await.is_ok();
     assert!(res, "Logout failed: {:?}", res);
 }
 
@@ -137,7 +137,7 @@ async fn test_ping() {
         .mock("POST", "/ui/ping")
         .match_header("content-type", "application/json")
         .with_status(200)
-        .with_body("\"pong\"")
+        .with_body("{\"result\": \"pong\"}")
         .create_async()
         .await;
     assert!(api.ping().await.unwrap());

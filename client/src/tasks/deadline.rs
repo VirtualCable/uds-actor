@@ -26,7 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
 
-pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<()> {
+pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<Option<String>> {
     let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
     let (deadline, remaining) = if deadline > std::time::Duration::from_secs(300) {
         (
@@ -40,7 +40,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
     if deadline.as_secs() == 0 {
         // Wait until signaled
         platform.session_manager().wait().await;
-        return Ok(());
+        return Ok(None);
     }
 
     // Deadline timer, simply wait until deadline is reached inside the session_manager
@@ -64,7 +64,10 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
     // Notify session manager to stop session
     platform.session_manager().stop().await;
 
-    Ok(())
+    Ok(Some(format!(
+        "deadline of {}s reached",
+        deadline.as_secs() + remaining.as_secs()
+    )))
 }
 
 #[cfg(test)]
@@ -75,7 +78,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let platform = create_platform(None, None, None, None).await;
+        let (platform, _calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -91,7 +94,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
-        let platform = create_platform(None, None, None, None).await;
+        let (platform, _calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {

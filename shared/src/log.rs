@@ -27,7 +27,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::{fs, fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
@@ -117,8 +117,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             })
             .with_ansi(false)
             .with_target(true)
-            .with_level(true)
-            .with_filter(EnvFilter::new(format!("{},flow=off", level)));
+            .with_level(true);
 
         #[cfg(debug_assertions)]
         use tracing_subscriber::Layer;

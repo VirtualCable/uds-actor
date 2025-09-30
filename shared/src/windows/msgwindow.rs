@@ -79,13 +79,13 @@ impl MsgWindow {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 class_name,
-                PCWSTR(widestring::U16CString::from_str_truncate("RDS Invisible Window").as_ptr()),
-                WS_POPUP | WS_DISABLED, // 👈 No borders, no interaction, 100% hidden
+                PCWSTR(widestring::U16CString::from_str_truncate("Actor Invisible Window").as_ptr()),
+                WS_POPUP | WS_DISABLED, //  No borders, no interaction, 100% hidden
                 0,
                 0,
                 0,
                 0,
-                None, // 👈 Not using HWND_MESSAGE
+                None, //  Not using HWND_MESSAGE
                 None,
                 Some(h_instance),
                 None, // No lpParam
@@ -112,21 +112,21 @@ impl MsgWindow {
                 let _ = DestroyWindow(*hwnd);
                 let _ = UnregisterClassW(get_class_name(), None);
             }
-            log::debug!("🧹 Window destroyed");
+            log::debug!("Window destroyed");
         }
     }
 
     fn process_messages(hwnd: &HWND) {
         let mut msg = MSG::default();
-        log::debug!("🕒 Starting message loop for HWND: {:?}", hwnd);
+        log::debug!("Starting message loop for HWND: {:?}", hwnd);
 
         while unsafe { GetMessageW(&mut msg, None, 0, 0).into() } {
-            log::debug!("📨 Got message: {} for HWND: {:?}", msg.message, msg.hwnd);
+            log::debug!("Got message: {} for HWND: {:?}", msg.message, msg.hwnd);
 
             MsgWindow::process_message(&msg);
         }
 
-        log::debug!("🏁 Message loop ended");
+        log::debug!("Message loop ended");
     }
 
     fn do_close(hwnd: &HWND) {
@@ -140,7 +140,7 @@ impl MsgWindow {
 
     // Execute this on main thread
     pub fn task(&mut self) {
-        log::debug!("🛠️ Starting message window task");
+        log::debug!("Starting message window task");
         let hwnd_shared = Arc::new(AtomicIsize::new(0));
         let hwnd_for_msgs = hwnd_shared.clone();
 

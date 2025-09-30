@@ -17,7 +17,7 @@ async fn test_run_no_server() {
 async fn test_run_and_stop() {
     shared::log::setup_logging("debug", shared::log::LogType::Tests);
     // Start a mock server to allow login
-    let platform = create_platform(None, None, None, None).await;
+    let (platform, _calls) = create_platform(None, None, None, None).await;
 
     let session_manager = platform.session_manager();
 

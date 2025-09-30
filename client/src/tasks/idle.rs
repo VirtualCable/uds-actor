@@ -26,12 +26,15 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
 
-pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow::Result<()> {
+pub async fn task(
+    max_idle: Option<u32>,
+    platform: platform::Platform,
+) -> anyhow::Result<Option<String>> {
     let max_idle = std::time::Duration::from_secs(max_idle.unwrap_or(0) as u64);
     if max_idle.as_secs() == 0 {
         // Wait until signaled
         platform.session_manager().wait().await;
-        return Ok(());
+        return Ok(None);
     }
 
     let operations = platform.operations();
@@ -51,16 +54,15 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
                 std::time::Duration::from_secs(0)
             }
         };
-        // If idle is less than 3 seconds, reset notified flag
-        // 3 seconds because we check for idle every second, so if user is active,
-        // idle will always be less than 3 seconds (1 second of inactivity + 1 second of check + some margin)
-        if idle.as_secs() < 3 {
+
+        let remaining = max_idle.saturating_sub(idle);
+        if remaining.as_secs() > 120 {
+            // If we have more than 2 minutes remaining, reset notified flag
             notified = false;
         }
 
         // Notify user:
-        // TODO: implement notification using fltk (for portability)
-        if !notified && idle > max_idle.saturating_sub(std::time::Duration::from_secs(300)) {
+        if !notified && remaining.as_secs() <= 120 {
             platform.actions()
                 .notify_user("You have been idle for a while. If no action is taken, the session will be stopped within 5 minutes.")
                 .await
@@ -69,9 +71,12 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
         }
-        if idle > max_idle {
-            shared::log::info!("Max idle time reached, stopping session");
-            break;
+
+        // If we reach max idle, stop session
+        if remaining.as_secs() == 0 {
+            let message = format!("idle of {}s reached", max_idle.as_secs());
+            shared::log::info!("{}", message);
+            return Ok(Some(message)); // Message to include on logout reason
         }
         // Wait inside the session_manager for a while (1 second or until signaled)
         session_manager
@@ -81,7 +86,7 @@ pub async fn task(max_idle: Option<u32>, platform: platform::Platform) -> anyhow
     // Notify session manager to stop session
     platform.session_manager().stop().await;
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -91,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_idle_task_idle() {
-        let platform = create_platform(None, None, None, None).await;
+        let (platform, _calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -107,7 +112,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_idle_task_no_idle() {
-        let platform = create_platform(None, None, None, None).await;
+        let (platform, _calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle
