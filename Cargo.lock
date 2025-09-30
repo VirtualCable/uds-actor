@@ -1440,7 +1440,7 @@ dependencies = [
 
 [[package]]
 name = "shared"
-version = "0.1.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1819,7 +1819,7 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "uds-actor-client"
-version = "0.1.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1835,6 +1835,17 @@ dependencies = [
  "shared",
  "tokio",
  "tower",
+ "winres",
+]
+
+[[package]]
+name = "uds-actor-service"
+version = "5.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "shared",
+ "tokio",
  "winres",
 ]
 

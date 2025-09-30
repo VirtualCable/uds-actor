@@ -29,6 +29,7 @@ pub mod sync;
 pub mod gui;
 
 pub mod actions;
+pub mod launcher;
 
 #[cfg(target_os = "windows")]
 pub mod windows;

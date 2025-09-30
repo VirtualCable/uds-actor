@@ -1,36 +1,19 @@
 [package]
-name = "uds-actor-client"
+name = "uds-actor-service"
 version = "5.0.0"
 edition = "2024"
 
-[dependencies.macros]
-path = "../macros"
-
 [dependencies]
 shared = { path = "../shared" }
+anyhow = "1.0.100"
 
+# Async runtime
 tokio = { version = "1.47.1", features = ["macros", "rt", "time", "signal"] }
 
-reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
-
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-
-anyhow = "1.0.88"
-async-trait = "0.1.89"
-
-axum = { version = "0.8.4", features = ["json", "tokio"] }
-base64 = "0.22.1"
 
 [build-dependencies]
 chrono = "0.4.42"
 winres = "0.1.12"
-
-
-[dev-dependencies]
-mockito = "1.7.0"
-tower = "0.5.2"
-hyper = "1.7.0"
 
 [profile.release]
 opt-level = "z"            # For size (use "s" for speed if size is not critical)

@@ -26,7 +26,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{fs, fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
+use std::{fs, fs::OpenOptions, io, path::PathBuf, sync::OnceLock, panic};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Reexport to avoid using crate names for tracing
@@ -89,6 +89,13 @@ pub enum LogType {
     Tests,
 }
 
+// Our log system wil also hook panics to log them
+pub fn setup_panic_hook() {
+    panic::set_hook(Box::new(|info| {
+        error!("Guru Meditation (😕): {:?}", info);
+    }));
+}
+
 pub fn setup_logging(level: &str, log_type: LogType) {
     let (level_key, log_path, log_name) = match log_type {
         LogType::Client => (
@@ -136,5 +143,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .ok();
 
         info!("Logging initialized with level: {}", level);
+        // Setupt panic hook
+        setup_panic_hook();
     });
 }

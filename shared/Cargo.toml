@@ -1,6 +1,6 @@
 [package]
 name = "shared"
-version = "0.1.0"
+version = "5.0.0"
 edition = "2024"
 
 [lib]
@@ -29,6 +29,9 @@ windows = { version = "0.62.1", features = [
     "Win32_NetworkManagement_NetManagement",
     "Win32_Storage_FileSystem",
     "Win32_Security_Authorization",
+    "Win32_System_Services",
+    "Win32_System_EventLog",
+
 ] }
 widestring = "1.2.0"
 
@@ -46,7 +49,6 @@ anyhow = "1.0.100"
 # Gui
 fltk = { version = "^1.5", features = ["fltk-bundled"] }
 
-
-tokio = { version = "1.47.1", features = ["macros", "rt", "time"] }
+tokio = { version = "1.47.1", features = ["macros", "rt", "time", "sync"] }
 
 async-trait = "0.1"

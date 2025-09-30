@@ -26,7 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub mod actions;
 pub mod operations;
-
+pub mod service;
 
 mod event;
 mod safe;
