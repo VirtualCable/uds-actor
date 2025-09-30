@@ -78,7 +78,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, _calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -87,14 +87,20 @@ mod tests {
             super::task(Some(1), platform),
         )
         .await;
+        calls.assert_called("session::wait_timeout(1s)");
+        calls.assert_called("session::wait_timeout(0");  // 0ns, 0s, ..
+        calls.assert_called("session::stop()");
+
         session_manager.stop().await; // Ensure session is stopped
 
         assert!(res.is_ok(), "Deadline task timed out: {:?}", res);
+        shared::log::info!("Calls: {:?}", calls.dump());
     }
 
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
-        let (platform, _calls) = create_platform(None, None, None, None).await;
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+        let (platform, calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {
@@ -114,5 +120,7 @@ mod tests {
         // Wait for deadline task to finish, at most 5 seconds
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), deadline_handle).await;
         assert!(!session_manager.is_running().await);
+
+        shared::log::info!("Calls: {:?}", calls.dump());
     }
 }

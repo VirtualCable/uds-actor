@@ -6,14 +6,61 @@ use shared::{
 };
 use std::sync::{Arc, RwLock};
 
+#[derive(Clone, Default)]
+pub struct Calls {
+    inner: Arc<RwLock<Vec<String>>>,
+}
+
+impl Calls {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    pub fn push<S: Into<String>>(&self, call: S) {
+        self.inner.write().unwrap().push(call.into());
+    }
+
+    pub fn contains_prefix(&self, prefix: &str) -> bool {
+        self.inner
+            .read()
+            .unwrap()
+            .iter()
+            .any(|c| c.starts_with(prefix))
+    }
+
+    pub fn assert_called(&self, prefix: &str) {
+        shared::log::info!("Asserting call with prefix: {}", prefix);
+        assert!(
+            self.contains_prefix(prefix),
+            "Expected call starting with '{}', but not found",
+            prefix
+        );
+    }
+
+    pub fn assert_not_called(&self, prefix: &str) {
+        shared::log::info!("Asserting NOT called with prefix: {}", prefix);
+        assert!(
+            !self.contains_prefix(prefix),
+            "Did not expect call starting with '{}', but found",
+            prefix
+        );
+    }
+
+    pub fn dump(&self) -> Vec<String> {
+        self.inner.read().unwrap().clone()
+    }
+}
+
 #[derive(Clone)]
 struct FakeSessionManager {
     event: Event,
-    calls: Arc<RwLock<Vec<String>>>,
+    calls: Calls,
 }
 
 impl FakeSessionManager {
-    fn new(calls: Arc<RwLock<Vec<String>>>) -> Self {
+    fn new(calls: Calls) -> Self {
         Self {
             event: Event::new(),
             calls,
@@ -24,25 +71,23 @@ impl FakeSessionManager {
 #[async_trait::async_trait]
 impl crate::session::SessionManagement for FakeSessionManager {
     async fn wait(&self) {
-        self.calls.write().unwrap().push("wait".into());
+        self.calls.push("session::wait()");
         self.event.wait_async().await;
     }
 
     async fn is_running(&self) -> bool {
-        self.calls.write().unwrap().push("is_running".into());
+        self.calls.push("session::is_running()");
         !self.event.is_set()
     }
 
     async fn stop(&self) {
-        self.calls.write().unwrap().push("stop".into());
+        self.calls.push("session::stop()");
         self.event.signal();
     }
 
     async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
         self.calls
-            .write()
-            .unwrap()
-            .push(format!("wait_timeout({:?})", timeout));
+            .push(format!("session::wait_timeout({:?})", timeout));
         let ev = self.event.clone();
         tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
             .await
@@ -51,11 +96,11 @@ impl crate::session::SessionManagement for FakeSessionManager {
 }
 
 pub struct FakeApi {
-    calls: Arc<RwLock<Vec<String>>>,
+    calls: Calls,
 }
 
 impl FakeApi {
-    fn new(calls: Arc<RwLock<Vec<String>>>) -> Self {
+    fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
@@ -63,19 +108,20 @@ impl FakeApi {
 #[async_trait::async_trait]
 impl ClientRest for FakeApi {
     async fn register(&mut self, _callback_url: &str) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("register".into());
+        self.calls.push("api::register()");
         Ok(())
     }
     async fn unregister(&mut self) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("unregister".into());
+        self.calls.push("api::unregister()");
         Ok(())
     }
     async fn login(
         &mut self,
-        _username: &str,
-        _session_type: Option<&str>,
+        username: &str,
+        session_type: Option<&str>,
     ) -> anyhow::Result<LoginResponse> {
-        self.calls.write().unwrap().push("login".into());
+        self.calls
+            .push(format!("api::login({},{:?})", username, session_type));
         Ok(LoginResponse {
             ip: "127.0.0.1".into(),
             hostname: "localhost".into(),
@@ -84,22 +130,22 @@ impl ClientRest for FakeApi {
             session_id: "sessid".into(),
         })
     }
-    async fn logout(&self, _reason: Option<&str>) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("logout".into());
+    async fn logout(&self, reason: Option<&str>) -> anyhow::Result<()> {
+        self.calls.push(format!("api::logout({:?})", reason));
         Ok(())
     }
     async fn ping(&self) -> anyhow::Result<bool> {
-        self.calls.write().unwrap().push("ping".into());
+        self.calls.push("api::ping()");
         Ok(true)
     }
 }
 
 pub struct FakeActions {
-    calls: Arc<RwLock<Vec<String>>>,
+    calls: Calls,
 }
 
 impl FakeActions {
-    fn new(calls: Arc<RwLock<Vec<String>>>) -> Self {
+    fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
@@ -107,11 +153,11 @@ impl FakeActions {
 #[async_trait::async_trait]
 impl Actions for FakeActions {
     async fn logoff(&self) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("logoff".into());
+        self.calls.push("actions::logoff()");
         Ok(())
     }
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
-        self.calls.write().unwrap().push("screenshot".into());
+        self.calls.push("actions::screenshot()");
         const PNG_1X1_TRANSPARENT: &[u8] = &[
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
             0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
@@ -122,49 +168,45 @@ impl Actions for FakeActions {
         Ok(PNG_1X1_TRANSPARENT.to_vec())
     }
     async fn run_script(&self, script: &str) -> anyhow::Result<String> {
-        self.calls
-            .write()
-            .unwrap()
-            .push(format!("run_script({})", script));
+        self.calls.push(format!("actions::run_script({})", script));
         Ok(format!("Executed: {}", script))
     }
-    async fn notify_user(&self, _message: &str) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("notify_user".into());
+    async fn notify_user(&self, message: &str) -> anyhow::Result<()> {
+        self.calls
+            .push(format!("actions::notify_user({:?})", message));
         Ok(())
     }
 }
 
 pub struct FakeOperations {
-    calls: Arc<RwLock<Vec<String>>>,
+    calls: Calls,
 }
 
 impl FakeOperations {
-    fn new(calls: Arc<RwLock<Vec<String>>>) -> Self {
+    fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
 impl shared::operations::Operations for FakeOperations {
     fn check_permissions(&self) -> anyhow::Result<bool> {
-        self.calls.write().unwrap().push("check_permissions".into());
+        self.calls.push("operations::check_permissions()");
         Ok(true)
     }
 
     fn get_computer_name(&self) -> anyhow::Result<String> {
-        self.calls.write().unwrap().push("get_computer_name".into());
+        self.calls.push("operations::get_computer_name()");
         Ok("FakeComputer".into())
     }
 
     fn get_domain_name(&self) -> anyhow::Result<Option<String>> {
-        self.calls.write().unwrap().push("get_domain_name".into());
+        self.calls.push("operations::get_domain_name()");
         Ok(Some("FakeDomain".into()))
     }
 
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
         self.calls
-            .write()
-            .unwrap()
-            .push(format!("rename_computer({})", new_name));
+            .push(format!("operations::rename_computer({})", new_name));
         shared::log::info!("Renaming computer to {}", new_name);
         Ok(())
     }
@@ -177,8 +219,8 @@ impl shared::operations::Operations for FakeOperations {
         password: &str,
         execute_in_one_step: bool,
     ) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push(format!(
-            "join_domain({},{:?},{},{},{})",
+        self.calls.push(format!(
+            "operations::join_domain({},{:?},{},{},{})",
             domain, ou, account, password, execute_in_one_step
         ));
         shared::log::info!(
@@ -198,8 +240,8 @@ impl shared::operations::Operations for FakeOperations {
         old_password: &str,
         new_password: &str,
     ) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push(format!(
-            "change_user_password({},{},{})",
+        self.calls.push(format!(
+            "operations::change_user_password({},{},{})",
             user, old_password, new_password
         ));
         shared::log::info!(
@@ -212,15 +254,12 @@ impl shared::operations::Operations for FakeOperations {
     }
 
     fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
-        self.calls
-            .write()
-            .unwrap()
-            .push("get_windows_version".into());
+        self.calls.push("operations::get_windows_version()");
         Ok((10, 0, 19044, 0, "Windows 10".into()))
     }
 
     fn get_os_version(&self) -> anyhow::Result<String> {
-        self.calls.write().unwrap().push("get_os_version".into());
+        self.calls.push("operations::get_os_version()");
         Ok("Windows 10".into())
     }
 
@@ -228,26 +267,23 @@ impl shared::operations::Operations for FakeOperations {
     /// represented as `u32` here; the platform implementation must convert it
     /// to the platform-specific flags type.
     fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
-        self.calls
-            .write()
-            .unwrap()
-            .push(format!("reboot({:?})", flags));
+        self.calls.push(format!("operations::reboot({:?})", flags));
         shared::log::info!("Rebooting with flags: {:?}", flags);
         Ok(())
     }
 
     fn logoff(&self) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("logoff".into());
+        self.calls.push("operations::logoff()");
         Ok(())
     }
 
     fn init_idle_timer(&self) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("init_idle_timer".into());
+        self.calls.push("operations::init_idle_timer()");
         Ok(())
     }
 
     fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>> {
-        self.calls.write().unwrap().push("get_network_info".into());
+        self.calls.push("operations::get_network_info()");
         Ok(vec![(
             "eth0".into(),
             "192.168.1.100".into(),
@@ -256,30 +292,30 @@ impl shared::operations::Operations for FakeOperations {
     }
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
-        self.calls.write().unwrap().push("get_idle_duration".into());
+        self.calls.push("operations::get_idle_duration()");
         Ok(std::time::Duration::from_secs(600))
     }
 
     fn get_current_user(&self) -> anyhow::Result<String> {
-        self.calls.write().unwrap().push("get_current_user".into());
+        self.calls.push("operations::get_current_user()");
         Ok("FakeUser".into())
     }
 
     fn get_session_type(&self) -> anyhow::Result<String> {
-        self.calls.write().unwrap().push("get_session_type".into());
+        self.calls.push("operations::get_session_type()");
         Ok("Interactive".into())
     }
 
     fn force_time_sync(&self) -> anyhow::Result<()> {
-        self.calls.write().unwrap().push("force_time_sync".into());
+        self.calls.push("operations::force_time_sync()");
         Ok(())
     }
 
     fn protect_file_for_owner_only(&self, _path: &str) -> anyhow::Result<()> {
-        self.calls
-            .write()
-            .unwrap()
-            .push("protect_file_for_owner_only".into());
+        self.calls.push(format!(
+            "operations::protect_file_for_owner_only({})",
+            _path
+        ));
         Ok(())
     }
 }
@@ -289,8 +325,8 @@ pub async fn create_platform(
     operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
     api: Option<std::sync::Arc<tokio::sync::RwLock<dyn ClientRest>>>,
     actions: Option<std::sync::Arc<dyn Actions>>,
-) -> (crate::platform::Platform, Arc<RwLock<Vec<String>>>) {
-    let calls: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+) -> (crate::platform::Platform, Calls) {
+    let calls: Calls = Calls::new();
     let manager =
         manager.unwrap_or_else(|| std::sync::Arc::new(FakeSessionManager::new(calls.clone())));
     let operations =
@@ -299,10 +335,13 @@ pub async fn create_platform(
         std::sync::Arc::new(tokio::sync::RwLock::new(FakeApi::new(calls.clone())))
     });
     let actions = actions.unwrap_or_else(|| std::sync::Arc::new(FakeActions::new(calls.clone())));
-    (crate::platform::Platform::new_with_params(
-        Some(manager),
-        Some(api),
-        Some(operations),
-        Some(actions),
-    ), calls)
+    (
+        crate::platform::Platform::new_with_params(
+            Some(manager),
+            Some(api),
+            Some(operations),
+            Some(actions),
+        ),
+        calls,
+    )
 }

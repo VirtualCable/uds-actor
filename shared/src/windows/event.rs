@@ -78,7 +78,7 @@ impl WindowsEvent {
 impl crate::sync::traits::EventLike for WindowsEvent {
     /// Blocks until the event is signaled
     fn wait(&self) {
-        log::debug!("🔔 Waiting for event: {:?}", self.handle);
+        log::debug!("Waiting for event: {:?}", self.handle);
         unsafe {
             let res = WaitForSingleObject(self.handle.get(), INFINITE);
             assert!(res == WAIT_OBJECT_0, "WaitForSingleObject failed");
@@ -89,7 +89,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
     /// Returns true if the event was signaled, false if the timeout expired
     fn wait_timeout(&self, timeout: Duration) -> bool {
         log::debug!(
-            "🔔 Waiting for event with timeout: {:?}, handle: {:?}",
+            "Waiting for event with timeout: {:?}, handle: {:?}",
             timeout,
             self.handle
         );
@@ -106,7 +106,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
 
     /// Signals the event (wakes up all waiters)
     fn signal(&self) {
-        log::debug!("🔔 Signaling event: {:?}", self.handle);
+        log::debug!("Signaling event: {:?}", self.handle);
         unsafe {
             let ok = SetEvent(self.handle.get()).is_ok();
             assert!(ok, "SetEvent failed");
@@ -115,7 +115,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
 
     /// Resets the event to non-signaled state (optional)
     fn reset(&self) {
-        log::debug!("🔔 Resetting event: {:?}", self.handle);
+        log::debug!("Resetting event: {:?}", self.handle);
         unsafe {
             let ok = ResetEvent(self.handle.get()).is_ok();
             assert!(ok, "ResetEvent failed");

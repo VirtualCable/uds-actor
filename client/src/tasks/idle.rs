@@ -64,7 +64,7 @@ pub async fn task(
         // Notify user:
         if !notified && remaining.as_secs() <= 120 {
             platform.actions()
-                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped within 5 minutes.")
+                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.")
                 .await
                 .ok();
 
@@ -76,6 +76,9 @@ pub async fn task(
         if remaining.as_secs() == 0 {
             let message = format!("idle of {}s reached", max_idle.as_secs());
             shared::log::info!("{}", message);
+            // Notify session manager to stop session
+            platform.session_manager().stop().await;
+
             return Ok(Some(message)); // Message to include on logout reason
         }
         // Wait inside the session_manager for a while (1 second or until signaled)
@@ -83,8 +86,6 @@ pub async fn task(
             .wait_timeout(std::time::Duration::from_secs(1))
             .await;
     }
-    // Notify session manager to stop session
-    platform.session_manager().stop().await;
 
     Ok(None)
 }
@@ -98,7 +99,7 @@ mod tests {
     async fn test_idle_task_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, _calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -107,15 +108,43 @@ mod tests {
             super::task(Some(1), platform),
         )
         .await;
+        calls.assert_called("session::stop()");
         session_manager.stop().await; // Ensure session is stopped in any case
 
         assert!(res.is_ok(), "Idle task timed out: {:?}", res);
+        calls.assert_called("operations::init_idle_timer()");
+        calls.assert_called("operations::get_idle_duration()");
+        calls.assert_called("actions::notify_user(\"");
+    }
 
+    // Test max_ilde grater than idle (idle is always 600 in our fake)
+    #[tokio::test]
+    async fn test_idle_task_no_idle_exceeded() {
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+
+        let (platform, calls) = create_platform(None, None, None, None).await;
+        let session_manager = platform.session_manager();
+
+        // Run idle task in a separate task with a short max_idle (5 seconds)
+        let res = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::task(Some(6000), platform),
+        )
+        .await;
+        // Should timeout, as idle is 600 seconds, and max_idle is 6000 seconds
+        assert!(res.is_err(), "Idle task should have timed out: {:?}", res);
+        assert!(session_manager.is_running().await);
+        calls.assert_not_called("session::stop()");
+        calls.assert_called("operations::init_idle_timer()");
+        calls.assert_called("operations::get_idle_duration()");
+        calls.assert_not_called("actions::notify_user(\"");
     }
 
     #[tokio::test]
     async fn test_idle_task_no_idle() {
-        let (platform, _calls) = create_platform(None, None, None, None).await;
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+
+        let (platform, calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle
@@ -129,6 +158,10 @@ mod tests {
         // Wait a bit more, to ensure we are inside the wait
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         assert!(session_manager.is_running().await);
+        // Session should still be running
+        calls.assert_not_called("session::stop()");
+        calls.assert_called("session::wait()");
+
         // Now stop the session
         session_manager.stop().await;
         shared::log::info!("Session stop requested");
