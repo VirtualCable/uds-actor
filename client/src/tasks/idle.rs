@@ -96,6 +96,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_idle_task_idle() {
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+
         let (platform, _calls) = create_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
@@ -108,6 +110,7 @@ mod tests {
         session_manager.stop().await; // Ensure session is stopped in any case
 
         assert!(res.is_ok(), "Idle task timed out: {:?}", res);
+
     }
 
     #[tokio::test]
