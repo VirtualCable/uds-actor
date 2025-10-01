@@ -78,7 +78,7 @@ impl WindowsEvent {
 impl crate::sync::traits::EventLike for WindowsEvent {
     /// Blocks until the event is signaled
     fn wait(&self) {
-        log::debug!("Waiting for event: {:?}", self.handle);
+        log::debug!("Waiting for event: {:?}", self.handle.get());
         unsafe {
             let res = WaitForSingleObject(self.handle.get(), INFINITE);
             assert!(res == WAIT_OBJECT_0, "WaitForSingleObject failed");
@@ -109,7 +109,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
         log::debug!("Signaling event: {:?}", self.handle);
         unsafe {
             let ok = SetEvent(self.handle.get()).is_ok();
-            assert!(ok, "SetEvent failed");
+            debug_assert!(ok, "SetEvent failed");
         }
     }
 
@@ -118,7 +118,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
         log::debug!("Resetting event: {:?}", self.handle);
         unsafe {
             let ok = ResetEvent(self.handle.get()).is_ok();
-            assert!(ok, "ResetEvent failed");
+            debug_assert!(ok, "ResetEvent failed");
         }
     }
 

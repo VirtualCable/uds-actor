@@ -26,7 +26,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{fs, fs::OpenOptions, io, path::PathBuf, sync::OnceLock, panic};
+use std::{fs, fs::OpenOptions, io, panic, path::PathBuf, sync::OnceLock};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Reexport to avoid using crate names for tracing
@@ -97,23 +97,39 @@ pub fn setup_panic_hook() {
 }
 
 pub fn setup_logging(level: &str, log_type: LogType) {
-    let (level_key, log_path, log_name) = match log_type {
+    let (level_key, log_path, use_datetime, log_name) = match log_type {
         LogType::Client => (
             "UDSACTOR_CLIENT_LOG_LEVEL",
             "UDSACTOR_CLIENT_LOG_PATH",
-            "udsactor-client.log",
+            "UDSACTOR_CLIENT_LOG_USE_DATETIME",
+            "udsactor-client",
         ),
-        LogType::Service => ("UDSACTOR_LOG_LEVEL", "UDSACTOR_LOG_PATH", "udsactor.log"),
+        LogType::Service => ("UDSACTOR_LOG_LEVEL", "UDSACTOR_LOG_PATH", "UDSACTOR_LOG_USE_DATETIME", "udsactor"),
         LogType::Tests => (
             "UDSACTOR_TESTS_LOG_LEVEL",
             "UDSACTOR_TESTS_LOG_PATH",
-            "udsactor-tests.log",
+            "UDSACTOR_TESTS_LOG_USE_DATETIME",
+            "udsactor-tests",
         ),
     };
 
     let level = std::env::var(level_key).unwrap_or_else(|_| level.to_string());
     let log_path =
         std::env::var(log_path).unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into());
+    let use_datetime: bool = std::env::var(use_datetime)
+        .unwrap_or_else(|_| "false".into())
+        .to_lowercase()
+        .parse()
+        .unwrap_or(false);
+
+    let log_name = if use_datetime {
+        let dt = chrono::Local::now();
+        format!("{}-{}", log_name, dt.format("%Y%m%d-%H%M%S"))
+    } else {
+        log_name.to_string()
+    } + ".log";
+
+    println!("Logging to {}/{} with level {}", log_path, log_name, level);
 
     LOGGER_INIT.get_or_init(|| {
         let main_layer = fmt::layer()
@@ -156,9 +172,7 @@ mod tests {
     #[test]
     #[ignore] // Ignored because it requires Windows service environment
     fn test_logging_on_network_path() {
-        unsafe { 
-            std::env::set_var("UDSACTOR_TESTS_LOG_PATH", r"\\172.27.1.45\shared")
-        }
+        unsafe { std::env::set_var("UDSACTOR_TESTS_LOG_PATH", r"\\172.27.1.45\shared") }
         setup_logging("debug", LogType::Tests);
         info!("This is a test log entry on network path");
         debug!("Debug entry");
@@ -167,6 +181,7 @@ mod tests {
         trace!("Trace entry");
     }
 
+    
     #[test]
     fn test_logging_on_default_path() {
         setup_logging("debug", LogType::Tests);
@@ -175,5 +190,39 @@ mod tests {
         warn!("Warning entry");
         error!("Error entry");
         trace!("Trace entry");
+    }
+
+    #[test]
+    fn test_logging_with_datetime() {
+        unsafe {
+            std::env::set_var("UDSACTOR_TESTS_LOG_PATH", std::env::temp_dir());
+            std::env::set_var("UDSACTOR_TESTS_LOG_USE_DATETIME", "true");
+        }
+        setup_logging("debug", LogType::Tests);
+        info!("This is a test log entry with datetime in filename");
+        debug!("Debug entry");
+        warn!("Warning entry");
+        error!("Error entry");
+        trace!("Trace entry");
+    }
+
+    #[test]
+    fn test_logging_rotation() {
+        let temp_dir = std::env::temp_dir();
+        unsafe { std::env::set_var("UDSACTOR_TESTS_LOG_PATH", &temp_dir) }
+        setup_logging("debug", LogType::Tests);
+        let log_file = temp_dir.join("udsactor-tests.log");
+        // Write enough logs to exceed 16MB
+        for i in 0..20000 {
+            info!("Log entry number: {} - {}", i, "A".repeat(1024)); // Each entry ~1KB
+        }
+        // Check if log file exists
+        assert!(log_file.exists());
+        // Check if rotated file exists
+        let rotated_file = temp_dir.join("udsactor-tests.log.1");
+        assert!(rotated_file.exists()); // Rotated file should exist
+        // Check if log file has been rotated
+        let meta = fs::metadata(&log_file).unwrap();
+        assert!(meta.len() < 16 * 1024 * 1024); // Current log file should be less than 16MB
     }
 }

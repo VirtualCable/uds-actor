@@ -67,10 +67,10 @@ pub async fn task(
                 .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.")
                 .await
                 .ok();
-
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
         }
+        shared::log::debug!("User idle for {} seconds ({} remaining)", idle.as_secs(), remaining.as_secs());
 
         // If we reach max idle, stop session
         if remaining.as_secs() == 0 {

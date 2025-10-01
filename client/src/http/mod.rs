@@ -6,10 +6,13 @@ use crate::platform::Platform;
 mod types;
 
 async fn ping() -> &'static str {
+    shared::debug_dev!("Ping received");
     "pong"
 }
 
 async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
+    shared::log::info!("Logout requested via HTTP API");
+
     let _ = state.platform.actions().logoff().await;
     // Notify session manager to stop
     state.platform.session_manager().stop().await;
@@ -31,6 +34,7 @@ async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
 async fn screenshot(
     Extension(state): Extension<types::AppState>,
 ) -> Json<types::ScreenshotResponse> {
+    shared::log::info!("Screenshot requested via HTTP API");
     let data = state
         .platform
         .actions()
@@ -46,6 +50,7 @@ async fn script(
     Extension(state): Extension<types::AppState>,
     Json(req): Json<types::ScriptRequest>,
 ) -> &'static str {
+    shared::log::info!("Script execution requested via HTTP API");
     _ = state.platform.actions().run_script(&req.script).await;
     "ok"
 }
@@ -54,6 +59,7 @@ async fn message(
     Extension(state): Extension<types::AppState>,
     Json(req): Json<types::MessageRequest>,
 ) -> &'static str {
+    shared::log::info!("Message display requested via HTTP API");
     let _ = state.platform.actions().notify_user(&req.message).await;
     "ok"
 }
@@ -100,6 +106,8 @@ pub async fn run_server(
 
     // Unregister from server
     let _ = api.write().await.unregister().await;
+
+    shared::debug_dev!("Unregistered from server");
     res
 }
 
