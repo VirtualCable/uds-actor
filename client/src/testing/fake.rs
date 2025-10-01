@@ -3,6 +3,7 @@ use crate::rest::{api::ClientRest, types::LoginResponse};
 use shared::{
     actions::Actions,
     sync::event::{Event, EventLike},
+    operations::{NetworkInterfaceInfo, Operations},
 };
 use std::sync::{Arc, RwLock};
 
@@ -188,7 +189,7 @@ impl FakeOperations {
     }
 }
 
-impl shared::operations::Operations for FakeOperations {
+impl Operations for FakeOperations {
     fn check_permissions(&self) -> anyhow::Result<bool> {
         self.calls.push("operations::check_permissions()");
         Ok(true)
@@ -253,14 +254,9 @@ impl shared::operations::Operations for FakeOperations {
         Ok(())
     }
 
-    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
-        self.calls.push("operations::get_windows_version()");
-        Ok((10, 0, 19044, 0, "Windows 10".into()))
-    }
-
     fn get_os_version(&self) -> anyhow::Result<String> {
         self.calls.push("operations::get_os_version()");
-        Ok("Windows 10".into())
+        Ok("Linux Debian Moscarda Edition 36.11.32".into())
     }
 
     /// Reboot the machine. `flags` is an optional platform-specific bitmask
@@ -282,13 +278,13 @@ impl shared::operations::Operations for FakeOperations {
         Ok(())
     }
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>> {
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>> {
         self.calls.push("operations::get_network_info()");
-        Ok(vec![(
-            "eth0".into(),
-            "192.168.1.100".into(),
-            "255.255.255.0".into(),
-        )])
+        Ok(vec![NetworkInterfaceInfo {
+            name: "eth0".into(),
+            ip_address: "192.168.1.100".into(),
+            mac: "00:1A:2B:3C:4D:5E".into(),
+        }])
     }
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {

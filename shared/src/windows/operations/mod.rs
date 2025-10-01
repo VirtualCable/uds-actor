@@ -65,7 +65,10 @@ use windows::{
     core::{PCWSTR, PWSTR},
 };
 
-use crate::log;
+use crate::{
+    log,
+    operations::{NetworkInterfaceInfo, Operations},
+};
 
 unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
     if ptr.is_null() {
@@ -87,9 +90,30 @@ impl WindowsOperations {
     pub fn new() -> Self {
         Self {}
     }
+
+    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
+        unsafe {
+            let mut info = OSVERSIONINFOW {
+                dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
+                ..Default::default()
+            };
+            if GetVersionExW(&mut info).is_ok() {
+                let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr())?;
+                Ok((
+                    info.dwMajorVersion,
+                    info.dwMinorVersion,
+                    info.dwBuildNumber,
+                    info.dwPlatformId,
+                    sz_cstr,
+                ))
+            } else {
+                Err(anyhow::anyhow!("GetVersionExW failed"))
+            }
+        }
+    }
 }
 
-impl crate::operations::Operations for WindowsOperations {
+impl Operations for WindowsOperations {
     fn check_permissions(&self) -> anyhow::Result<bool> {
         // Use IsUserAnAdmin from shell32
         use windows::Win32::UI::Shell::IsUserAnAdmin;
@@ -121,17 +145,17 @@ impl crate::operations::Operations for WindowsOperations {
             let mut buffer = PWSTR::null();
             let mut status = NetSetupUnknownStatus;
 
-            // lpServer = None → máquina local
+            // lpServer = None = local machine
             let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
 
             if ret != 0 {
                 return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
             }
 
-            // Convertir el PWSTR devuelto a String
+            // Convert the returned PWSTR to String
             let domain = if !buffer.is_null() {
                 let s = utf16_ptr_to_string(buffer.0 as *const u16)?;
-                // Liberar memoria asignada por NetGetJoinInformation
+                // Free memory allocated by NetGetJoinInformation
                 NetApiBufferFree(Some(buffer.0 as _));
                 s
             } else {
@@ -148,10 +172,6 @@ impl crate::operations::Operations for WindowsOperations {
     }
 
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
-        // On tests, return early to not rename the test machine :D
-        if cfg!(test) {
-            return Ok(());
-        }
         let wname = U16CString::from_str(new_name)
             .context("failed to convert new computer name to UTF-16")?;
         unsafe {
@@ -173,7 +193,7 @@ impl crate::operations::Operations for WindowsOperations {
         execute_in_one_step: bool,
     ) -> anyhow::Result<()> {
         unsafe {
-            // Construir credenciales estilo user@domain si hace falta
+            // Build user@domain style credentials if needed
             let mut account_str = account.to_string();
             if !account.contains('@') && !account.contains('\\') {
                 if domain.contains('.') {
@@ -252,7 +272,7 @@ impl crate::operations::Operations for WindowsOperations {
                 U16CString::from_str(new_password).context("invalid new password UTF-16")?;
 
             let res = NetUserChangePassword(
-                PCWSTR::null(), // NULL = máquina local
+                PCWSTR::null(), // NULL for local machine
                 PCWSTR(user_w.as_ptr()),
                 PCWSTR(old_w.as_ptr()),
                 PCWSTR(new_w.as_ptr()),
@@ -266,27 +286,6 @@ impl crate::operations::Operations for WindowsOperations {
         }
     }
 
-    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
-        unsafe {
-            let mut info = OSVERSIONINFOW {
-                dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
-                ..Default::default()
-            };
-            if GetVersionExW(&mut info).is_ok() {
-                let sz_cstr = utf16_ptr_to_string(info.szCSDVersion.as_ptr())?;
-                Ok((
-                    info.dwMajorVersion,
-                    info.dwMinorVersion,
-                    info.dwBuildNumber,
-                    info.dwPlatformId,
-                    sz_cstr,
-                ))
-            } else {
-                Err(anyhow::anyhow!("GetVersionExW failed"))
-            }
-        }
-    }
-
     fn get_os_version(&self) -> anyhow::Result<String> {
         let (major, minor, build, _platform, csd) = self.get_windows_version()?;
         Ok(format!(
@@ -296,13 +295,7 @@ impl crate::operations::Operations for WindowsOperations {
     }
 
     fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
-        // On tests, return early to not reboot the test machine :D
         log::debug!("Reboot called with flags: {:?}", flags);
-
-        if cfg!(test) {
-            return Ok(());
-        }
-
         use windows::Win32::System::Shutdown::EXIT_WINDOWS_FLAGS;
         let wflags = flags.map(EXIT_WINDOWS_FLAGS);
         let flags = wflags.unwrap_or(EWX_FORCEIFHUNG | EWX_REBOOT);
@@ -329,10 +322,6 @@ impl crate::operations::Operations for WindowsOperations {
 
     fn logoff(&self) -> anyhow::Result<()> {
         log::debug!("Logoff called");
-        // On tests, return early to not logoff the test machine :D
-        if cfg!(test) {
-            return Ok(());
-        }
         unsafe {
             _ = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
         }
@@ -379,7 +368,17 @@ impl crate::operations::Operations for WindowsOperations {
         }
     }
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>> {
+    fn get_session_type(&self) -> anyhow::Result<String> {
+        log::debug!("Get session type called");
+        let env_var = std::env::var("SESSIONNAME");
+        if let Ok(session_name) = env_var {
+            return Ok(session_name);
+        }
+        log::warn!("SESSIONNAME environment variable is not set");
+        Ok("unknown".to_string())
+    }
+
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>> {
         let mut buf_len: u32 = 32_768;
         let mut buf = vec![0u8; buf_len as usize];
         let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
@@ -404,7 +403,6 @@ impl crate::operations::Operations for WindowsOperations {
                 let adapter = &*adapters_ptr;
 
                 let name = if !adapter.FriendlyName.is_null() {
-                    // SAFETY: adapter.FriendlyName is a PWSTR-like wrapper; .0 is *mut u16
                     match utf16_ptr_to_string(adapter.FriendlyName.0 as *const u16) {
                         Ok(s) => s,
                         Err(_) => "<unknown>".to_string(),
@@ -418,25 +416,36 @@ impl crate::operations::Operations for WindowsOperations {
                     .collect::<Vec<_>>()
                     .join(":");
 
-                // Aquí podrías recorrer adapter.FirstUnicastAddress para obtener IPs
-
-                results.push((name, mac, "<ip>".to_string())); // IP real omitida por simplicidad
-
+                // Iterate FirstUnicastAddress to get IPs
+                let mut addr = adapter.FirstUnicastAddress;
+                loop {
+                    if addr.is_null() {
+                        break;
+                    }
+                    let sockaddr = (*addr).Address.lpSockaddr;
+                    if (*sockaddr).sa_family == AF_INET {
+                        // IPv4
+                        let data = (*sockaddr).sa_data;
+                        let ip = std::net::Ipv4Addr::new(
+                            data[2] as u8,
+                            data[3] as u8,
+                            data[4] as u8,
+                            data[5] as u8,
+                        );
+                        results.push(NetworkInterfaceInfo {
+                            name: name.clone(),
+                            ip_address: ip.to_string(),
+                            mac: mac.clone(),
+                        });
+                    }
+                    // Move to next unicast address
+                    addr = (*addr).Next;
+                }
                 adapters_ptr = adapter.Next;
             }
         }
 
         Ok(results)
-    }
-
-    fn get_session_type(&self) -> anyhow::Result<String> {
-        log::debug!("Get session type called");
-        let env_var = std::env::var("SESSIONNAME");
-        if let Ok(session_name) = env_var {
-            return Ok(session_name);
-        }
-        log::warn!("SESSIONNAME environment variable is not set");
-        Ok("unknown".to_string())
     }
 
     fn force_time_sync(&self) -> anyhow::Result<()> {
@@ -454,11 +463,11 @@ impl crate::operations::Operations for WindowsOperations {
 
     fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()> {
         unsafe {
-            // Convertir ruta a UTF-16
+            // Convert path to UTF-16
             let path_w = U16CString::from_str(path)
                 .context("failed to convert path to UTF-16 for SetNamedSecurityInfoW")?;
 
-            // 1. Resolver SID del usuario actual
+            // 1. Resolve the current user SID
             let mut sid: [u8; 256] = [0; 256];
             let mut sid_size = sid.len() as u32;
             let mut domain: [u16; 256] = [0; 256];
@@ -480,7 +489,7 @@ impl crate::operations::Operations for WindowsOperations {
             )
             .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
 
-            // 2. Crear ACL con una ACE que da acceso total al SID
+            // 2. Create ACL with an ACE that grants full access to the SID
             let mut acl_buf = vec![0u8; 1024];
             let acl = acl_buf.as_mut_ptr() as *mut ACL;
             InitializeAcl(acl, acl_buf.len() as u32, ACL_REVISION)
@@ -494,7 +503,7 @@ impl crate::operations::Operations for WindowsOperations {
             )
             .map_err(|e| anyhow::anyhow!("AddAccessAllowedAce failed: {}", e))?;
 
-            // 3. Aplicar la nueva DACL al fichero
+            // 3. Apply the new DACL to the file
             let err = SetNamedSecurityInfoW(
                 PCWSTR(path_w.as_ptr()),
                 SE_FILE_OBJECT,
@@ -513,3 +522,6 @@ impl crate::operations::Operations for WindowsOperations {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

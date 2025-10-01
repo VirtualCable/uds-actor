@@ -24,12 +24,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+pub mod gui;
 pub mod log;
 pub mod sync;
-pub mod gui;
 
 pub mod actions;
-pub mod launcher;
+pub mod service;
 
 #[cfg(target_os = "windows")]
 pub mod windows;
@@ -49,6 +49,3 @@ macro_rules! debug_dev {
         }
     };
 }
-
-#[cfg(test)]
-pub mod test_utils;

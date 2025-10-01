@@ -227,10 +227,37 @@ extern "system" fn launcher_window_proc(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{thread, time::Duration, sync::mpsc};
 
     use super::*;
-    use crate::test_utils::run_with_timeout;
+
+    fn run_with_timeout<F, R>(timeout: Duration, func: F) -> Result<R, &'static str>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let (tx, rx) = mpsc::channel();
+
+        // Main thread to run the function
+        let tx_clone = tx.clone();
+        thread::spawn(move || {
+            let result = func();
+            let _ = tx_clone.send(Some(result));
+        });
+
+        // timeout thread
+        thread::spawn(move || {
+            thread::sleep(timeout);
+        let _ = tx.send(None); // if the timeout wins, send None
+        });
+
+        match rx.recv() {
+            Ok(Some(result)) => Ok(result),
+            Ok(None) => Err("Timeout reached"),
+            Err(_) => Err("Error receiving result"),
+        }
+    }
+
 
     #[test]
     fn test_msg_window_creation() {

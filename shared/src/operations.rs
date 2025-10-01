@@ -7,6 +7,14 @@
 // The Windows implementation will convert those into the appropriate
 // Windows-specific types.
 
+// Struct for a network interface information
+#[derive(Debug, Clone)]
+pub struct NetworkInterfaceInfo {
+    pub name: String,
+    pub ip_address: String,
+    pub mac: String,
+}
+
 pub trait Operations: Send + Sync {
     fn check_permissions(&self) -> anyhow::Result<bool>;
 
@@ -32,8 +40,6 @@ pub trait Operations: Send + Sync {
         new_password: &str,
     ) -> anyhow::Result<()>;
 
-    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)>;
-
     fn get_os_version(&self) -> anyhow::Result<String>;
 
     /// Reboot the machine. `flags` is an optional platform-specific bitmask
@@ -45,7 +51,7 @@ pub trait Operations: Send + Sync {
 
     fn init_idle_timer(&self) -> anyhow::Result<()>;
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>>;
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>>;
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration>;
 

@@ -6,12 +6,12 @@ use windows::{
 
 use anyhow::Result;
 
-use crate::launcher::AsyncLauncherTrait;
 use crate::log::{debug, info};
+use crate::service::AsyncServiceTrait;
 
 const SERVICE_NAME: PCWSTR = w!("RustExampleService");
 
-static LAUNCHER: OnceLock<Arc<dyn AsyncLauncherTrait>> = OnceLock::new();
+static LAUNCHER: OnceLock<Arc<dyn AsyncServiceTrait>> = OnceLock::new();
 
 #[derive(Clone, Debug)]
 struct ServiceContext {
@@ -24,11 +24,11 @@ unsafe impl Send for ServiceContext {}
 unsafe impl Sync for ServiceContext {}
 
 impl ServiceContext {
-    fn new() -> Self {
+    fn new(async_stop: Arc<tokio::sync::Notify>) -> Self {
         Self {
             status_handle: SERVICE_STATUS_HANDLE(std::ptr::null_mut()),
             stop_event: unsafe { CreateEventW(None, true, false, None).unwrap() },
-            async_stop: std::sync::Arc::new(tokio::sync::Notify::new()),
+            async_stop,
         }
     }
 
@@ -90,12 +90,6 @@ impl ServiceContext {
     }
 }
 
-impl Default for ServiceContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // Handler signature OK; returns DWORD
 extern "system" fn service_handler(
     ctrl: u32,
@@ -131,7 +125,7 @@ extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         let launcher = LAUNCHER.get().expect("Launcher not set");
 
         // Register the service control handler, with our context
-        let mut ctx = ServiceContext::new();
+        let mut ctx = ServiceContext::new(launcher.get_stop_notify());
 
         let ctx_ptr: *mut ServiceContext = &mut ctx;
         ctx.status_handle = match RegisterServiceCtrlHandlerExW(
@@ -167,7 +161,7 @@ extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     }
 }
 
-pub fn run_service<L: AsyncLauncherTrait>(launcher: L) -> Result<()> {
+pub fn run_service<L: AsyncServiceTrait>(launcher: L) -> Result<()> {
     debug!("Running windows service...");
     LAUNCHER
         .set(Arc::new(launcher))
@@ -197,7 +191,8 @@ mod tests {
 
     #[test]
     fn test_stop_signals_notify_and_event() {
-        let mut ctx = ServiceContext::new();
+        let async_stop = Arc::new(tokio::sync::Notify::new());
+        let mut ctx = ServiceContext::new(async_stop.clone());
         ctx.status_handle = SERVICE_STATUS_HANDLE::default(); // dummy
 
         let ctx_ptr: *mut ServiceContext = &mut ctx;
