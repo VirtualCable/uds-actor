@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration, pin::Pin};
 use tokio::sync::Notify;
 
 use anyhow::Result;
@@ -14,18 +14,21 @@ pub trait AsyncServiceTrait: Send + Sync + 'static {
     fn get_stop_notify(&self) -> Arc<Notify>;
 }
 
+// Type alias for the main async function signature
+type MainAsyncFn = fn(Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
 pub struct AsyncService {
     // Add async fn to call as main_async
-    main_async: fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+    main_async: MainAsyncFn,
     stop: Arc<Notify>,
 }
 
 impl AsyncService {
-    pub fn new(
-        main_async: fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
-        stop: Arc<Notify>,
-    ) -> Self {
-        Self { main_async, stop }
+    pub fn new(main_async: MainAsyncFn) -> Self {
+        Self {
+            main_async,
+            stop: Arc::new(Notify::new()),
+        }
     }
     #[cfg(target_os = "windows")]
     pub fn run_service(self) -> Result<()> {
@@ -81,7 +84,7 @@ impl AsyncServiceTrait for AsyncService {
             .unwrap();
 
         rt.block_on(async move {
-            let mut main_task = tokio::spawn((self.main_async)());
+            let mut main_task = tokio::spawn((self.main_async)(stop.clone()));
             let signals_task = tokio::spawn(AsyncService::signals(stop.clone()));
             tokio::select! {
                 res = &mut main_task => {
@@ -125,24 +128,24 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    async fn async_main() {
-        // main logic
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            println!("Working...");
-        }
+    fn async_main(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            // main logic
+            stop.notified().await;
+            println!("Stop received");
+        })
     }
 
     #[tokio::test]
     async fn test_run_stops_on_notify() {
-        let stop = Arc::new(Notify::new());
-        let stop_clone = stop.clone();
         let stopped = Arc::new(AtomicBool::new(false));
         let stopped_clone = stopped.clone();
 
-        let launcher = AsyncService::new(|| Box::pin(async_main()), stop.clone());
+        let service = AsyncService::new(async_main);
+        let stop = service.get_stop_notify();
+        let stop_clone = stop.clone();
         let handle = std::thread::spawn(move || {
-            launcher.run(stop_clone);
+            service.run(stop_clone);
             stopped_clone.store(true, std::sync::atomic::Ordering::SeqCst);
         });
 
@@ -151,7 +154,7 @@ mod tests {
         assert!(!stopped.load(std::sync::atomic::Ordering::SeqCst));
 
         // Notify to stop
-        stop.notify_one();
+        stop.notify_waiters();
         // Wait for thread to join, with timeout
         let res = timeout(Duration::from_secs(5), async {
             handle.join().unwrap();

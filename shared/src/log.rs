@@ -147,3 +147,33 @@ pub fn setup_logging(level: &str, log_type: LogType) {
         setup_panic_hook();
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore] // Ignored because it requires Windows service environment
+    fn test_logging_on_network_path() {
+        unsafe { 
+            std::env::set_var("UDSACTOR_TESTS_LOG_PATH", r"\\172.27.1.45\shared")
+        }
+        setup_logging("debug", LogType::Tests);
+        info!("This is a test log entry on network path");
+        debug!("Debug entry");
+        warn!("Warning entry");
+        error!("Error entry");
+        trace!("Trace entry");
+    }
+
+    #[test]
+    fn test_logging_on_default_path() {
+        setup_logging("debug", LogType::Tests);
+        info!("This is a test log entry on default path");
+        debug!("Debug entry");
+        warn!("Warning entry");
+        error!("Error entry");
+        trace!("Trace entry");
+    }
+}
