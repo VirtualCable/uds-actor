@@ -45,14 +45,11 @@ impl GuiHandle {
         thread::spawn(move || {
             let app = app::App::default();
 
-            // Dummy window to keep the event loop alive
-            let mut dummy = Window::new(0, 0, 1, 1, "");
-            dummy.end();
-            dummy.show();
-
             // Explicit main loop
-            while app.wait() {
+            loop {
+                app.wait();
                 while let Ok(cmd) = rx.try_recv() {
+                    log::debug!("GUI: Received command: {:?}", cmd);
                     match cmd {
                         GuiCommand::Show {
                             title,
@@ -92,6 +89,7 @@ impl GuiHandle {
         title: &str,
         message: &str,
     ) -> anyhow::Result<MessageBoxResult> {
+        log::debug!("GUI: Showing message dialog: {} - {}", title, message);
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(GuiCommand::Show {
@@ -101,8 +99,8 @@ impl GuiHandle {
                 respond_to: tx,
             })
             .map_err(|_| anyhow::anyhow!("GUI thread stopped"))?;
+        app::awake();
         let res = rx.await?;
-        app::awake(); // Wake up the FLTK thread to process events
         Ok(res)
     }
 
@@ -111,6 +109,7 @@ impl GuiHandle {
         title: &str,
         message: &str,
     ) -> anyhow::Result<MessageBoxResult> {
+        log::debug!("GUI: Showing yes/no dialog: {} - {}", title, message);
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(GuiCommand::Show {
@@ -120,19 +119,21 @@ impl GuiHandle {
                 respond_to: tx,
             })
             .map_err(|_| anyhow::anyhow!("GUI thread stopped"))?;
+        app::awake();
         let res = rx.await?;
-        app::awake(); // Wake up the FLTK thread to process events
         Ok(res)
     }
 
     pub fn shutdown(&self) {
+        log::debug!("GUI: Shutting down");
         let _ = self.sender.send(GuiCommand::Quit);
-        app::awake(); // Wake up the FLTK thread to process events
+        app::awake();
     }
 
     pub fn close_all_windows(&self) {
+        log::debug!("GUI: Closing all windows");
         let _ = self.sender.send(GuiCommand::CloseAll);
-        app::awake(); // Wake up the FLTK thread to process events
+        app::awake();
     }
 }
 
@@ -288,6 +289,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Requires GUI interaction"]
     async fn test_message_dialog() {
+        log::setup_logging("debug", log::LogType::Tests);
         let gui = GuiHandle::new();
         let gui_task = gui.clone();
         tokio::spawn(async move {
@@ -306,5 +308,6 @@ mod tests {
         // Wait some time to allow interaction
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         gui.close_all_windows();
+        gui.shutdown();
     }
 }
