@@ -48,17 +48,19 @@ pub async fn task(
         // Get current idle time
         let idle = match operations.get_idle_duration() {
             Ok(idle) => idle,
-            Err(e) => {
-                shared::log::error!("Failed to get idle time: {}", e);
+            Err(_) => {
                 // If no idle, consider it as zero
                 std::time::Duration::from_secs(0)
             }
         };
 
         let remaining = max_idle.saturating_sub(idle);
-        if remaining.as_secs() > 120 {
+        if remaining.as_secs() > 120 && notified {
             // If we have more than 2 minutes remaining, reset notified flag
             notified = false;
+            shared::log::debug!("User is active again, resetting notified flag");
+            // Also, if any dialogs are open, close them
+            shared::gui::ensure_dialogs_closed().await;
         }
 
         // Notify user:
@@ -70,14 +72,20 @@ pub async fn task(
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
         }
-        shared::log::debug!("User idle for {} seconds ({} remaining)", idle.as_secs(), remaining.as_secs());
+
+        // Debug log every 30 seconds
+        shared::debug_dev!(
+            "User idle for {} seconds ({} remaining)",
+            idle.as_secs(),
+            remaining.as_secs()
+        );
 
         // If we reach max idle, stop session
         if remaining.as_secs() == 0 {
             let message = format!("idle of {}s reached", max_idle.as_secs());
             shared::log::info!("{}", message);
-            // Notify session manager to stop session
-            platform.session_manager().stop().await;
+            // Use logoff in case of idle, should fire stop process
+            operations.logoff().ok();
 
             return Ok(Some(message)); // Message to include on logout reason
         }
@@ -108,7 +116,8 @@ mod tests {
             super::task(Some(1), platform),
         )
         .await;
-        calls.assert_called("session::stop()");
+        calls.assert_called("actions::logoff()");
+        calls.assert_not_called("session::stop()");
         session_manager.stop().await; // Ensure session is stopped in any case
 
         assert!(res.is_ok(), "Idle task timed out: {:?}", res);

@@ -4,7 +4,6 @@ use async_trait::async_trait;
 // Common actions trait for different platforms
 #[async_trait]
 pub trait Actions: Send + Sync {
-    async fn logoff(&self) -> anyhow::Result<()>;
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>>;
     async fn run_script(&self, script: &str) -> anyhow::Result<String>;
 

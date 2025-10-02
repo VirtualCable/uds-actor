@@ -13,9 +13,6 @@ async fn ping() -> &'static str {
 async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
     shared::log::info!("Logout requested via HTTP API");
 
-    let _ = state.platform.actions().logoff().await;
-    // Notify session manager to stop
-    state.platform.session_manager().stop().await;
     // Even in the case that we have been notified of a logout, we need to ensure the API is called
     // right now. As soon as we implement the websocket version, all of this will be obsolete.
     let _ = state
@@ -27,6 +24,11 @@ async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
         .await;
     // Note: Logoff should initiate a logoff by the OS
     _ = state.platform.operations().logoff();
+
+    // Notify session manager to stop: Note, using logoff should be enough, will close our app
+    // and that will stop the session manager
+    // state.platform.session_manager().stop().await;
+
     // Notify server we are logging off
     "ok"
 }

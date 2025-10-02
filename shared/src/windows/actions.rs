@@ -7,12 +7,6 @@ pub struct WindowsActions;
 
 #[async_trait]
 impl Actions for WindowsActions {
-    async fn logoff(&self) -> anyhow::Result<()> {
-        log::info!("Logoff requested (stub)");
-        // TODO: Close user session in Windows
-        Ok(())
-    }
-
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
         log::info!("Screenshot requested (stub)");
         // TODO: Take Windows screenshot
@@ -70,6 +64,5 @@ mod tests {
         assert!(res.is_err(), "notify_user should not block");
         // Close all dialogs now
         crate::gui::ensure_dialogs_closed().await;
-
     }
 }

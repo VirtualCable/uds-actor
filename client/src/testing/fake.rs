@@ -153,10 +153,6 @@ impl FakeActions {
 
 #[async_trait::async_trait]
 impl Actions for FakeActions {
-    async fn logoff(&self) -> anyhow::Result<()> {
-        self.calls.push("actions::logoff()");
-        Ok(())
-    }
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
         self.calls.push("actions::screenshot()");
         const PNG_1X1_TRANSPARENT: &[u8] = &[

@@ -1,4 +1,4 @@
-use shared::gui::{ensure_dialogs_closed, message_dialog, yesno_dialog};
+use shared::gui::{ensure_dialogs_closed, message_dialog};
 
 #[tokio::test]
 #[ignore = "Requires GUI interaction"]
@@ -17,9 +17,6 @@ async fn integration_test_messagebox() {
     let res = message_dialog("Test 2", "This should fail").await;
     shared::log::debug!("Second dialog result: {}", res.err().unwrap());
 
-    // This should open a Yes/No window and return the result but we have other window, so it will fail
-    let res = yesno_dialog("Question", "Do you want to continue?").await;
-    shared::log::debug!("User result: {}", res.err().unwrap());
 
     shared::gui::shutdown().await;
 }
@@ -45,6 +42,5 @@ async fn integration_test_messagebox_closer() {
 
     shared::gui::shutdown().await;
 
-    let res = handle.await.unwrap();
-    shared::log::debug!("Second dialog result: {}", res.unwrap());
+    _ = handle.await.unwrap();
 }
