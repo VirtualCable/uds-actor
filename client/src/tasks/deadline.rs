@@ -50,7 +50,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 
         platform
             .actions()
-            .notify_user("This session will be stopped in 5 minutes.\nPlease save your work.")
+            .notify_user("This session will be stopped in 5 minutes.\nPlease save your work.", platform.gui())
             .await
             .ok();
 

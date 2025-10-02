@@ -8,6 +8,7 @@ pub struct Platform {
     api: Arc<tokio::sync::RwLock<dyn ClientRest>>,
     operations: Arc<dyn shared::operations::Operations>,
     actions: Arc<dyn shared::actions::Actions>,
+    gui: shared::gui::GuiHandle,
 }
 
 impl Platform {
@@ -22,6 +23,7 @@ impl Platform {
             api,
             operations,
             actions,
+            gui: shared::gui::GuiHandle::new(),
         }
     }
 
@@ -39,6 +41,10 @@ impl Platform {
 
     pub fn actions(&self) -> Arc<dyn shared::actions::Actions> {
         self.actions.clone()
+    }
+
+    pub fn gui(&self) -> shared::gui::GuiHandle {
+        self.gui.clone()
     }
 
     // Only for tests
@@ -60,7 +66,12 @@ impl Platform {
             api,
             operations,
             actions,
+            gui: shared::gui::GuiHandle::new(),
         }
+    }
+
+    pub fn shutdown(&self) {
+        self.gui.shutdown();
     }
 }
 

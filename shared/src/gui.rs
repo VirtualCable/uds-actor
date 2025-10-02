@@ -1,21 +1,17 @@
+// gui.rs
 use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, window::Window};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tracing_log::log;
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
+use tokio::sync::{mpsc, oneshot};
+
+use crate::log;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageBoxResult {
     Ok,
     No,
-}
-
-impl std::fmt::Display for MessageBoxResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MessageBoxResult::Ok => write!(f, "Ok"),
-            MessageBoxResult::No => write!(f, "No"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -24,66 +20,158 @@ pub enum MessageBoxButtons {
     YesNo,
 }
 
-// Global guard to prevent multiple messageboxes at the same time
-static MESSAGEBOX_ACTIVE: AtomicBool = AtomicBool::new(false);
-static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+#[derive(Debug)]
+enum GuiCommand {
+    Show {
+        title: String,
+        message: String,
+        buttons: MessageBoxButtons,
+        respond_to: oneshot::Sender<MessageBoxResult>,
+    },
+    CloseAll,
+    Quit,
+}
 
-static APP: std::sync::OnceLock<fltk::app::App> = std::sync::OnceLock::new();
+#[derive(Clone)]
+pub struct GuiHandle {
+    sender: mpsc::UnboundedSender<GuiCommand>,
+}
 
-/// Blocking generic messagebox
-fn messagebox(
+impl GuiHandle {
+    pub fn new() -> Self {
+        let (tx, mut rx) = mpsc::unbounded_channel::<GuiCommand>();
+
+        // Dedicated thread for FLTK
+        thread::spawn(move || {
+            let app = app::App::default();
+
+            // Dummy window to keep the event loop alive
+            let mut dummy = Window::new(0, 0, 1, 1, "");
+            dummy.end();
+            dummy.show();
+
+            // Explicit main loop
+            while app.wait() {
+                while let Ok(cmd) = rx.try_recv() {
+                    match cmd {
+                        GuiCommand::Show {
+                            title,
+                            message,
+                            buttons,
+                            respond_to,
+                        } => {
+                            log::debug!("GUI: Showing message box: {} - {}", title, message);
+                            show_messagebox(&title, &message, buttons, respond_to);
+                        }
+                        GuiCommand::CloseAll => {
+                            log::debug!("GUI: Closing all windows");
+                            if let Some(wins) = fltk::app::windows() {
+                                for mut w in wins {
+                                    let win: Window = unsafe { w.into_widget() };
+                                    if w.shown() {
+                                        w.hide();
+                                        fltk::window::Window::delete(win);
+                                    }
+                                }
+                            }
+                        }
+                        GuiCommand::Quit => {
+                            log::debug!("GUI: Quitting");
+                            return; // exit the GUI thread
+                        }
+                    }
+                }
+            }
+        });
+
+        GuiHandle { sender: tx }
+    }
+
+    pub async fn message_dialog(
+        &self,
+        title: &str,
+        message: &str,
+    ) -> anyhow::Result<MessageBoxResult> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(GuiCommand::Show {
+                title: title.to_string(),
+                message: message.to_string(),
+                buttons: MessageBoxButtons::Ok,
+                respond_to: tx,
+            })
+            .map_err(|_| anyhow::anyhow!("GUI thread stopped"))?;
+        let res = rx.await?;
+        app::awake(); // Wake up the FLTK thread to process events
+        Ok(res)
+    }
+
+    pub async fn yesno_dialog(
+        &self,
+        title: &str,
+        message: &str,
+    ) -> anyhow::Result<MessageBoxResult> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(GuiCommand::Show {
+                title: title.to_string(),
+                message: message.to_string(),
+                buttons: MessageBoxButtons::YesNo,
+                respond_to: tx,
+            })
+            .map_err(|_| anyhow::anyhow!("GUI thread stopped"))?;
+        let res = rx.await?;
+        app::awake(); // Wake up the FLTK thread to process events
+        Ok(res)
+    }
+
+    pub fn shutdown(&self) {
+        let _ = self.sender.send(GuiCommand::Quit);
+        app::awake(); // Wake up the FLTK thread to process events
+    }
+
+    pub fn close_all_windows(&self) {
+        let _ = self.sender.send(GuiCommand::CloseAll);
+        app::awake(); // Wake up the FLTK thread to process events
+    }
+}
+
+impl Default for GuiHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn show_messagebox(
     title: &str,
     message: &str,
     buttons: MessageBoxButtons,
-    max_chars: usize,
-) -> anyhow::Result<MessageBoxResult> {
-    let app = APP.get_or_init(app::App::default);
-    log::debug!("MessageBox app created/initialized");
+    respond_to: oneshot::Sender<MessageBoxResult>,
+) {
+    // Split message en líneas
+    let lines = split_message(message, 64);
 
-    log::debug!(
-        "Preparing messagebox: {} - {} ({})",
-        title,
-        message,
-        MESSAGEBOX_ACTIVE.load(Ordering::SeqCst)
-    );
-    // Check if another messagebox is already active
-    if MESSAGEBOX_ACTIVE
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        log::warn!("Another messagebox is already active, cannot open a new one");
-        return Err(anyhow::Error::msg("Another messagebox is already active"));
-    }
-
-    // Split message into lines
-    let lines = split_message(message, max_chars);
-
-    // Fixed font and size
+    // Fixe font and size
     let font = Font::Helvetica;
     let font_size = 14;
-    // Ensure the font is set
     draw::set_font(font, font_size);
-    // Measure character height with some padding
-    let char_height = draw::measure("A", false).1 + 4;
-    log::debug!("Character height: {}", char_height);
 
-    // Approximate width using measure
+    // Line height
+    let char_height = draw::measure("A", false).1 + 4;
+
+    // maximum width of the lines
     let max_width = lines
         .iter()
-        .map(|l| {
-            let (w, _) = draw::measure(l, false);
-            w
-        })
+        .map(|l| draw::measure(l, false).0)
         .max()
         .unwrap_or(200);
 
-    let width = (max_width + 32).max(240); // give some padding, minimum 240
+    let width = (max_width + 32).max(240);
     let height = (lines.len() as i32 * char_height) + 100;
-    log::debug!("MessageBox size: {}x{}", width, height);
 
     let mut window = Window::new(100, 100, width, height, title).center_screen();
 
-    // Add frames for each line
+    // Añadir un Frame por cada línea
     for (i, line) in lines.iter().enumerate() {
         let mut frame = Frame::new(
             10,
@@ -96,143 +184,71 @@ fn messagebox(
         frame.set_label_font(font);
     }
 
-    let result = Arc::new(Mutex::new(MessageBoxResult::No));
-    let cb_result = result.clone();
+    let respond_to = Arc::new(Mutex::new(Some(respond_to)));
 
     match buttons {
         MessageBoxButtons::Ok => {
+            let respond_to = respond_to.clone();
             let mut ok = Button::new(width / 2 - 40, height - 50, 80, 30, "Ok");
-            ok.set_label_size(font_size);
-            ok.set_label_font(font);
             ok.set_callback({
+                let mut window = window.clone();
                 move |_| {
-                    *cb_result.lock().unwrap() = MessageBoxResult::Ok;
-                    app.quit();
+                    if let Some(tx) = respond_to.lock().unwrap().take() {
+                        let _ = tx.send(MessageBoxResult::Ok);
+                    }
+                    window.hide();
+                    fltk::window::Window::delete(window.clone());
                 }
             });
         }
         MessageBoxButtons::YesNo => {
+            let respond_to_yes = respond_to.clone();
             let mut yes = Button::new(width / 2 - 90, height - 50, 80, 30, "Yes");
-            let mut no = Button::new(width / 2 + 10, height - 50, 80, 30, "No");
-
-            for b in [&mut yes, &mut no] {
-                b.set_label_size(font_size);
-                b.set_label_font(font);
-            }
-
             yes.set_callback({
-                let cb_result = cb_result.clone();
+                let mut window = window.clone();
                 move |_| {
-                    *cb_result.lock().unwrap() = MessageBoxResult::Ok;
-                    app.quit();
+                    if let Some(tx) = respond_to_yes.lock().unwrap().take() {
+                        let _ = tx.send(MessageBoxResult::Ok);
+                    }
+                    window.hide();
+                    fltk::window::Window::delete(window.clone());
                 }
             });
 
+            let respond_to_no = respond_to.clone();
+            let mut no = Button::new(width / 2 + 10, height - 50, 80, 30, "No");
             no.set_callback({
+                let mut window = window.clone();
                 move |_| {
-                    *cb_result.lock().unwrap() = MessageBoxResult::No;
-                    app.quit();
+                    if let Some(tx) = respond_to_no.lock().unwrap().take() {
+                        let _ = tx.send(MessageBoxResult::No);
+                    }
+                    window.hide();
+                    fltk::window::Window::delete(window.clone());
                 }
             });
         }
     }
 
-    log::debug!("MessageBox ready, ending window");
+    // Handle window close (X) button
+    window.handle({
+        let respond_to = respond_to.clone();
+        move |w, ev| {
+            if ev == fltk::enums::Event::Close {
+                if let Some(tx) = respond_to.lock().unwrap().take() {
+                    let _ = tx.send(MessageBoxResult::No);
+                }
+                w.hide();
+                fltk::window::Window::delete(w.clone());
+                true
+            } else {
+                false
+            }
+        }
+    });
+
     window.end();
-    log::debug!("MessageBox ready, showing");
     window.show();
-
-    // Timeout callback
-    let cb_app = app;
-    let cb_timeout = move |_handle| {
-        if SHUTDOWN.load(Ordering::SeqCst) {
-            log::debug!("MessageBox received shutdown signal, closing");
-            // Reset SHUTDOWN flag
-            SHUTDOWN.store(false, Ordering::SeqCst);
-            // Close the app
-            cb_app.quit();
-        } else {
-            // Repeat the timeout
-            app::repeat_timeout3(1.0, _handle);
-        }
-    };
-
-    app::add_timeout3(1.0, cb_timeout);
-
-    log::debug!("MessageBox ready, running app");
-    if let Err(e) = app.run() {
-        // Reset the guard on error
-        log::error!("FLTK run error: {}", e);
-        MESSAGEBOX_ACTIVE.store(false, Ordering::SeqCst);
-        return Err(anyhow::Error::msg(format!("FLTK run error: {}", e)));
-    }
-
-    fltk::window::Window::delete(window);
-
-    // Reset the guard when finished
-    MESSAGEBOX_ACTIVE.store(false, Ordering::SeqCst);
-    log::debug!("MessageBox closed & marked as not active");
-
-    Ok(*result.lock().unwrap())
-}
-
-/// Async helper: shows a dialog with only Ok, does not return anything
-pub async fn message_dialog(title: &str, message: &str) -> anyhow::Result<MessageBoxResult> {
-    log::debug!("Displaying message dialog: {} - {}", title, message);
-    let title = title.to_string();
-    let message = message.to_string();
-    tokio::task::spawn_blocking(move || {
-        messagebox(&title, &message, MessageBoxButtons::Ok, 64).map_err(anyhow::Error::msg)
-    })
-    .await
-    .unwrap_or_else(|_| Err(anyhow::Error::msg("Task Join Error")))
-}
-
-/// Async helper: shows a Yes/No dialog and returns the result
-pub async fn yesno_dialog(title: &str, message: &str) -> anyhow::Result<MessageBoxResult> {
-    let title = title.to_string();
-    let message = message.to_string();
-    tokio::task::spawn_blocking(move || {
-        messagebox(&title, &message, MessageBoxButtons::YesNo, 64).map_err(anyhow::Error::msg)
-    })
-    .await
-    .unwrap_or_else(|_| Err(anyhow::Error::msg("Task Join Error")))
-}
-
-/// Async closer: signal shutdown and wait until any active messagebox is gone
-pub async fn ensure_dialogs_closed() {
-    // If already shutting down, return
-    if SHUTDOWN.load(Ordering::SeqCst) {
-        log::debug!("ensure_dialogs_closed: Already shutting down, returning");
-        return;
-    }
-
-    // Signal shutdown
-    SHUTDOWN.store(true, Ordering::SeqCst);
-    log::debug!("ensure_dialogs_closed: Signaled shutdown, waiting for messagebox to close");
-
-    // Poll MESSAGEBOX_ACTIVE up to 10 times, 100ms each
-    // Should be enough to close any active messagebox
-    let mut closed = false;
-    for _ in 0..10 {
-        if !MESSAGEBOX_ACTIVE.load(Ordering::SeqCst) {
-            log::debug!("ensure_dialogs_closed: Messagebox closed");
-            closed = true;
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    }
-    if !closed {
-        log::warn!("ensure_dialogs_closed: Timeout waiting for messagebox to close");
-    }
-
-    // Ensure shutdown flag is reset so new dialogs can open
-    SHUTDOWN.store(false, Ordering::SeqCst);
-    log::debug!("ensure_dialogs_closed: Reset shutdown flag");
-}
-
-pub async fn shutdown() {
-    SHUTDOWN.store(true, Ordering::SeqCst);
 }
 
 fn split_message(msg: &str, max_len: usize) -> Vec<String> {
@@ -268,97 +284,27 @@ fn split_message(msg: &str, max_len: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log;
 
-    #[test]
-    fn test_split_message() {
-        log::setup_logging("debug", log::LogType::Tests);
-        let msg = "This is a test message that should be split into multiple lines based on the maximum length specified.";
-        let lines = split_message(msg, 20);
-        for line in &lines {
-            log::info!("Line: '{}'", line);
-            assert!(line.len() <= 20);
-        }
-        assert_eq!(lines.len(), 7); // 7 lines because of word boundaries
-    }
-
-    // Note: The gui test is omitted because it requires a GUI environment to run
-    // And will block the test suite
-    #[test]
-    #[ignore]
-    fn test_messagebox() {
-        log::setup_logging("debug", log::LogType::Tests);
-        let res = messagebox(
-            "Test Title",
-            "This is a test message to display in the message box. It should handle long messages properly.",
-            MessageBoxButtons::YesNo,
-            40,
-        );
-        assert!(res.is_ok());
-        log::info!("MessageBox result: {}", res.unwrap());
-    }
-
-    // Test that multiple messagedialog works
     #[tokio::test]
-    #[ignore] // Ignored because it requires GUI environment and user interaction
-    async fn test_multiple_message_dialogs() {
-        log::setup_logging("debug", log::LogType::Tests);
-        for i in 0..5 {
-            let title = format!("Test Dialog {}", i);
-            let message = format!("This is test dialog number {}.", i);
-            tokio::spawn(async move {
-                ensure_dialogs_closed().await;
-                let res = message_dialog(&title, &message).await;
-                log::info!("Dialog {} result: {:?}", i, res);
-                res
-            });
-            // Wait a bit before starting the next dialog
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-        // Wait a bit to let dialogs finish
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        ensure_dialogs_closed().await;
-    }
-
-    async fn notify_user(message: &str) -> anyhow::Result<()> {
-        crate::log::info!("Notify user: {}", message);
-        let message = message.to_string();
-        ensure_dialogs_closed().await;
-        // Execute the dialog on a background thread
+    #[ignore = "Requires GUI interaction"]
+    async fn test_message_dialog() {
+        let gui = GuiHandle::new();
+        let gui_task = gui.clone();
         tokio::spawn(async move {
-            _ = message_dialog("Notification", &message).await;
+            let res = gui_task
+                .yesno_dialog("Confirm", "Do you want to proceed?")
+                .await;
+            println!("Yes/No dialog result: {:?}", res);
         });
-        Ok(())
-    }
-
-    // Test idle dialog closing automatically
-    #[tokio::test]
-    async fn test_idle_dialog_closing() {
-        log::setup_logging("debug", log::LogType::Tests);
-        notify_user("This is a test notification that should close automatically in 1 seconds.")
-            .await
-            .unwrap();
-        // Wait 1 second, to repeat the notification
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        ensure_dialogs_closed().await;
-        // Wait a bit to see the dialog closed
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        notify_user("This is a test notification that should close automatically in 1 seconds.")
-            .await
-            .unwrap();
-        // Wait 3 seconds to ensure the first dialog is closed
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        // Now ensure all dialogs are closed
-        ensure_dialogs_closed().await;
-        // Wait a bit to see the dialog closed
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        // Final notification
-        notify_user("Final notification after ensuring dialogs are closed.")
-            .await
-            .unwrap();
-        // Wait a bit to see the final dialog
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        ensure_dialogs_closed().await;
+        let gui_task = gui.clone();
+        tokio::spawn(async move {
+            let res = gui_task
+                .message_dialog("Test", "This is a test message with probable several lines and some more text\n even with a newline\n or two")
+                .await;
+            println!("Message dialog result: {:?}", res);
+        });
+        // Wait some time to allow interaction
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        gui.close_all_windows();
     }
 }

@@ -60,13 +60,13 @@ pub async fn task(
             notified = false;
             shared::log::debug!("User is active again, resetting notified flag");
             // Also, if any dialogs are open, close them
-            shared::gui::ensure_dialogs_closed().await;
+            platform.gui().close_all_windows();
         }
 
         // Notify user:
         if !notified && remaining.as_secs() <= 120 {
             platform.actions()
-                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.")
+                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.", platform.gui())
                 .await
                 .ok();
             shared::log::info!("User idle for {:?} seconds", idle.as_secs());

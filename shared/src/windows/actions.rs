@@ -44,14 +44,16 @@ mod tests {
         crate::log::setup_logging("debug", crate::log::LogType::Tests);
         let not_blocked = Arc::new(tokio::sync::Notify::new());
         let actions = new_actions();
+        let gui = crate::gui::GuiHandle::new();
         // Spawn on a separate task, ensuring it does not block
         let not_blocked_spawn = not_blocked.clone();
         let started = Arc::new(tokio::sync::Notify::new());
         let started_spawn = started.clone();
+        let gui_task = gui.clone();
         tokio::spawn(async move {
             started_spawn.notify_waiters();
             crate::log::info!("Calling notify_user...");
-            actions.notify_user("Test notification").await.unwrap();
+            actions.notify_user("Test notification", gui_task).await.unwrap();
             crate::log::info!("notify_user completed");
             not_blocked_spawn.notify_waiters();
         });
@@ -63,6 +65,6 @@ mod tests {
             tokio::time::timeout(std::time::Duration::from_secs(2), not_blocked.notified()).await;
         assert!(res.is_err(), "notify_user should not block");
         // Close all dialogs now
-        crate::gui::ensure_dialogs_closed().await;
+        gui.shutdown();
     }
 }

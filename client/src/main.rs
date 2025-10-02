@@ -72,7 +72,9 @@ async fn main() {
     shared::log::info!("Starting uds-actor client...");
     let platform = platform::Platform::new();
 
-    run(platform).await; // To allow using tests
+    run(platform.clone()).await; // Run main loop
+
+    platform.shutdown();
 }
 
 async fn run(platform: platform::Platform) {
@@ -128,7 +130,6 @@ async fn run(platform: platform::Platform) {
     }
 
     // Ensure GUI is shutdown. If not done, and any window is open, process will hang until window is closed
-    shared::gui::shutdown().await;
 }
 
 // Faking modules for tests

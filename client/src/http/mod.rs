@@ -62,7 +62,7 @@ async fn message(
     Json(req): Json<types::MessageRequest>,
 ) -> &'static str {
     shared::log::info!("Message display requested via HTTP API");
-    let _ = state.platform.actions().notify_user(&req.message).await;
+    let _ = state.platform.actions().notify_user(&req.message, state.platform.gui()).await;
     "ok"
 }
 

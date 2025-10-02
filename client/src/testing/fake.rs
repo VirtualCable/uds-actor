@@ -168,7 +168,7 @@ impl Actions for FakeActions {
         self.calls.push(format!("actions::run_script({})", script));
         Ok(format!("Executed: {}", script))
     }
-    async fn notify_user(&self, message: &str) -> anyhow::Result<()> {
+    async fn notify_user(&self, message: &str, _gui: shared::gui::GuiHandle) -> anyhow::Result<()> {
         self.calls
             .push(format!("actions::notify_user({:?})", message));
         Ok(())

@@ -1,4 +1,3 @@
-use crate::gui::{ensure_dialogs_closed, message_dialog};
 use async_trait::async_trait;
 
 // Common actions trait for different platforms
@@ -10,13 +9,13 @@ pub trait Actions: Send + Sync {
     // Default implementation for notifying the user: closes dialogs and shows
     // a notification dialog. Implementations may override if platform-specific
     // behavior is required.
-    async fn notify_user(&self, message: &str) -> anyhow::Result<()> {
+    async fn notify_user(&self, message: &str, gui: crate::gui::GuiHandle) -> anyhow::Result<()> {
         crate::log::info!("Notify user: {}", message);
         let message = message.to_string();
-        ensure_dialogs_closed().await;
+        // ensure_dialogs_closed().await;
         // Execute the dialog on a background thread
         tokio::spawn(async move {
-            _ = message_dialog("Notification", &message).await;
+            _ = gui.message_dialog("Notification", &message).await;
         });
         Ok(())
     }
