@@ -53,13 +53,13 @@ impl AsyncService {
 
             tokio::select! {
                 _ = sigterm.recv() => {
-                    shared::log::info!("Received SIGTERM");
+                    crate::log::info!("Received SIGTERM");
                 },
                 _ = sigint.recv() => {
-                    shared::log::info!("Received SIGINT");
+                    crate::log::info!("Received SIGINT");
                 }
                 _ = stop.notified() => {
-                    shared::log::info!("Stop notified");
+                    crate::log::info!("Stop notified");
                     return;
                 }
             }

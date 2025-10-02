@@ -13,6 +13,17 @@ impl UnixOperations {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn get_linux_version(&self) -> Option<String> {
+        if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+            for line in content.lines() {
+                if line.starts_with("ID=") {
+                    return Some(line[3..].trim_matches('"').to_string());
+                }
+            }
+        }
+        None
+    }
 }
 
 impl crate::operations::Operations for UnixOperations {
@@ -33,7 +44,10 @@ impl crate::operations::Operations for UnixOperations {
 
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
         log::debug!("UnixOperations::rename_computer called: {}", new_name);
-        Ok(())
+        renamer::renamer(
+            new_name,
+            self.get_linux_version().as_deref().unwrap_or("unknown"),
+        )
     }
 
     fn join_domain(
@@ -64,14 +78,11 @@ impl crate::operations::Operations for UnixOperations {
         Ok(())
     }
 
-    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
-        log::debug!("UnixOperations::get_windows_version called");
-        Ok((0, 0, 0, 0, String::new()))
-    }
-
     fn get_os_version(&self) -> anyhow::Result<String> {
         log::debug!("UnixOperations::get_os_version called");
-        Ok(String::new())
+        Ok(self
+            .get_linux_version()
+            .unwrap_or("generic-linux".to_string()))
     }
 
     fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
@@ -89,7 +100,7 @@ impl crate::operations::Operations for UnixOperations {
         Ok(())
     }
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<(String, String, String)>> {
+    fn get_network_info(&self) -> anyhow::Result<Vec<crate::operations::NetworkInterfaceInfo>> {
         log::debug!("UnixOperations::get_network_info called");
         Ok(vec![])
     }
