@@ -1,6 +1,8 @@
 // TODO: finish Unix implementation
 use crate::log;
 
+mod renamer;
+
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(UnixOperations::new())
 }
