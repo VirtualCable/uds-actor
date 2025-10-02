@@ -37,6 +37,7 @@ widestring = "1.2.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5.11.0"
+whoami = "1.6.1"
 
 [dependencies.macros]
 path = "../macros"
@@ -53,6 +54,6 @@ chrono = { version = "0.4.42" }
 # Gui
 fltk = { version = "^1.5", features = ["fltk-bundled"] }
 
-tokio = { version = "1.47.1", features = ["macros", "rt", "time", "sync"] }
+tokio = { version = "1.47.1", features = ["macros", "rt", "time", "sync", "signal"] }
 
 async-trait = "0.1"

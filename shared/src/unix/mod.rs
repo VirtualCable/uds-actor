@@ -24,8 +24,14 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-mod event;
 pub mod actions;
-pub mod operations;
+mod event;
+
+// If linux, include operations
+#[cfg(target_os = "linux")]
+pub mod operations_linux;
+
+#[cfg(target_os = "linux")]
+pub use operations_linux as operations;
 
 pub use event::UnixEvent;

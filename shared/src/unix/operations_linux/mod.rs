@@ -2,6 +2,7 @@
 use crate::log;
 
 mod renamer;
+mod session;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(UnixOperations::new())
@@ -92,7 +93,7 @@ impl crate::operations::Operations for UnixOperations {
 
     fn logoff(&self) -> anyhow::Result<()> {
         log::debug!("UnixOperations::logoff called");
-        Ok(())
+        session::logout()
     }
 
     fn init_idle_timer(&self) -> anyhow::Result<()> {
