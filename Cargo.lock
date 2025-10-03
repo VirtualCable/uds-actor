@@ -2211,8 +2211,14 @@ version = "5.0.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "hyper",
+ "mockito",
+ "reqwest",
+ "serde",
+ "serde_json",
  "shared",
  "tokio",
+ "tower",
  "winres",
 ]
 
