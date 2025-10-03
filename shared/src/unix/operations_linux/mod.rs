@@ -1,8 +1,43 @@
-// TODO: finish Unix implementation
+// Copyright (c) 2025 Virtual Cable S.L.U.
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//    * Redistributions of source code must retain the above copyright notice,
+//      this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above copyright notice,
+//      this list of conditions and the following disclaimer in the documentation
+//      and/or other materials provided with the distribution.
+//    * Neither the name of Virtual Cable S.L.U. nor the names of its contributors
+//      may be used to endorse or promote products derived from this software
+//      without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*!
+Author: Adolfo Gómez, dkmaster at dkmon dot com
+*/
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
+
+use anyhow::Result;
+
 use crate::log;
 
+mod computer;
+mod idle;
 mod renamer;
 mod session;
+mod network;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(UnixOperations::new())
@@ -28,22 +63,26 @@ impl UnixOperations {
 }
 
 impl crate::operations::Operations for UnixOperations {
-    fn check_permissions(&self) -> anyhow::Result<bool> {
+    fn check_permissions(&self) -> Result<bool> {
         log::debug!("UnixOperations::check_permissions called");
-        Ok(false)
+        if std::env::var("UDS_DEBUG").unwrap_or_else(|_| "0".to_string()) == "1" {
+            Ok(true)
+        } else {
+            Ok(unsafe { libc::geteuid() == 0 })
+        }
     }
 
-    fn get_computer_name(&self) -> anyhow::Result<String> {
+    fn get_computer_name(&self) -> Result<String> {
         log::debug!("UnixOperations::get_computer_name called");
-        Ok(String::new())
+        computer::get_computer_name()
     }
 
-    fn get_domain_name(&self) -> anyhow::Result<Option<String>> {
+    fn get_domain_name(&self) -> Result<Option<String>> {
         log::debug!("UnixOperations::get_domain_name called");
         Ok(None)
     }
 
-    fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
+    fn rename_computer(&self, new_name: &str) -> Result<()> {
         log::debug!("UnixOperations::rename_computer called: {}", new_name);
         renamer::renamer(
             new_name,
@@ -51,82 +90,97 @@ impl crate::operations::Operations for UnixOperations {
         )
     }
 
-    fn join_domain(
-        &self,
-        domain: &str,
-        ou: Option<&str>,
-        account: &str,
-        _password: &str,
-        execute_in_one_step: bool,
-    ) -> anyhow::Result<()> {
-        log::debug!(
-            "UnixOperations::join_domain called: domain={} ou={:?} account={} execute_in_one_step={}",
-            domain,
-            ou,
-            account,
-            execute_in_one_step
-        );
-        Ok(())
+    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
+        computer::join_domain(options)
     }
 
     fn change_user_password(
         &self,
         user: &str,
         _old_password: &str,
-        _new_password: &str,
-    ) -> anyhow::Result<()> {
+        new_password: &str,
+    ) -> Result<()> {
         log::debug!("UnixOperations::change_user_password called: user={}", user);
-        Ok(())
+
+        // chpasswd expects "user:new_password" in stdin
+        let input = format!("{}:{}\n", user, new_password);
+
+        let mut child = Command::new("/usr/sbin/chpasswd")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin.write_all(input.as_bytes())?;
+        }
+
+        let output = child.wait_with_output()?;
+        if output.status.success() {
+            log::debug!("Password for {} changed successfully", user);
+            Ok(())
+        } else {
+            log::error!(
+                "Error changing password for {}: {}",
+                user,
+                String::from_utf8_lossy(&output.stderr)
+            );
+            Err(anyhow::anyhow!("chpasswd failed"))
+        }
     }
 
-    fn get_os_version(&self) -> anyhow::Result<String> {
+    fn get_os_version(&self) -> Result<String> {
         log::debug!("UnixOperations::get_os_version called");
         Ok(self
             .get_linux_version()
             .unwrap_or("generic-linux".to_string()))
     }
 
-    fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
+    fn reboot(&self, flags: Option<u32>) -> Result<()> {
         log::debug!("UnixOperations::reboot called: {:?}", flags);
+        Command::new("systemctl").arg("reboot").status()?;
         Ok(())
     }
 
-    fn logoff(&self) -> anyhow::Result<()> {
+    fn logoff(&self) -> Result<()> {
         log::debug!("UnixOperations::logoff called");
         session::logout()
     }
 
-    fn init_idle_timer(&self) -> anyhow::Result<()> {
-        log::debug!("UnixOperations::init_idle_timer called");
-        Ok(())
-    }
-
-    fn get_network_info(&self) -> anyhow::Result<Vec<crate::operations::NetworkInterfaceInfo>> {
+    fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterfaceInfo>> {
         log::debug!("UnixOperations::get_network_info called");
-        Ok(vec![])
+        network::get_network_info()
     }
 
-    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
+    fn init_idle_timer(&self) -> Result<()> {
+        log::debug!("UnixOperations::init_idle_timer called");
+        idle::init_idle()
+    }
+
+    fn get_idle_duration(&self) -> Result<std::time::Duration> {
         log::debug!("UnixOperations::get_idle_duration called");
-        Ok(std::time::Duration::new(0, 0))
+        let idle = idle::get_idle();
+        Ok(std::time::Duration::from_secs_f64(idle))
     }
 
-    fn get_current_user(&self) -> anyhow::Result<String> {
+    fn get_current_user(&self) -> Result<String> {
         log::debug!("UnixOperations::get_current_user called");
-        Ok(String::new())
+        Ok(whoami::username())
     }
 
-    fn get_session_type(&self) -> anyhow::Result<String> {
+    fn get_session_type(&self) -> Result<String> {
         log::debug!("UnixOperations::get_session_type called");
-        Ok(String::new())
+        Ok(std::env::var("XRDP_SESSION").unwrap_or_else(|_| {
+            std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "unknown".to_string())
+        }))
     }
 
-    fn force_time_sync(&self) -> anyhow::Result<()> {
+    fn force_time_sync(&self) -> Result<()> {
         log::debug!("UnixOperations::force_time_sync called");
-        Ok(())
+        computer::refresh_system_time()
     }
 
-    fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()> {
+    fn protect_file_for_owner_only(&self, path: &str) -> Result<()> {
         log::debug!(
             "UnixOperations::protect_file_for_owner_only called: {}",
             path

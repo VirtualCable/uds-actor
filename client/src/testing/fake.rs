@@ -2,8 +2,8 @@
 use crate::rest::{api::ClientRest, types::LoginResponse};
 use shared::{
     actions::Actions,
-    sync::event::{Event, EventLike},
     operations::{NetworkInterfaceInfo, Operations},
+    sync::event::{Event, EventLike},
 };
 use std::sync::{Arc, RwLock};
 
@@ -208,26 +208,10 @@ impl Operations for FakeOperations {
         Ok(())
     }
 
-    fn join_domain(
-        &self,
-        domain: &str,
-        ou: Option<&str>,
-        account: &str,
-        password: &str,
-        execute_in_one_step: bool,
-    ) -> anyhow::Result<()> {
-        self.calls.push(format!(
-            "operations::join_domain({},{:?},{},{},{})",
-            domain, ou, account, password, execute_in_one_step
-        ));
-        shared::log::info!(
-            "Joining domain: {}, ou: {:?}, account: {}, password: {}, one_step: {}",
-            domain,
-            ou,
-            account,
-            password,
-            execute_in_one_step
-        );
+    fn join_domain(&self, options: &shared::operations::JoinDomainOptions) -> anyhow::Result<()> {
+        self.calls
+            .push(format!("operations::join_domain({:?})", options));
+        shared::log::info!("Joining domain: {:?}", options);
         Ok(())
     }
 

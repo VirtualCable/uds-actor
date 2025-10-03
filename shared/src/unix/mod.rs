@@ -30,8 +30,13 @@ mod event;
 // If linux, include operations
 #[cfg(target_os = "linux")]
 pub mod operations_linux;
-
 #[cfg(target_os = "linux")]
 pub use operations_linux as operations;
+
+// TODO: macos implementation
+// #[cfg(target_os = "macos")]
+// pub mod operations_macos;
+// #[cfg(target_os = "macos")]
+// pub use operations_macos as operations;
 
 pub use event::UnixEvent;

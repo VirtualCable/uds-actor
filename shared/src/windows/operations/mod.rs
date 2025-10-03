@@ -186,33 +186,30 @@ impl Operations for WindowsOperations {
 
     fn join_domain(
         &self,
-        domain: &str,
-        ou: Option<&str>,
-        account: &str,
-        password: &str,
-        execute_in_one_step: bool,
+        options: &crate::operations::JoinDomainOptions,
     ) -> anyhow::Result<()> {
+        log::debug!("WindowsOperations::join_domain called: options={:?}", options);
         unsafe {
             // Build user@domain style credentials if needed
-            let mut account_str = account.to_string();
+            let mut account_str = options.account.to_string();
             if !account.contains('@') && !account.contains('\\') {
-                if domain.contains('.') {
-                    account_str = format!("{}@{}", account, domain);
+                if options.domain.contains('.') {
+                    account_str = format!("{}@{}", options.account, options.domain);
                 } else {
-                    account_str = format!("{}\\{}", domain, account);
+                    account_str = format!("{}\\{}", options.domain, options.account);
                 }
             }
 
             // Flags
             let mut flags =
                 NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
-            if execute_in_one_step {
+            if options.execute_in_one_step.unwrap_or(true) {
                 flags |= NETSETUP_JOIN_WITH_NEW_NAME;
             }
 
             // Convert to utf16
             let lp_domain =
-                U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
+                U16CString::from_str(options.domain).context("failed to convert domain to UTF-16")?;
             let lp_ou = match ou {
                 Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
                 None => None,
@@ -220,7 +217,7 @@ impl Operations for WindowsOperations {
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
             let lp_password =
-                U16CString::from_str(password).context("failed to convert password to UTF-16")?;
+                U16CString::from_str(options.password).context("failed to convert password to UTF-16")?;
 
             // Call
             let mut res = NetJoinDomain(
