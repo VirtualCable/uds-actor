@@ -3,15 +3,17 @@ use base64::engine::{Engine as _, general_purpose::STANDARD};
 
 use crate::platform::Platform;
 
+use shared::log;
+
 mod types;
 
 async fn ping() -> &'static str {
-    shared::debug_dev!("Ping received");
+    log::debug!("Ping received via HTTP API");
     "pong"
 }
 
 async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
-    shared::log::info!("Logout requested via HTTP API");
+    log::info!("Logout requested via HTTP API");
 
     // Even in the case that we have been notified of a logout, we need to ensure the API is called
     // right now. As soon as we implement the websocket version, all of this will be obsolete.
@@ -36,7 +38,7 @@ async fn logout(Extension(state): Extension<types::AppState>) -> &'static str {
 async fn screenshot(
     Extension(state): Extension<types::AppState>,
 ) -> Json<types::ScreenshotResponse> {
-    shared::log::info!("Screenshot requested via HTTP API");
+    log::info!("Screenshot requested via HTTP API");
     let data = state
         .platform
         .actions()
@@ -52,7 +54,7 @@ async fn script(
     Extension(state): Extension<types::AppState>,
     Json(req): Json<types::ScriptRequest>,
 ) -> &'static str {
-    shared::log::info!("Script execution requested via HTTP API");
+    log::info!("Script execution requested via HTTP API");
     _ = state.platform.actions().run_script(&req.script).await;
     "ok"
 }
@@ -61,8 +63,12 @@ async fn message(
     Extension(state): Extension<types::AppState>,
     Json(req): Json<types::MessageRequest>,
 ) -> &'static str {
-    shared::log::info!("Message display requested via HTTP API");
-    let _ = state.platform.actions().notify_user(&req.message, state.platform.gui()).await;
+    log::info!("Message display requested via HTTP API");
+    let _ = state
+        .platform
+        .actions()
+        .notify_user(&req.message, state.platform.gui())
+        .await;
     "ok"
 }
 
@@ -80,7 +86,7 @@ pub async fn run_server(
 
     // If cannot register, set stop and return
     if let Err(err) = api.write().await.register(&callback_url).await {
-        shared::log::error!("Failed to register with server: {}", err);
+        log::error!("Failed to register with server: {}", err);
         platform.session_manager().stop().await;
         return Err(anyhow::anyhow!("Failed to register with server: {}", err));
     }
@@ -96,20 +102,25 @@ pub async fn run_server(
         }));
 
     let addr = listener.local_addr().unwrap();
-    println!("Listening on http://{}", addr);
+    log::debug!("Listening on http://{}", addr);
 
+    log::debug!("Starting server");
     let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+        log::debug!("Waiting for session manager shutdown...");
         platform.session_manager().wait().await;
+        log::debug!("Session manager has shut down, stopping server...");
     });
 
     let res = server
         .await
         .map_err(|e| anyhow::anyhow!("Server error: {}", e));
 
+    log::debug!("Server has shut down: {:?}", res);
+
     // Unregister from server
     let _ = api.write().await.unregister().await;
 
-    shared::debug_dev!("Unregistered from server");
+    log::debug!("Unregistered from server");
     res
 }
 

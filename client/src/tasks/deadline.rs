@@ -25,6 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
+use shared::log;
 
 pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<Option<String>> {
     let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
@@ -38,6 +39,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
     };
     // If no deadline, just wait until signaled
     if deadline.as_secs() == 0 {
+        log::info!("No deadline set, waiting until signaled");
         // Wait until signaled
         platform.session_manager().wait().await;
         return Ok(None);
@@ -46,7 +48,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
     // Deadline timer, simply wait until deadline is reached inside the session_manager
     // But leave a 5 mins to notify before deadline
     if !platform.session_manager().wait_timeout(deadline).await {
-        shared::log::info!("Deadline notification reached, notifying user");
+        log::info!("Deadline notification reached, notifying user");
 
         platform
             .actions()
@@ -56,9 +58,9 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 
         // Wait remaining minutes more or until signaled
         let _ = platform.session_manager().wait_timeout(remaining).await;
-        shared::log::info!("Session still running after deadline, stopping session");
+        log::info!("Session still running after deadline, stopping session");
     } else {
-        shared::log::info!("Session signaled or closed, stopping deadline task");
+        log::info!("Session signaled or closed, stopping deadline task");
     }
 
     // Notify session manager to stop session

@@ -26,8 +26,8 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{fs, fs::OpenOptions, io, panic, path::PathBuf, sync::OnceLock};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use std::{fs, fs::OpenOptions, io::{self, Write}, panic, path::PathBuf, sync::OnceLock};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
@@ -92,6 +92,15 @@ pub enum LogType {
 // Our log system wil also hook panics to log them
 pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
+        // Also, open a file on temp dir to log panic, in case logging system is broken
+        let temp_log = std::env::temp_dir().join("udsactor-panic.log");
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&temp_log)
+            .unwrap();
+        let _ = writeln!(f, "Panic occurred: {:?}", info);
+        // Now log it using our logging system
         error!("Guru Meditation (😕): {:?}", info);
     }));
 }
@@ -132,6 +141,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
     println!("Logging to {}/{} with level {}", log_path, log_name, level);
 
     LOGGER_INIT.get_or_init(|| {
+        let env_filter = EnvFilter::new(level.clone());
         let main_layer = fmt::layer()
             .with_writer(RotatingWriter {
                 path: std::path::Path::new(&log_path).join(log_name),
@@ -140,17 +150,19 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             })
             .with_ansi(false)
             .with_target(true)
-            .with_level(true);
+            .with_level(true)
+            .with_thread_ids(true)
+            .with_filter(env_filter.clone());
 
-        #[cfg(debug_assertions)]
-        use tracing_subscriber::Layer;
         #[cfg(debug_assertions)]
         let main_layer = main_layer.and_then(
             fmt::layer()
                 .with_writer(std::io::stderr)
                 .with_ansi(true)
                 .with_target(true)
-                .with_level(true),
+                .with_level(true)
+                .with_thread_ids(true)
+                .with_filter(env_filter),
         );
 
         tracing_subscriber::registry()

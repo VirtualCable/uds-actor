@@ -67,12 +67,13 @@ async fn send_logout(platform: &platform::Platform, reason: Option<&str>) -> any
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     // Setup logging
-    shared::log::setup_logging("info", shared::log::LogType::Client);
+    shared::log::setup_logging("debug", shared::log::LogType::Client);
 
     shared::log::info!("Starting uds-actor client...");
     let platform = platform::Platform::new();
 
     run(platform.clone()).await; // Run main loop
+    shared::log::info!("uds-actor client stopped.");
 
     platform.shutdown();
 }

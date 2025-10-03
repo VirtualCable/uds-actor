@@ -25,6 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
+use shared::log;
 
 pub async fn task(
     max_idle: Option<u32>,
@@ -58,7 +59,7 @@ pub async fn task(
         if remaining.as_secs() > 120 && notified {
             // If we have more than 2 minutes remaining, reset notified flag
             notified = false;
-            shared::log::debug!("User is active again, resetting notified flag");
+            log::debug!("User is active again, resetting notified flag");
             // Also, if any dialogs are open, close them
             platform.gui().close_all_windows();
         }
@@ -69,16 +70,18 @@ pub async fn task(
                 .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.", platform.gui())
                 .await
                 .ok();
-            shared::log::info!("User idle for {:?} seconds", idle.as_secs());
+            log::info!("User idle for {:?} seconds", idle.as_secs());
             notified = true;
         }
 
         // Debug log every 30 seconds
-        shared::debug_dev!(
-            "User idle for {} seconds ({} remaining)",
-            idle.as_secs(),
-            remaining.as_secs()
-        );
+        if idle.as_secs() % 30 == 0 {
+            log::debug!(
+                "User idle for {} seconds ({} remaining)",
+                idle.as_secs(),
+                remaining.as_secs()
+            );
+        }
 
         // If we reach max idle, stop session
         if remaining.as_secs() == 0 {
