@@ -75,7 +75,7 @@ pub async fn task(
         }
 
         // Debug log every 30 seconds
-        if idle.as_secs() % 30 == 0 {
+        if idle.as_secs() % 30 == 0 && idle.as_secs() != 0 {
             log::debug!(
                 "User idle for {} seconds ({} remaining)",
                 idle.as_secs(),

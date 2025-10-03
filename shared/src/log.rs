@@ -151,7 +151,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .with_ansi(false)
             .with_target(true)
             .with_level(true)
-            .with_thread_ids(true)
+            .with_thread_ids(level == "debug" || level == "trace")
             .with_filter(env_filter.clone());
 
         #[cfg(debug_assertions)]
