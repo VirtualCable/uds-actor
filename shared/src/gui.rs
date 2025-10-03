@@ -72,7 +72,10 @@ impl GuiHandle {
 
             // Explicit main loop
             loop {
-                app.wait();
+                // If no events, wait a bit
+                if !app.wait() {
+                    std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
+                }
                 while let Ok(cmd) = rx.try_recv() {
                     log::debug!("GUI: Received command: {:?}", cmd);
                     match cmd {
@@ -103,6 +106,7 @@ impl GuiHandle {
                         }
                     }
                 }
+                std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
             }
         });
 
