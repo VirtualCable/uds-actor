@@ -54,9 +54,6 @@ mod tests {
     use super::*;
     use crate::log;
 
-    #[cfg(target_family = "unix")]
-    use crate::unix::config::new_test_config_loader;
-
     fn get_test_config() -> ActorConfiguration {
         ActorConfiguration {
             host: "https://example.com".to_string(),
@@ -112,7 +109,7 @@ mod tests {
         log::setup_logging("debug", crate::log::LogType::Tests);
 
         let test_cfg = get_test_config();
-        let mut config = new_test_config_loader();
+        let mut config = new_config_loader();
         let res = config.save_config(&test_cfg);
         assert!(res.is_ok(), "Failed to save config: {:?}", res.err());
         let loaded_cfg = config.load_config().unwrap();

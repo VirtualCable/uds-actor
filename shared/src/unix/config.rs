@@ -5,17 +5,10 @@ use crate::{
     log,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct UnixConfig {
     actor: Option<ActorConfiguration>,
 }
-
-impl Default for UnixConfig {
-    fn default() -> Self {
-        Self { actor: None }
-    }
-}
-
 
 impl ConfigLoader for UnixConfig {
     fn load_config(&mut self) -> Result<ActorConfiguration> {
@@ -69,13 +62,5 @@ pub fn new_config_loader() -> Box<dyn ConfigLoader> {
 #[cfg(not(test))]
 const CONFIG_PATH: &str = "/etc/udsactor/config.yaml";
 
-
 #[cfg(test)]
 const CONFIG_PATH: &str = "/tmp/udsactor/config.yaml";
-
-
-#[cfg(test)]
-pub fn new_test_config_loader() -> Box<dyn ConfigLoader> {
-    Box::new(UnixConfig::default())
-}
-

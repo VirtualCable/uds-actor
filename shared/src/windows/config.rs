@@ -24,9 +24,6 @@ use crate::{
     log,
 };
 
-// Constants
-const PATH: PCWSTR = w!("SOFTWARE\\UDSActor");
-
 unsafe fn fix_registry_permissions(hkey: HKEY) -> Result<()> {
     let mut p_sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR::default();
     let mut p_dacl: *mut ACL = std::ptr::null_mut();
@@ -103,35 +100,20 @@ unsafe fn fix_registry_permissions(hkey: HKEY) -> Result<()> {
     Ok(())
 }
 
-// Allow to choose registry root, for testing purposes
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RegistryRoot {
-    LocalMachine,
-    CurrentUser,
-}
+// Constants
+const PATH: PCWSTR = w!("SOFTWARE\\UDSActor");
 
-impl RegistryRoot {
-    pub fn as_hkey(&self) -> HKEY {
-        match self {
-            RegistryRoot::LocalMachine => HKEY_LOCAL_MACHINE,
-            RegistryRoot::CurrentUser => HKEY_CURRENT_USER,
-        }
+fn get_key_root() -> HKEY {
+    if cfg!(test) || (cfg!(debug_assertions) && std::env::var("UDS_USE_CURRENT_USER").is_ok()) {
+        HKEY_CURRENT_USER
+    } else {
+        HKEY_LOCAL_MACHINE
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct WindowsConfig {
     actor: Option<ActorConfiguration>,
-    keys_root: RegistryRoot,
-}
-
-impl Default for WindowsConfig {
-    fn default() -> Self {
-        Self {
-            actor: None,
-            keys_root: RegistryRoot::LocalMachine,
-        }
-    }
 }
 
 impl ConfigLoader for WindowsConfig {
@@ -139,13 +121,7 @@ impl ConfigLoader for WindowsConfig {
         // Try to open the registry key for reading
         unsafe {
             let mut hkey: HKEY = HKEY::default();
-            let status = RegOpenKeyExW(
-                self.keys_root.as_hkey(),
-                PATH,
-                None,
-                KEY_QUERY_VALUE,
-                &mut hkey,
-            );
+            let status = RegOpenKeyExW(get_key_root(), PATH, None, KEY_QUERY_VALUE, &mut hkey);
 
             if status.is_err() {
                 // If key does not exist, return a default configuration
@@ -199,7 +175,7 @@ impl ConfigLoader for WindowsConfig {
             let mut hkey: HKEY = HKEY::default();
             let mut disposition = REG_CREATE_KEY_DISPOSITION::default();
             let status = RegCreateKeyExW(
-                HKEY_LOCAL_MACHINE,
+                get_key_root(),
                 PATH,
                 None,
                 None,
@@ -212,13 +188,7 @@ impl ConfigLoader for WindowsConfig {
 
             // IF already exists, open with all access
             if status.is_err() {
-                let status = RegOpenKeyExW(
-                    self.keys_root.as_hkey(),
-                    PATH,
-                    None,
-                    KEY_ALL_ACCESS,
-                    &mut hkey,
-                );
+                let status = RegOpenKeyExW(get_key_root(), PATH, None, KEY_ALL_ACCESS, &mut hkey);
                 if status.is_err() {
                     return Err(anyhow::anyhow!("Failed to open or create registry key"));
                 }
@@ -226,7 +196,7 @@ impl ConfigLoader for WindowsConfig {
 
             // Apply security fix (remove BUILTIN\Users ACE)
             // if using LocalMachine root
-            if self.keys_root == RegistryRoot::LocalMachine {
+            if get_key_root() == HKEY_LOCAL_MACHINE {
                 fix_registry_permissions(hkey)?;
             }
 
@@ -248,13 +218,7 @@ impl ConfigLoader for WindowsConfig {
         unsafe {
             // Try to open the registry key
             let mut hkey: HKEY = HKEY::default();
-            let status = RegOpenKeyExW(
-                self.keys_root.as_hkey(),
-                PATH,
-                None,
-                KEY_ALL_ACCESS,
-                &mut hkey,
-            );
+            let status = RegOpenKeyExW(get_key_root(), PATH, None, KEY_ALL_ACCESS, &mut hkey);
 
             if status.is_err() {
                 return Err(anyhow::anyhow!("Failed to open registry key"));
@@ -284,12 +248,4 @@ impl ConfigLoader for WindowsConfig {
 
 pub fn new_config_loader() -> Box<dyn ConfigLoader> {
     Box::new(WindowsConfig::default())
-}
-
-#[cfg(test)]
-pub fn new_test_config_loader() -> Box<dyn ConfigLoader> {
-    Box::new(WindowsConfig {
-        actor: None,
-        keys_root: RegistryRoot::CurrentUser,
-    })
 }
