@@ -13,7 +13,7 @@ pub struct ActorDataConfiguration {
     pub unique_id: Option<String>,
     pub os: Option<ActorOsConfiguration>,
 }
-    
+
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorConfiguration {
     pub host: String,
@@ -41,3 +41,9 @@ pub trait ConfigLoader {
         self.load_config()
     }
 }
+
+#[cfg(target_os = "windows")]
+pub use crate::windows::config::new_config_loader;
+
+#[cfg(target_family = "unix")]
+pub use crate::unix::config::new_config_loader;
