@@ -4,6 +4,9 @@ use shared::{log, service::AsyncService};
 
 use tokio::sync::Notify;
 
+mod platform;
+
+
 fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
         async_main(stop).await;

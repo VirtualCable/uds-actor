@@ -43,7 +43,6 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, BrokerApi) {
     (
         server,
         BrokerApi::new(&url, false, std::time::Duration::from_secs(5), true)
-            .unwrap()
             .with_token("token")
             .with_secret("secret"),
     )
@@ -213,7 +212,7 @@ async fn test_initialize() {
             master_token: Some("some_master_token".to_string()),
             token: Some("anothertoken".to_string()),
             unique_id: Some("unique_id_123".to_string()),
-            os: Some(types::ActorOsConfigurationType {
+            os: Some(crate::config::ActorOsConfiguration {
                 action: "do_nothing".to_string(),
                 name: "linux".to_string(),
                 custom: None,

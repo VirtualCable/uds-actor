@@ -2118,6 +2118,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-server",
+ "base64",
  "chrono",
  "fltk",
  "futures-util",

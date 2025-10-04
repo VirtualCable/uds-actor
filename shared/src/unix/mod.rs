@@ -25,6 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub mod actions;
+pub mod config;
 mod event;
 
 // If linux, include operations

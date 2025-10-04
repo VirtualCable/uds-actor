@@ -30,19 +30,16 @@ pub mod sync;
 pub mod tls;
 pub mod ws;
 pub mod broker;
-
-
-
+pub mod config;
 pub mod actions;
 pub mod service;
+pub mod operations;
 
 #[cfg(target_os = "windows")]
 pub mod windows;
 
 #[cfg(not(target_os = "windows"))]
 pub mod unix;
-
-pub mod operations;
 
 #[macro_export]
 macro_rules! debug_dev {

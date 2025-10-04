@@ -67,7 +67,7 @@ reqwest = { version = "0.12.23", features = [
 ipnetwork = "0.21.1"
 
 rustls = "0.23.32"
-async-trait = "0.1"
+async-trait = "0.1.89"
 tokio = { version = "1.47.1", features = [
     "macros",
     "rt",
@@ -87,9 +87,10 @@ tokio-tungstenite = { version = "0.28.0", features = [
 ] }
 futures-util = "0.3.31"
 
-# json
+# json & related
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+base64 = "0.22.1"
 
 
 [dev-dependencies]

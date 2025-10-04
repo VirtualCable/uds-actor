@@ -28,6 +28,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use serde::{Deserialize, Serialize};
 
+use crate::config::ActorOsConfiguration;
+
 /// Possible errors in REST operations
 #[derive(Debug)]
 pub enum RestError {
@@ -129,7 +131,7 @@ pub struct InitializationResponse {
     pub master_token: Option<String>, // New master token (if unmanaged, this will be unique, may be same as provided)
     pub token: Option<String>, // For managed only. Will replace master_token by a new unique token provided by server
     pub unique_id: Option<String>, // Unique ID assigned by server to this
-    pub os: Option<ActorOsConfigurationType>,
+    pub os: Option<ActorOsConfiguration>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -218,35 +220,6 @@ pub struct RegisterCommandData {
     pub pre_command: Option<String>,
     pub runonce_command: Option<String>,
     pub post_command: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ActorOsConfigurationType {
-    pub action: String,
-    pub name: String,
-    pub custom: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ActorDataConfigurationType {
-    pub unique_id: Option<String>,
-    pub os: Option<ActorOsConfigurationType>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ActorConfigurationType {
-    pub host: String,
-    pub check_certificate: bool,
-    pub actor_type: Option<String>,
-    pub master_token: Option<String>, // Configured master token. Will be replaced by unique one if unmanaged
-    pub own_token: Option<String>, // On unmanaged, master_token will be cleared and this will be used (unique provided by server)
-    pub restrict_net: Option<String>,
-    pub pre_command: Option<String>,
-    pub runonce_command: Option<String>,
-    pub post_command: Option<String>,
-    pub log_level: i32,
-    pub config: Option<ActorDataConfigurationType>,
-    pub data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -52,7 +52,7 @@ impl BrokerApi {
         verify_ssl: bool,
         timeout: Duration,
         no_proxy: bool,
-    ) -> Result<Self, types::RestError> {
+    ) -> Self {
         let mut builder = ClientBuilder::new()
             .timeout(timeout)
             .connection_verbose(cfg!(debug_assertions))
@@ -62,16 +62,17 @@ impl BrokerApi {
             builder = builder.no_proxy();
         }
 
+        // panic if client cannot be built, as this is a programming error (invalid URL, etc)
         let client = builder
             .build()
-            .map_err(|e| types::RestError::Other(e.to_string()))?;
+            .map_err(|e| types::RestError::Other(e.to_string())).unwrap();
 
-        Ok(Self {
+        Self {
             api_url: normalize_api_url(api_url),
             client,
             secret: None,
             token: None,
-        })
+        }
     }
 
     pub fn with_secret(self, secret: &str) -> Self {
