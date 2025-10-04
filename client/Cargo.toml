@@ -9,7 +9,7 @@ path = "../macros"
 [dependencies]
 shared = { path = "../shared" }
 
-tokio = { version = "1.47.1", features = ["macros", "rt", "time", "signal"] }
+tokio = { version = "1.47.1", features = ["macros", "rt", "time", "signal", "net"] }
 
 reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
 
@@ -21,6 +21,7 @@ async-trait = "0.1.89"
 
 axum = { version = "0.8.4", features = ["json", "tokio"] }
 base64 = "0.22.1"
+
 
 [build-dependencies]
 chrono = "0.4.42"

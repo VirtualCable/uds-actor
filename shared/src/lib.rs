@@ -27,6 +27,9 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 pub mod gui;
 pub mod log;
 pub mod sync;
+pub mod tls;
+pub mod ws;
+
 
 pub mod actions;
 pub mod service;

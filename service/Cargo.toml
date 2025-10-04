@@ -10,6 +10,9 @@ anyhow = "1.0.100"
 # Async runtime
 tokio = { version = "1.47.1", features = ["macros", "rt", "time", "signal"] }
 
+
+rustls = { version = "0.23.32", features = ["ring"] }
+
 reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "system-proxy"] }
 
 serde = { version = "1.0.228", features = ["derive"] }
@@ -33,3 +36,4 @@ lto = true                 # Link Time Optimization (better optimizations across
 codegen-units = 1         # compiles in a single unit to allow for more cross-crate optimization
 panic = "unwind"           # removes support for backtraces (reduces size)
 strip = "symbols"         # removes debug symbols (requires Rust 1.70+)
+

@@ -171,7 +171,8 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .ok();
 
         info!("Logging initialized with level: {}", level);
-        // Setupt panic hook
+        // Setupt panic hook, not if testing
+        #[cfg(not(test))]
         setup_panic_hook();
     });
 }
