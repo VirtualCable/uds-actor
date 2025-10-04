@@ -47,3 +47,85 @@ pub use crate::windows::config::new_config_loader;
 
 #[cfg(target_family = "unix")]
 pub use crate::unix::config::new_config_loader;
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::log;
+
+    #[cfg(target_family = "unix")]
+    use crate::unix::config::new_test_config_loader;
+
+    fn get_test_config() -> ActorConfiguration {
+        ActorConfiguration {
+            host: "https://example.com".to_string(),
+            check_certificate: true,
+            actor_type: Some("unmanaged".to_string()),
+            master_token: Some("master123".to_string()),
+            own_token: None,
+            restrict_net: Some("192.168.1.0/24".to_string()),
+            pre_command: None,
+            runonce_command: None,
+            post_command: None,
+            log_level: 3,
+            config: None,
+            data: None,
+        }
+    }
+
+    fn compare_configs(a: &ActorConfiguration, b: &ActorConfiguration) -> bool {
+        // Compare a.config to b.config (Option<ActorDataConfiguration>)
+        if a.config.is_none() != b.config.is_none() {
+            return false;
+        }
+        if let (Some(a_cfg), Some(b_cfg)) = (&a.config, &b.config) {
+            if a_cfg.unique_id != b_cfg.unique_id {
+                return false;
+            }
+            if a_cfg.os.is_none() != b_cfg.os.is_none() {
+                return false;
+            }
+            if let (Some(a_os), Some(b_os)) = (&a_cfg.os, &b_cfg.os)
+                && (a_os.action != b_os.action
+                    || a_os.name != b_os.name
+                    || a_os.custom != b_os.custom)
+            {
+                return false;
+            }
+        }
+
+        a.host == b.host
+            && a.check_certificate == b.check_certificate
+            && a.actor_type == b.actor_type
+            && a.master_token == b.master_token
+            && a.own_token == b.own_token
+            && a.restrict_net == b.restrict_net
+            && a.pre_command == b.pre_command
+            && a.runonce_command == b.runonce_command
+            && a.post_command == b.post_command
+            && a.log_level == b.log_level
+    }
+
+    #[test]
+    fn test_registry_save_load_delete_config() {
+        log::setup_logging("debug", crate::log::LogType::Tests);
+
+        let test_cfg = get_test_config();
+        let mut config = new_test_config_loader();
+        let res = config.save_config(&test_cfg);
+        assert!(res.is_ok(), "Failed to save config: {:?}", res.err());
+        let loaded_cfg = config.load_config().unwrap();
+        assert!(
+            compare_configs(&test_cfg, &loaded_cfg),
+            "Loaded config does not match saved config"
+        );
+        let res = config.clear_config();
+        assert!(res.is_ok(), "Failed to clear config: {:?}", res.err());
+        let cleared_cfg = config.load_config().unwrap();
+        assert!(
+            compare_configs(&cleared_cfg, &ActorConfiguration::default()),
+            "Cleared config is not default"
+        );
+    }
+}

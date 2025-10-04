@@ -40,7 +40,8 @@ zbus = "5.11.0"
 whoami = "1.6.1"
 libc = "0.2.176"
 libloading = "0.8.9"
-yaml-rust2 = "0.10.4"
+toml = "0.9.7"
+
 
 [dependencies.macros]
 path = "../macros"
