@@ -33,7 +33,7 @@ use mockito::{Matcher, Server};
 
 // Helper to create a ServerRestApi pointing to mockito server
 // Helper to create a mockito server and a ServerRestApi pointing to it
-async fn setup_server_and_api() -> (mockito::ServerGuard, ServerRestSession) {
+async fn setup_server_and_api() -> (mockito::ServerGuard, BrokerApi) {
     log::setup_logging("debug", log::LogType::Tests);
 
     info!("Setting up mock server and API client");
@@ -42,8 +42,27 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, ServerRestSession) {
     // Pass the base url (without /ui) to the API
     (
         server,
-        ServerRestSession::new(&url, false, std::time::Duration::from_secs(5), true).unwrap(),
+        BrokerApi::new(&url, false, std::time::Duration::from_secs(5), true)
+            .unwrap()
+            .with_token("token")
+            .with_secret("secret"),
     )
+}
+
+// Helper to create an id with some interfaces
+fn create_test_id() -> Vec<types::InterfaceInfo> {
+    vec![
+        types::InterfaceInfo {
+            name: "eth0".to_string(),
+            mac: "00:11:22:33:44:55".to_string(),
+            ip: "192.168.1.1".to_string(),
+        },
+        types::InterfaceInfo {
+            name: "wlan0".to_string(),
+            mac: "66:77:88:99:AA:BB".to_string(),
+            ip: "192.168.1.2".to_string(),
+        },
+    ]
 }
 
 #[tokio::test]
@@ -189,8 +208,8 @@ async fn test_register() {
 async fn test_initialize() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let result = types::ApiResponse::<types::InitializationResult> {
-        result: types::InitializationResult {
+    let result = types::ApiResponse::<types::InitializationResponse> {
+        result: types::InitializationResponse {
             master_token: Some("some_master_token".to_string()),
             token: Some("anothertoken".to_string()),
             unique_id: Some("unique_id_123".to_string()),
@@ -204,25 +223,14 @@ async fn test_initialize() {
     };
     let payload = types::InitializationRequest {
         actor_type: types::ActorType::Managed,
-        token: "linux",
+        token: api.get_token().unwrap(),
         version: consts::VERSION,
         build: consts::BUILD,
-        id: vec![
-            types::InterfaceInfo {
-                name: "eth0".to_string(),
-                mac: "00:11:22:33:44:55".to_string(),
-                ip: "10.0.0.1".to_string(),
-            },
-            types::InterfaceInfo {
-                name: "wlan0".to_string(),
-                mac: "66:77:88:99:AA:BB".to_string(),
-                ip: "10.0.0.2".to_string(),
-            },
-        ],
+        id: create_test_id(),
     };
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for initialize: {}", payload_value);
-    
+
     let _m = server
         .mock("POST", "/initialize")
         .match_header("content-type", "application/json")
@@ -231,12 +239,210 @@ async fn test_initialize() {
         .with_status(200)
         .create_async()
         .await;
+
     let response = api
-        .initialize(
-            payload.token,
-            payload.id.as_slice(),
-            Some(types::ActorType::Managed),
-        )
+        .initialize(payload.id.as_slice(), Some(types::ActorType::Managed))
         .await;
     assert!(response.is_ok(), "Initialize failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_ready() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<types::CertificateInfo> {
+        result: types::CertificateInfo {
+            key: "key".to_string(),
+            certificate: "certificate".to_string(),
+            password: "testpass".to_string(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+        },
+        error: None,
+    };
+    let payload = types::ReadyRequest {
+        token: api.get_token().unwrap(),
+        secret: api.get_secret().unwrap(),
+        ip: "10.0.0.1",
+        port: 1234,
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for ready: {}", payload_value);
+    let _m = server
+        .mock("POST", "/ready")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api.ready(payload.ip, payload.port).await;
+    assert!(response.is_ok(), "Ready failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_unmanaged_ready() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<types::CertificateInfo> {
+        result: types::CertificateInfo {
+            key: "key".to_string(),
+            certificate: "certificate".to_string(),
+            password: "testpass".to_string(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+        },
+        error: None,
+    };
+    let payload = types::UnmanagedReadyRequest {
+        id: create_test_id(),
+        token: api.get_token().unwrap(),
+        secret: api.get_secret().unwrap(),
+        port: 1234,
+    }; // Note: unmanaged actors also use the same ready request
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for unmanaged ready: {}", payload_value);
+    let _m = server
+        .mock("POST", "/unmanaged")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api
+        .unmanaged_ready(payload.id.as_slice(), payload.port)
+        .await;
+    assert!(response.is_ok(), "Unmanaged ready failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_ready_ip_changed() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<types::CertificateInfo> {
+        result: types::CertificateInfo {
+            key: "key".to_string(),
+            certificate: "certificate".to_string(),
+            password: "testpass".to_string(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+        },
+        error: None,
+    };
+    let payload = types::ReadyRequest {
+        token: api.get_token().unwrap(),
+        secret: api.get_secret().unwrap(),
+        ip: "10.0.0.1",
+        port: 1234,
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for ready: {}", payload_value);
+    let _m = server
+        .mock("POST", "/ipchange")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api.notify_new_ip(payload.ip, payload.port).await;
+    assert!(response.is_ok(), "Ready failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_logout() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<String> {
+        result: "ok".to_string(),
+        error: None,
+    };
+    let payload = types::LogoutRequest {
+        actor_type: types::ActorType::Managed,
+        id: create_test_id(),
+        token: api.get_token().unwrap(),
+        username: "testuser",
+        session_type: "session",
+        session_id: "session123",
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for logout: {}", payload_value);
+    let _m = server
+        .mock("POST", "/logout")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api
+        .logout(
+            types::ActorType::Managed,
+            payload.id.as_slice(),
+            payload.username,
+            payload.session_type,
+            payload.session_id,
+        )
+        .await;
+    assert!(response.is_ok(), "Logout failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_log() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<String> {
+        result: "ok".to_string(),
+        error: None,
+    };
+    let payload = types::LogRequest {
+        token: api.get_token().unwrap(),
+        level: types::LogLevel::Info,
+        message: "Test log message",
+        timestamp: 1234567890,
+    };
+    let mut payload_map = serde_json::to_value(&payload)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone();
+    // Remove timestamp from payload_map, as it is dynamic
+    payload_map.remove("timestamp");
+    let payload_value = serde_json::Value::Object(payload_map);
+
+    info!("Payload for log: {}", payload_value);
+    let _m = server
+        .mock("POST", "/log")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::PartialJson(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api.log(payload.level, payload.message).await;
+    assert!(response.is_ok(), "Log failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_test() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<String> {
+        result: "ok".to_string(),
+        error: None,
+    };
+    let payload = types::TestRequest {
+        actor_type: types::ActorType::Managed,
+        token: api.get_token().unwrap(),
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for test: {}", payload_value);
+    let _m = server
+        .mock("POST", "/test")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api.test(types::ActorType::Managed).await;
+    assert!(response.is_ok(), "Test failed: {:?}", response);
 }

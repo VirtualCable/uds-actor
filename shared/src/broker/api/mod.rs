@@ -38,13 +38,15 @@ pub mod types;
 use anyhow::Result;
 
 /// Client for REST API
-pub struct ServerRestSession {
+pub struct BrokerApi {
     api_url: String,
     client: Client,
+    secret: Option<String>,
+    token: Option<String>,
 }
 
 #[allow(dead_code)]
-impl ServerRestSession {
+impl BrokerApi {
     pub fn new(
         api_url: &str,
         verify_ssl: bool,
@@ -67,7 +69,23 @@ impl ServerRestSession {
         Ok(Self {
             api_url: normalize_api_url(api_url),
             client,
+            secret: None,
+            token: None,
         })
+    }
+
+    pub fn with_secret(self, secret: &str) -> Self {
+        Self {
+            secret: Some(secret.to_string()),
+            ..self
+        }
+    }
+
+    pub fn with_token(self, token: &str) -> Self {
+        Self {
+            token: Some(token.to_string()),
+            ..self
+        }
     }
 
     fn headers(&self) -> reqwest::header::HeaderMap {
@@ -112,6 +130,28 @@ impl ServerRestSession {
         }
     }
 
+    pub fn set_secret(&mut self, secret: &str) {
+        self.secret = Some(secret.to_string());
+    }
+
+    pub fn set_token(&mut self, token: &str) {
+        self.token = Some(token.to_string());
+    }
+
+    pub fn get_secret(&self) -> Result<&str, types::RestError> {
+        self.secret
+            .as_ref()
+            .map(|s| s.as_ref())
+            .ok_or_else(|| types::RestError::Other("No secret set".to_string()))
+    }
+
+    pub fn get_token(&self) -> Result<&str, types::RestError> {
+        self.token
+            .as_ref()
+            .map(|s| s.as_ref())
+            .ok_or_else(|| types::RestError::Other("No token set".to_string()))
+    }
+
     pub async fn enumerate_authenticators(
         &self,
     ) -> Result<Vec<types::Authenticator>, types::RestError> {
@@ -149,20 +189,144 @@ impl ServerRestSession {
 
     pub async fn initialize(
         &self,
-        token: &str,
         interfaces: &[types::InterfaceInfo],
         actor_type: Option<types::ActorType>,
-    ) -> Result<types::InitializationResult, types::RestError> {
+    ) -> Result<types::InitializationResponse, types::RestError> {
         let payload = types::InitializationRequest {
             actor_type: actor_type.unwrap_or(types::ActorType::Managed),
-            token,
+            token: self.get_token()?,
             version: consts::VERSION,
             build: consts::BUILD,
             id: interfaces.to_vec(),
         };
 
-        let response: types::ApiResponse<types::InitializationResult> =
+        let response: types::ApiResponse<types::InitializationResponse> =
             self.do_post("initialize", &payload).await?;
+        response.result()
+    }
+
+    pub async fn ready(
+        &self,
+        ip: &str,
+        port: u16,
+    ) -> Result<types::CertificateInfo, types::RestError> {
+        let payload = types::ReadyRequest {
+            token: self.get_token()?,
+            secret: self.get_secret()?,
+            ip,
+            port,
+        };
+
+        let response: types::ApiResponse<types::CertificateInfo> =
+            self.do_post("ready", &payload).await?;
+        response.result()
+    }
+
+    // Notifies a ready from an unmanaged actor
+    // Data passed in are used for callbacks
+    // That will be 'https://{ip}:{port}/actor/{secret}
+    pub async fn unmanaged_ready(
+        &self,
+        interfaces: &[types::InterfaceInfo],
+        port: u16,
+    ) -> Result<types::CertificateInfo, types::RestError> {
+        let payload = types::UnmanagedReadyRequest {
+            id: interfaces.to_vec(),
+            token: self.get_token()?,
+            secret: self.get_secret()?,
+            port,
+        };
+
+        let response: types::ApiResponse<types::CertificateInfo> =
+            self.do_post("unmanaged", &payload).await?;
+        response.result()
+    }
+
+    pub async fn notify_new_ip(
+        &self,
+        ip: &str,
+        port: u16,
+    ) -> Result<types::CertificateInfo, types::RestError> {
+        let payload = types::ReadyRequest {
+            token: self.get_token()?,
+            secret: self.get_secret()?,
+            ip,
+            port,
+        };
+
+        let response: types::ApiResponse<types::CertificateInfo> =
+            self.do_post("ipchange", &payload).await?;
+        response.result()
+    }
+
+    pub async fn login(
+        &self,
+        actor_type: types::ActorType,
+        interfaces: &[types::InterfaceInfo],
+        username: &str,
+        session_type: &str,
+    ) -> Result<types::LoginResponse, types::RestError> {
+        let payload = types::LoginRequest {
+            actor_type,
+            id: interfaces.to_vec(),
+            token: self.get_token()?,
+            username,
+            session_type,
+        };
+
+        let response: types::ApiResponse<types::LoginResponse> =
+            self.do_post("login", &payload).await?;
+        response.result()
+    }
+
+    pub async fn logout(
+        &self,
+        actor_type: types::ActorType,
+        interfaces: &[types::InterfaceInfo],
+        username: &str,
+        session_type: &str,
+        session_id: &str,
+    ) -> Result<String, types::RestError> {
+        let payload = types::LogoutRequest {
+            actor_type,
+            id: interfaces.to_vec(),
+            token: self.get_token()?,
+            username,
+            session_type,
+            session_id,
+        };
+
+        let response: types::ApiResponse<String> = self.do_post("logout", &payload).await?;
+        response.result()
+    }
+
+    /// Sends a log message to the server
+    /// Returns "ok" if successful (basically, if no Error, it's ok)
+    pub async fn log(
+        &self,
+        level: types::LogLevel,
+        message: &str,
+    ) -> Result<String, types::RestError> {
+        let payload = types::LogRequest {
+            token: self.get_token()?,
+            level,
+            message,
+            timestamp: chrono::Utc::now().timestamp(),
+        };
+
+        let response: types::ApiResponse<String> = self.do_post("log", &payload).await?;
+        response.result()
+    }
+
+    /// Tests connectivity and authentication with the server
+    /// Returns "ok" if successful (basically, if no Error, it's ok)
+    pub async fn test(&self, actor_type: types::ActorType) -> Result<String, types::RestError> {
+        let payload = types::TestRequest {
+            actor_type,
+            token: self.get_token()?,
+        };
+
+        let response: types::ApiResponse<String> = self.do_post("test", &payload).await?;
         response.result()
     }
 }

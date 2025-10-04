@@ -69,11 +69,63 @@ pub struct RegisterRequest<'a> {
     pub os: &'a str,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ReadyRequest<'a> {
+    pub token: &'a str,
+    pub secret: &'a str,
+    pub ip: &'a str,
+    pub port: u16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UnmanagedReadyRequest<'a> {
+    pub id: Vec<InterfaceInfo>,
+    pub token: &'a str,
+    pub secret: &'a str,
+    pub port: u16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LoginRequest<'a> {
+    #[serde(rename = "type")]
+    pub actor_type: ActorType,
+    pub id: Vec<InterfaceInfo>,
+    pub token: &'a str,
+    pub username: &'a str,
+    pub session_type: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogoutRequest<'a> {
+    #[serde(rename = "type")]
+    pub actor_type: ActorType,
+    pub id: Vec<InterfaceInfo>,
+    pub token: &'a str,
+    pub username: &'a str,
+    pub session_type: &'a str,
+    pub session_id: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogRequest<'a> {
+    pub token: &'a str,
+    pub level: LogLevel,
+    pub message: &'a str,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TestRequest<'a> {
+    #[serde(rename = "type")]
+    pub actor_type: ActorType,
+    pub token: &'a str,
+}
+
 // ************
 //   Responses
 // ************
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct InitializationResult {
+pub struct InitializationResponse {
     pub master_token: Option<String>, // New master token (if unmanaged, this will be unique, may be same as provided)
     pub token: Option<String>, // For managed only. Will replace master_token by a new unique token provided by server
     pub unique_id: Option<String>, // Unique ID assigned by server to this
@@ -81,7 +133,7 @@ pub struct InitializationResult {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct LoginResultInfo {
+pub struct LoginResponse {
     pub ip: String,
     pub hostname: String,
     pub deadline: Option<i64>,
@@ -184,8 +236,8 @@ pub struct ClientInfo {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CertificateInfo {
-    pub private_key: String,
-    pub server_certificate: String,
+    pub key: String,
+    pub certificate: String,
     pub password: String,
     pub ciphers: String,
 }
