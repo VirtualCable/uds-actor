@@ -30,32 +30,31 @@ use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use crate::log;
+
+pub mod consts;
+pub mod types;
+
 use anyhow::Result;
 
-use super::{consts, types};
-
-
-#[allow(dead_code)]
 /// Client for REST API
 pub struct ServerRestSession {
-    base_url: String,
-    check_certificate: bool,
+    api_url: String,
     client: Client,
-    timeout: Duration,
 }
 
 #[allow(dead_code)]
 impl ServerRestSession {
     pub fn new(
-        base_url: &str,
-        verify_cert: bool,
+        api_url: &str,
+        verify_ssl: bool,
         timeout: Duration,
         no_proxy: bool,
     ) -> Result<Self, types::RestError> {
         let mut builder = ClientBuilder::new()
             .timeout(timeout)
             .connection_verbose(cfg!(debug_assertions))
-            .danger_accept_invalid_certs(!verify_cert);
+            .danger_accept_invalid_certs(!verify_ssl);
 
         if no_proxy {
             builder = builder.no_proxy();
@@ -65,17 +64,9 @@ impl ServerRestSession {
             .build()
             .map_err(|e| types::RestError::Other(e.to_string()))?;
 
-        let base_url = if base_url.ends_with('/') {
-            base_url.to_string()
-        } else {
-            format!("{}/", base_url)
-        };
-
         Ok(Self {
-            base_url: base_url.to_string(),
-            check_certificate: verify_cert,
+            api_url: normalize_api_url(api_url),
             client,
-            timeout,
         })
     }
 
@@ -85,14 +76,13 @@ impl ServerRestSession {
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
             USER_AGENT,
-            HeaderValue::from_str(&format!("UDS Actor v{}/{}", consts::VERSION, consts::BUILD))
-                .unwrap(),
+            HeaderValue::from_str(consts::UDS_ACTOR_AGENT).unwrap(),
         );
         headers
     }
 
     fn api_url(&self, method: &str) -> String {
-        self.base_url.clone() + method
+        self.api_url.clone() + method
     }
 
     async fn do_post<T: for<'de> Deserialize<'de>, P: Serialize>(
@@ -100,7 +90,7 @@ impl ServerRestSession {
         method: &str,
         payload: &P,
     ) -> Result<T, types::RestError> {
-        shared::debug_dev!("POST to {}", self.api_url(method));
+        log::debug!("POST to {}", self.api_url(method));
         let resp = self
             .client
             .post(self.api_url(method))
@@ -122,31 +112,69 @@ impl ServerRestSession {
         }
     }
 
+    pub async fn enumerate_authenticators(
+        &self,
+    ) -> Result<Vec<types::Authenticator>, types::RestError> {
+        let response: types::ApiResponse<Vec<types::Authenticator>> =
+            self.do_post("auth/auths", &()).await?;
+        response.result()
+    }
+
+    /// Registers the actor, returns the registration token as String
+    pub async fn register(
+        &self,
+        username: &str,
+        hostname: &str,
+        interface: &types::InterfaceInfo,
+        command: &types::RegisterCommandData,
+        log_level: types::LogLevel,
+        os: &str,
+    ) -> Result<String, types::RestError> {
+        let payload = types::RegisterRequest {
+            version: consts::VERSION,
+            build: consts::BUILD,
+            username,
+            hostname,
+            ip: &interface.ip,
+            mac: &interface.mac,
+            command: command.clone(),
+            log_level,
+            os,
+        };
+
+        // Returns the registration token as string
+        let response: types::ApiResponse<String> = self.do_post("register", &payload).await?;
+        response.result()
+    }
+
     pub async fn initialize(
         &self,
         token: &str,
         interfaces: &[types::InterfaceInfo],
-        actor_type: Option<&str>,
+        actor_type: Option<types::ActorType>,
     ) -> Result<types::InitializationResult, types::RestError> {
-        #[derive(Serialize)]
-        struct Payload<'a> {
-            #[serde(rename = "type")]
-            actor_type: &'a str,
-            token: &'a str,
-            version: &'a str,
-            build: &'a str,
-            id: Vec<types::InterfaceInfo>,
-        }
-
-        let payload = Payload {
-            actor_type: actor_type.unwrap_or(consts::MANAGED),
+        let payload = types::InitializationRequest {
+            actor_type: actor_type.unwrap_or(types::ActorType::Managed),
             token,
             version: consts::VERSION,
             build: consts::BUILD,
             id: interfaces.to_vec(),
         };
 
-        let response: types::ApiResponse<types::InitializationResult> = self.do_post("initialize", &payload).await?;
+        let response: types::ApiResponse<types::InitializationResult> =
+            self.do_post("initialize", &payload).await?;
         response.result()
     }
 }
+
+pub fn normalize_api_url(api_url: &str) -> String {
+    // If api_url ends with a /, we assume it is a full path already
+    if !api_url.ends_with('/') {
+        format!("{}/{}", api_url, consts::UDS_ACTOR_ENDPOINT)
+    } else {
+        api_url.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests;

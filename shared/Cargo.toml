@@ -47,7 +47,10 @@ path = "../macros"
 [dependencies]
 # Logging
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "local-time"] }
+tracing-subscriber = { version = "0.3.20", features = [
+    "env-filter",
+    "local-time",
+] }
 tracing-log = "0.2.0"
 
 anyhow = "1.0.100"
@@ -56,16 +59,32 @@ chrono = { version = "0.4.42" }
 # Gui
 fltk = { version = "^1.5", features = ["fltk-bundled"] }
 
+reqwest = { version = "0.12.23", features = [
+    "json",
+    "rustls-tls",
+    "system-proxy",
+] }
 
-tokio = { version = "1.47.1", features = ["macros", "rt", "time", "sync", "signal"] }
-rustls = { version = "0.23.32", features = ["ring"] }
-tokio-rustls = "0.26.4" 
+
+rustls = "0.23.32"
+async-trait = "0.1"
+tokio = { version = "1.47.1", features = [
+    "macros",
+    "rt",
+    "time",
+    "sync",
+    "signal",
+] }
+rustls-native-certs = "0.8.1"
+tokio-rustls = "0.26.4"
 
 axum = { version = "0.8.4", features = ["json", "tokio", "ws"] }
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 
 # Web services
-tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-native-roots"] }
+tokio-tungstenite = { version = "0.28.0", features = [
+    "rustls-tls-native-roots",
+] }
 futures-util = "0.3.31"
 
 # json
@@ -73,4 +92,11 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 
 
-async-trait = "0.1"
+[dev-dependencies]
+mockito = "1.7.0"
+tower = "0.5.2"
+hyper = "1.7.0"
+
+
+[build-dependencies]
+chrono = "0.4.42"

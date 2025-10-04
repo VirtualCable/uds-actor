@@ -70,9 +70,6 @@ fn build_windows() {
 
     res.append_rc_content(r##"101      BITMAP      DISCARDABLE "../img/uds.bmp""##);
 
-    // Pass the version and build to the compiler as environment variables
-    println!("cargo:rustc-env=CARGO_PKG_BUILD={build}");
-
     // Compile resources
     res.compile().unwrap();
 }

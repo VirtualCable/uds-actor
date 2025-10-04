@@ -26,10 +26,16 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+// Defined in build.rs
+pub const BUILD: &str = env!("CARGO_PKG_BUILD");
+// Must end in /
+pub const UDS_ACTOR_ENDPOINT: &str = "uds/rest/actor/v3/";
 
-pub mod consts;
-pub mod types;
-pub mod api;
 
-#[cfg(test)]
-mod tests;
+pub const UDS_ACTOR_AGENT: &str = concat!(
+    "UDS Actor v",
+    env!("CARGO_PKG_VERSION"),  // concat needs literals
+    "/",
+    env!("CARGO_PKG_BUILD")  // concat needs literals
+);

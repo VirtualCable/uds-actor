@@ -26,11 +26,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-// Defined in build.rs
-pub const BUILD: &str = env!("CARGO_PKG_BUILD");
-// Must end in /
-pub const UDS_BASE_PATH: &str = "/uds/rest/actor/v3/";
 
-pub const MANAGED: &str = "managed";
-pub const UNMANAGED: &str = "unmanaged";
+fn main() {
+    let base_date = chrono::NaiveDate::from_ymd_opt(1972, 7, 1).unwrap();
+    let today = chrono::Utc::now().date_naive();
+    let build = (today - base_date).num_days();
+
+    // Pass the version and build to the compiler as environment variables
+    println!("cargo:rustc-env=CARGO_PKG_BUILD={build}");
+}
