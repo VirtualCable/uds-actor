@@ -64,7 +64,7 @@ reqwest = { version = "0.12.23", features = [
     "rustls-tls",
     "system-proxy",
 ] }
-
+ipnetwork = "0.21.1"
 
 rustls = "0.23.32"
 async-trait = "0.1"
