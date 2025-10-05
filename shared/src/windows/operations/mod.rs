@@ -67,7 +67,7 @@ use windows::{
 
 use crate::{
     log,
-    operations::{NetworkInterfaceInfo, Operations},
+    operations::{NetworkInterface, Operations},
 };
 
 unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
@@ -377,7 +377,7 @@ impl Operations for WindowsOperations {
         Ok("unknown".to_string())
     }
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>> {
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>> {
         let mut buf_len: u32 = 32_768;
         let mut buf = vec![0u8; buf_len as usize];
         let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
@@ -431,9 +431,9 @@ impl Operations for WindowsOperations {
                             data[4] as u8,
                             data[5] as u8,
                         );
-                        results.push(NetworkInterfaceInfo {
+                        results.push(NetworkInterface {
                             name: name.clone(),
-                            ip_address: ip.to_string(),
+                            ip_addr: ip.to_string(),
                             mac: mac.clone(),
                         });
                     }

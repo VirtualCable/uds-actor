@@ -101,7 +101,7 @@ fn test_get_network_info() {
     for iface in interfaces {
         info!(
             "Interface: {} - IP: {} - MAC: {}",
-            iface.name, iface.ip_address, iface.mac
+            iface.name, iface.ip_addr, iface.mac
         );
     }
 }

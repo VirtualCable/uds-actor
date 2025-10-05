@@ -2,7 +2,7 @@
 use crate::rest::{api::ClientRest, types::LoginResponse};
 use shared::{
     actions::Actions,
-    operations::{NetworkInterfaceInfo, Operations},
+    operations::{NetworkInterface, Operations},
     sync::event::{Event, EventLike},
 };
 use std::sync::{Arc, RwLock};
@@ -258,11 +258,11 @@ impl Operations for FakeOperations {
         Ok(())
     }
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>> {
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>> {
         self.calls.push("operations::get_network_info()");
-        Ok(vec![NetworkInterfaceInfo {
+        Ok(vec![NetworkInterface {
             name: "eth0".into(),
-            ip_address: "192.168.1.100".into(),
+            ip_addr: "192.168.1.100".into(),
             mac: "00:1A:2B:3C:4D:5E".into(),
         }])
     }

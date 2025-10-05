@@ -28,21 +28,13 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use serde::{Deserialize, Serialize};
 
-use crate::config::ActorOsConfiguration;
+use crate::config::{ActorOsConfiguration, ActorType};
 
 /// Possible errors in REST operations
 #[derive(Debug)]
 pub enum RestError {
     Connection(String),
     Other(String),
-}
-
-/// Actor types
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ActorType {
-    Managed,
-    Unmanaged,
 }
 
 // ************
@@ -179,28 +171,15 @@ impl<T: Serialize> ApiResponse<T> {
 // ************
 #[derive(Debug, Clone, Serialize)]
 pub struct InterfaceInfo {
-    pub name: String,
     pub mac: String,
     pub ip: String,
 }
 
-impl InterfaceInfo {
-    /// Check if this interface's IP is inside the given subnet (IPv4 or IPv6).
-    pub fn in_subnet(&self, subnet: Option<&str>) -> bool {
-        // If no subnet provided, always valid
-        let Some(subnet_str) = subnet else {
-            return true;
-        };
-
-        // Try to parse subnet
-        let Ok(net) = subnet_str.parse::<ipnetwork::IpNetwork>() else {
-            return true; // if subnet invalid, treat as "no filter"
-        };
-
-        // Try to parse interface IP
-        match self.ip.parse::<std::net::IpAddr>() {
-            Ok(addr) => net.contains(addr),
-            Err(_) => false,
+impl From<crate::operations::NetworkInterface> for InterfaceInfo {
+    fn from(iface: crate::operations::NetworkInterface) -> Self {
+        InterfaceInfo {
+            mac: iface.mac,
+            ip: iface.ip_addr,
         }
     }
 }
@@ -283,58 +262,5 @@ impl From<&str> for LogLevel {
             "fatal" => LogLevel::Fatal,
             _ => LogLevel::Other,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_single_interface_in_subnet() {
-        let iface = InterfaceInfo {
-            name: "eth0".to_string(),
-            mac: "00:11:22:33:44:55".to_string(),
-            ip: "192.168.1.10".to_string(),
-        };
-        assert!(iface.in_subnet(Some("192.168.1.0/24")));
-        assert!(!iface.in_subnet(Some("192.168.2.0/24")));
-    }
-
-    #[test]
-    fn test_multiple_interfaces_in_subnet() {
-        let ifaces = vec![
-            InterfaceInfo {
-                name: "eth0".to_string(),
-                mac: "00:11:22:33:44:55".to_string(),
-                ip: "192.168.1.10".to_string(),
-            },
-            InterfaceInfo {
-                name: "eth1".to_string(),
-                mac: "00:11:22:33:44:56".to_string(),
-                ip: "192.168.1.11".to_string(),
-            },
-            InterfaceInfo {
-                name: "eth2".to_string(),
-                mac: "00:11:22:33:44:57".to_string(),
-                ip: "192.168.1.12".to_string(),
-            },
-            // Not in subnet
-            InterfaceInfo {
-                name: "eth3".to_string(),
-                mac: "00:11:22:33:44:58".to_string(),
-                ip: "192.168.2.10".to_string(),
-            },
-        ];
-        let in_subnet: Vec<_> = ifaces
-            .iter()
-            .filter(|iface| iface.in_subnet(Some("192.168.1.0/24")))
-            .collect();
-        assert_eq!(in_subnet.len(), 3);
-        let not_in_subnet: Vec<_> = ifaces
-            .iter()
-            .filter(|iface| !iface.in_subnet(Some("192.168.1.0/24")))
-            .collect();
-        assert_eq!(not_in_subnet.len(), 1);
     }
 }

@@ -43,6 +43,7 @@ pub struct BrokerApi {
     client: Client,
     secret: Option<String>,
     token: Option<String>,
+    actor_type: crate::config::ActorType,
 }
 
 #[allow(dead_code)]
@@ -52,6 +53,7 @@ impl BrokerApi {
         verify_ssl: bool,
         timeout: Duration,
         no_proxy: bool,
+        actor_type: Option<crate::config::ActorType>,
     ) -> Self {
         let mut builder = ClientBuilder::new()
             .timeout(timeout)
@@ -72,6 +74,7 @@ impl BrokerApi {
             client,
             secret: None,
             token: None,
+            actor_type: actor_type.unwrap_or(crate::config::ActorType::Managed),
         }
     }
 
@@ -166,7 +169,7 @@ impl BrokerApi {
         &self,
         username: &str,
         hostname: &str,
-        interface: &types::InterfaceInfo,
+        interface: &crate::operations::NetworkInterface,
         command: &types::RegisterCommandData,
         log_level: types::LogLevel,
         os: &str,
@@ -176,7 +179,7 @@ impl BrokerApi {
             build: consts::BUILD,
             username,
             hostname,
-            ip: &interface.ip,
+            ip: &interface.ip_addr,
             mac: &interface.mac,
             command: command.clone(),
             log_level,
@@ -190,15 +193,14 @@ impl BrokerApi {
 
     pub async fn initialize(
         &self,
-        interfaces: &[types::InterfaceInfo],
-        actor_type: Option<types::ActorType>,
+        interfaces: &[crate::operations::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError> {
         let payload = types::InitializationRequest {
-            actor_type: actor_type.unwrap_or(types::ActorType::Managed),
+            actor_type: self.actor_type.clone(),
             token: self.get_token()?,
             version: consts::VERSION,
             build: consts::BUILD,
-            id: interfaces.to_vec(),
+            id: interfaces.iter().cloned().map(Into::into).collect(),
         };
 
         let response: types::ApiResponse<types::InitializationResponse> =
@@ -228,11 +230,11 @@ impl BrokerApi {
     // That will be 'https://{ip}:{port}/actor/{secret}
     pub async fn unmanaged_ready(
         &self,
-        interfaces: &[types::InterfaceInfo],
+        interfaces: &[crate::operations::NetworkInterface],
         port: u16,
     ) -> Result<types::CertificateInfo, types::RestError> {
         let payload = types::UnmanagedReadyRequest {
-            id: interfaces.to_vec(),
+            id: interfaces.iter().cloned().map(Into::into).collect(),
             token: self.get_token()?,
             secret: self.get_secret()?,
             port,
@@ -262,14 +264,13 @@ impl BrokerApi {
 
     pub async fn login(
         &self,
-        actor_type: types::ActorType,
-        interfaces: &[types::InterfaceInfo],
+        interfaces: &[crate::operations::NetworkInterface],
         username: &str,
         session_type: &str,
     ) -> Result<types::LoginResponse, types::RestError> {
         let payload = types::LoginRequest {
-            actor_type,
-            id: interfaces.to_vec(),
+            actor_type: self.actor_type.clone(),
+            id: interfaces.iter().cloned().map(Into::into).collect(),
             token: self.get_token()?,
             username,
             session_type,
@@ -282,15 +283,14 @@ impl BrokerApi {
 
     pub async fn logout(
         &self,
-        actor_type: types::ActorType,
-        interfaces: &[types::InterfaceInfo],
+        interfaces: &[crate::operations::NetworkInterface],
         username: &str,
         session_type: &str,
         session_id: &str,
     ) -> Result<String, types::RestError> {
         let payload = types::LogoutRequest {
-            actor_type,
-            id: interfaces.to_vec(),
+            actor_type: self.actor_type.clone(),
+            id: interfaces.iter().cloned().map(Into::into).collect(),
             token: self.get_token()?,
             username,
             session_type,
@@ -321,9 +321,9 @@ impl BrokerApi {
 
     /// Tests connectivity and authentication with the server
     /// Returns "ok" if successful (basically, if no Error, it's ok)
-    pub async fn test(&self, actor_type: types::ActorType) -> Result<String, types::RestError> {
+    pub async fn test(&self) -> Result<String, types::RestError> {
         let payload = types::TestRequest {
-            actor_type,
+            actor_type: self.actor_type.clone(),
             token: self.get_token()?,
         };
 

@@ -20,7 +20,7 @@ use windows::{
 };
 
 use crate::{
-    config::{ActorConfiguration, ConfigLoader},
+    config::{ActorConfiguration, Configuration},
     log,
 };
 
@@ -116,7 +116,7 @@ pub struct WindowsConfig {
     actor: Option<ActorConfiguration>,
 }
 
-impl ConfigLoader for WindowsConfig {
+impl Configuration for WindowsConfig {
     fn load_config(&mut self) -> Result<ActorConfiguration> {
         // Try to open the registry key for reading
         unsafe {
@@ -246,6 +246,6 @@ impl ConfigLoader for WindowsConfig {
     }
 }
 
-pub fn new_config_loader() -> Box<dyn ConfigLoader> {
+pub fn new_config_loader() -> Box<dyn Configuration> {
     Box::new(WindowsConfig::default())
 }

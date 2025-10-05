@@ -1,6 +1,25 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+/// Actor types
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ActorType {
+    #[default]
+    Managed,
+    Unmanaged,
+}
+
+impl From<&str> for ActorType {
+    fn from(value: &str) -> Self {
+        match value.to_lowercase().as_str() {
+            "managed" => ActorType::Managed,
+            "unmanaged" => ActorType::Unmanaged,
+            _ => ActorType::Unmanaged,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorOsConfiguration {
     pub action: String,
@@ -17,8 +36,8 @@ pub struct ActorDataConfiguration {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorConfiguration {
     pub host: String,
-    pub check_certificate: bool,
-    pub actor_type: Option<String>,
+    pub verify_ssl: bool,
+    pub actor_type: Option<ActorType>,
     pub master_token: Option<String>, // Configured master token. Will be replaced by unique one if unmanaged
     pub own_token: Option<String>, // On unmanaged, master_token will be cleared and this will be used (unique provided by server)
     pub restrict_net: Option<String>,
@@ -30,7 +49,7 @@ pub struct ActorConfiguration {
     pub data: Option<serde_json::Value>,
 }
 
-pub trait ConfigLoader {
+pub trait Configuration {
     fn load_config(&mut self) -> Result<ActorConfiguration>;
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()>;
     fn clear_config(&mut self) -> Result<()>; // Remove saved config
@@ -48,7 +67,6 @@ pub use crate::windows::config::new_config_loader;
 #[cfg(target_family = "unix")]
 pub use crate::unix::config::new_config_loader;
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,8 +75,8 @@ mod tests {
     fn get_test_config() -> ActorConfiguration {
         ActorConfiguration {
             host: "https://example.com".to_string(),
-            check_certificate: true,
-            actor_type: Some("unmanaged".to_string()),
+            verify_ssl: true,
+            actor_type: Some(ActorType::Managed),
             master_token: Some("master123".to_string()),
             own_token: None,
             restrict_net: Some("192.168.1.0/24".to_string()),
@@ -93,7 +111,7 @@ mod tests {
         }
 
         a.host == b.host
-            && a.check_certificate == b.check_certificate
+            && a.verify_ssl == b.verify_ssl
             && a.actor_type == b.actor_type
             && a.master_token == b.master_token
             && a.own_token == b.own_token

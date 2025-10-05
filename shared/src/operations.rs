@@ -36,10 +36,31 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 
 // Struct for a network interface information
 #[derive(Debug, Clone)]
-pub struct NetworkInterfaceInfo {
+pub struct NetworkInterface {
     pub name: String,
-    pub ip_address: String,
+    pub ip_addr: String,
     pub mac: String,
+}
+
+impl NetworkInterface {
+    /// Check if this interface's IP is inside the given subnet (IPv4 or IPv6).
+    pub fn in_subnet(&self, subnet: Option<&str>) -> bool {
+        // If no subnet provided, always valid
+        let Some(subnet_str) = subnet else {
+            return true;
+        };
+
+        // Try to parse subnet
+        let Ok(net) = subnet_str.parse::<ipnetwork::IpNetwork>() else {
+            return true; // if subnet invalid, treat as "no filter"
+        };
+
+        // Try to parse interface IP
+        match self.ip_addr.parse::<std::net::IpAddr>() {
+            Ok(addr) => net.contains(addr),
+            Err(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -67,10 +88,7 @@ pub trait Operations: Send + Sync {
 
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()>;
 
-    fn join_domain(
-        &self,
-        options: &JoinDomainOptions,
-    ) -> anyhow::Result<()>;
+    fn join_domain(&self, options: &JoinDomainOptions) -> anyhow::Result<()>;
 
     fn change_user_password(
         &self,
@@ -90,7 +108,7 @@ pub trait Operations: Send + Sync {
 
     fn init_idle_timer(&self) -> anyhow::Result<()>;
 
-    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterfaceInfo>>;
+    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>>;
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration>;
 
@@ -114,3 +132,57 @@ pub use crate::windows::operations::new_operations;
 
 #[cfg(target_family = "unix")]
 pub use crate::unix::operations_linux::new_operations;
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_single_interface_in_subnet() {
+        let iface = NetworkInterface {
+            name: "eth0".to_string(),
+            mac: "00:11:22:33:44:55".to_string(),
+            ip_addr: "192.168.1.10".to_string(),
+        };
+        assert!(iface.in_subnet(Some("192.168.1.0/24")));
+        assert!(!iface.in_subnet(Some("192.168.2.0/24")));
+    }
+
+    #[test]
+    fn test_multiple_interfaces_in_subnet() {
+        let ifaces = vec![
+            NetworkInterface {
+                name: "eth0".to_string(),
+                mac: "00:11:22:33:44:55".to_string(),
+                ip_addr: "192.168.1.10".to_string(),
+            },
+            NetworkInterface {
+                name: "eth1".to_string(),
+                mac: "00:11:22:33:44:56".to_string(),
+                ip_addr: "192.168.1.11".to_string(),
+            },
+            NetworkInterface {
+                name: "eth2".to_string(),
+                mac: "00:11:22:33:44:57".to_string(),
+                ip_addr: "192.168.1.12".to_string(),
+            },
+            // Not in subnet
+            NetworkInterface {
+                name: "eth3".to_string(),
+                mac: "00:11:22:33:44:58".to_string(),
+                ip_addr: "192.168.2.10".to_string(),
+            },
+        ];
+        let in_subnet: Vec<_> = ifaces
+            .iter()
+            .filter(|iface| iface.in_subnet(Some("192.168.1.0/24")))
+            .collect();
+        assert_eq!(in_subnet.len(), 3);
+        let not_in_subnet: Vec<_> = ifaces
+            .iter()
+            .filter(|iface| !iface.in_subnet(Some("192.168.1.0/24")))
+            .collect();
+        assert_eq!(not_in_subnet.len(), 1);
+    }
+}

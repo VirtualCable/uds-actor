@@ -42,24 +42,30 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, BrokerApi) {
     // Pass the base url (without /ui) to the API
     (
         server,
-        BrokerApi::new(&url, false, std::time::Duration::from_secs(5), true)
-            .with_token("token")
-            .with_secret("secret"),
+        BrokerApi::new(
+            &url,
+            false,
+            std::time::Duration::from_secs(5),
+            true,
+            Some(crate::config::ActorType::Managed),
+        )
+        .with_token("token")
+        .with_secret("secret"),
     )
 }
 
 // Helper to create an id with some interfaces
-fn create_test_id() -> Vec<types::InterfaceInfo> {
+fn create_test_id() -> Vec<crate::operations::NetworkInterface> {
     vec![
-        types::InterfaceInfo {
+        crate::operations::NetworkInterface {
             name: "eth0".to_string(),
             mac: "00:11:22:33:44:55".to_string(),
-            ip: "192.168.1.1".to_string(),
+            ip_addr: "192.168.1.1".to_string(),
         },
-        types::InterfaceInfo {
+        crate::operations::NetworkInterface {
             name: "wlan0".to_string(),
             mac: "66:77:88:99:AA:BB".to_string(),
-            ip: "192.168.1.2".to_string(),
+            ip_addr: "192.168.1.2".to_string(),
         },
     ]
 }
@@ -187,10 +193,10 @@ async fn test_register() {
         .register(
             payload.username,
             payload.hostname,
-            &types::InterfaceInfo {
+            &crate::operations::NetworkInterface {
                 name: "eth0".to_string(),
                 mac: payload.mac.to_string(),
-                ip: payload.ip.to_string(),
+                ip_addr: payload.ip.to_string(),
             },
             &payload.command,
             payload.log_level,
@@ -221,11 +227,11 @@ async fn test_initialize() {
         error: None,
     };
     let payload = types::InitializationRequest {
-        actor_type: types::ActorType::Managed,
+        actor_type: crate::config::ActorType::Managed,
         token: api.get_token().unwrap(),
         version: consts::VERSION,
         build: consts::BUILD,
-        id: create_test_id(),
+        id: create_test_id().iter().cloned().map(Into::into).collect(),
     };
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for initialize: {}", payload_value);
@@ -239,9 +245,7 @@ async fn test_initialize() {
         .create_async()
         .await;
 
-    let response = api
-        .initialize(payload.id.as_slice(), Some(types::ActorType::Managed))
-        .await;
+    let response = api.initialize(create_test_id().as_slice()).await;
     assert!(response.is_ok(), "Initialize failed: {:?}", response);
 }
 
@@ -292,7 +296,7 @@ async fn test_unmanaged_ready() {
         error: None,
     };
     let payload = types::UnmanagedReadyRequest {
-        id: create_test_id(),
+        id: create_test_id().iter().cloned().map(Into::into).collect(),
         token: api.get_token().unwrap(),
         secret: api.get_secret().unwrap(),
         port: 1234,
@@ -308,7 +312,10 @@ async fn test_unmanaged_ready() {
         .create_async()
         .await;
     let response = api
-        .unmanaged_ready(payload.id.as_slice(), payload.port)
+        .unmanaged_ready(
+            create_test_id().as_slice(),
+            payload.port,
+        )
         .await;
     assert!(response.is_ok(), "Unmanaged ready failed: {:?}", response);
 }
@@ -355,8 +362,8 @@ async fn test_logout() {
         error: None,
     };
     let payload = types::LogoutRequest {
-        actor_type: types::ActorType::Managed,
-        id: create_test_id(),
+        actor_type: crate::config::ActorType::Managed,
+        id: create_test_id().iter().cloned().map(Into::into).collect(),
         token: api.get_token().unwrap(),
         username: "testuser",
         session_type: "session",
@@ -374,8 +381,7 @@ async fn test_logout() {
         .await;
     let response = api
         .logout(
-            types::ActorType::Managed,
-            payload.id.as_slice(),
+            create_test_id().as_slice(),
             payload.username,
             payload.session_type,
             payload.session_id,
@@ -429,7 +435,7 @@ async fn test_test() {
         error: None,
     };
     let payload = types::TestRequest {
-        actor_type: types::ActorType::Managed,
+        actor_type: crate::config::ActorType::Managed,
         token: api.get_token().unwrap(),
     };
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
@@ -442,6 +448,6 @@ async fn test_test() {
         .with_status(200)
         .create_async()
         .await;
-    let response = api.test(types::ActorType::Managed).await;
+    let response = api.test().await;
     assert!(response.is_ok(), "Test failed: {:?}", response);
 }
