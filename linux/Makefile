@@ -66,6 +66,7 @@ udsactor:
 	cp scripts/UDSActorTool $(BINDIR)
 	cp scripts/UDSActorTool-startup $(BINDIR)
 	cp scripts/udsvapp ${BINDIR}
+	cp scripts/UDSActorRegister $(SBINDIR)
 	
 	# Policy to run as administrator
 	cp policy/org.openuds.pkexec.UDSActorConfig.policy $(POLKITDIR)
