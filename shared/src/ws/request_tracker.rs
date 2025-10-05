@@ -1,14 +1,16 @@
-use anyhow::Result;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::sync::{Mutex, oneshot};
 
-type RequestId = u64;
+use crate::{
+    log,
+    ws::types::{RequestId, RpcError, RpcMessage},
+};
 
 /// Represents a pending request waiting for a response.
 /// Stores the creation time and the oneshot sender to notify the waiter.
 struct Pending {
     created: Instant,
-    tx: oneshot::Sender<Result<String>>,
+    tx: oneshot::Sender<RpcMessage>,
 }
 
 /// Internal state holding all pending requests.
@@ -19,12 +21,12 @@ struct State {
 /// Public request manager that wraps the internal state in Arc<Mutex<...>>.
 /// Provides methods to register, resolve and cleanup requests.
 #[derive(Clone)]
-pub struct RequestState {
+pub struct RequestTracker {
     inner: Arc<Mutex<State>>,
     timeout: std::time::Duration,
 }
 
-impl RequestState {
+impl RequestTracker {
     /// Create a new RequestState with a default timeout of 30 seconds.
     pub fn new() -> Self {
         Self {
@@ -43,7 +45,7 @@ impl RequestState {
 
     /// Register a new request and return a receiver to await the response.
     /// The caller awaits on the returned oneshot::Receiver<Result<String>>.
-    pub async fn register(&self, id: RequestId) -> oneshot::Receiver<Result<String>> {
+    pub async fn register(&self, id: RequestId) -> oneshot::Receiver<RpcMessage> {
         let (tx, rx) = oneshot::channel();
         let mut guard = self.inner.lock().await;
         guard.pending.insert(
@@ -57,19 +59,18 @@ impl RequestState {
     }
 
     /// Resolve a request by id with a successful payload.
-    pub async fn resolve_ok(&self, id: RequestId, payload: String) {
+    pub async fn resolve_ok(&self, id: RequestId, message: RpcMessage) {
+        log::debug!("Resolving request id {} with success", id);
         let mut guard = self.inner.lock().await;
         if let Some(p) = guard.pending.remove(&id) {
-            let _ = p.tx.send(Ok(payload));
+            let _ = p.tx.send(message);
         }
     }
 
     /// Resolve a request by id with an error.
-    pub async fn resolve_err(&self, id: RequestId, err: anyhow::Error) {
-        let mut guard = self.inner.lock().await;
-        if let Some(p) = guard.pending.remove(&id) {
-            let _ = p.tx.send(Err(err));
-        }
+    pub async fn resolve_err(&self, id: RequestId, code: u32, message: String) {
+        self.resolve_ok(id, RpcMessage::Error(RpcError { code, message }))
+            .await;
     }
 
     /// Remove expired requests and notify their receivers with a timeout error.
@@ -88,13 +89,16 @@ impl RequestState {
         // Remove them and send timeout error
         for id in expired {
             if let Some(p) = guard.pending.remove(&id) {
-                let _ = p.tx.send(Err(anyhow::anyhow!("timeout")));
+                let _ = p.tx.send(RpcMessage::Error(RpcError {
+                    code: 408,
+                    message: "timeout".into(),
+                }));
             }
         }
     }
 }
 
-impl Default for RequestState {
+impl Default for RequestTracker {
     fn default() -> Self {
         Self::new()
     }
@@ -103,7 +107,7 @@ impl Default for RequestState {
 /// Example background task that periodically calls cleanup.
 /// For now it runs in an infinite loop; later you can break it
 /// using `session_manager.is_running()`.
-pub async fn spawn_cleanup_task(state: RequestState) {
+pub fn spawn_cleanup_task(state: RequestTracker) {
     tokio::spawn(async move {
         loop {
             state.cleanup().await;

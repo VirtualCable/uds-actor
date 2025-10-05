@@ -1,6 +1,22 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+pub type RequestId = u64;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RpcEnvelope<T> {
+    pub id: Option<RequestId>,
+    #[serde(flatten)]
+    pub msg: T,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RpcError {
+    pub code: u32,
+    pub message: String,
+}
+
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "kind", content = "msg")]
 pub enum RpcMessage {
     // Requests with id
@@ -12,6 +28,7 @@ pub enum RpcMessage {
     LoginResponse(LoginResponse),
     ScreenshotResponse(ScreenshotResponse),
     ScriptExecResponse(ScriptExecResponse),
+    PingResponse(Pong),
 
     // Notifications (no id)
     Ping(Ping),
@@ -19,6 +36,9 @@ pub enum RpcMessage {
     LogoffRequest(LogoffRequest),
     LogoutRequest(LogoutRequest),
     ShowMessage(ShowMessage),
+
+    // Error response with
+    Error(RpcError),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -32,7 +52,7 @@ pub struct ScreenshotRequest;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ScreenshotResponse {
-    pub result: String,  // base64 encoded image
+    pub result: String, // base64 encoded image
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -58,7 +78,6 @@ pub struct LogoutRequest {
     pub callback_url: String,
     pub session_id: String,
 }
-
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LoginResponse {
