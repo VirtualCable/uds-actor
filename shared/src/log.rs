@@ -221,6 +221,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Ignored because it generates a lot of log data on console
     fn test_logging_rotation() {
         let temp_dir = std::env::temp_dir();
         unsafe { std::env::set_var("UDSACTOR_TESTS_LOG_PATH", &temp_dir) }

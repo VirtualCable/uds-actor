@@ -119,7 +119,7 @@ mod tests {
             super::task(Some(1), platform),
         )
         .await;
-        calls.assert_called("actions::logoff()");
+        calls.assert_called("operations::logoff()");
         calls.assert_not_called("session::stop()");
         session_manager.stop().await; // Ensure session is stopped in any case
 
