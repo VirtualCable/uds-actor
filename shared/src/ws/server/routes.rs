@@ -2,14 +2,12 @@ use anyhow::Result;
 use axum::http::StatusCode;
 use axum::{Extension, Json, Router, extract::Path, routing::get};
 use chrono::Utc;
-use tokio::sync::broadcast;
 
 use super::OutboundMsg;
 use crate::ws::types::RpcEnvelope;
 use crate::{
     log,
     ws::{
-        request_tracker::RequestTracker,
         types::{RpcMessage, ScreenshotRequest, ScreenshotResponse},
         wait_response,
     },
@@ -18,15 +16,17 @@ use crate::{
 /// GET /actor/{secret}/screenshot
 pub async fn get_screenshot(
     Path(_secret): Path<String>,
-    Extension(state): Extension<RequestTracker>,
-    Extension(outbound_tx): Extension<broadcast::Sender<OutboundMsg>>,
+    Extension(state): Extension<super::ServerState>,
 ) -> Result<Json<ScreenshotResponse>, StatusCode> {
+    let tracker = state.tracker.clone();
+    let outbound_tx = state.outbound_tx.clone();
+
     // Generate a unique id
     let id = Utc::now().timestamp_millis() as u64;
     log::info!("Screenshot requested via WebSocket API with id {}", id);
 
     // Register the request
-    let rx = state.register(id).await;
+    let rx = tracker.register(id).await;
 
     // Build the envelope with the typed request
     let envelope = RpcEnvelope {
@@ -38,7 +38,7 @@ pub async fn get_screenshot(
     let val = serde_json::to_value(&envelope).unwrap();
     let _ = outbound_tx.send(OutboundMsg::Json(val));
 
-    wait_response::<ScreenshotResponse>(rx).await
+    wait_response::<ScreenshotResponse>(rx, None).await
 }
 
 pub fn routes() -> Router {

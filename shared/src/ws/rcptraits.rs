@@ -1,63 +1,31 @@
 use crate::ws::types::{
-    LoginResponse, Pong, RpcError, RpcMessage, ScreenshotResponse, ScriptExecResponse,
+    LoginResponse, Pong, RpcError, RpcMessage, ScreenshotResponse, ScriptExecResponse, LoginRequest, ScreenshotRequest, ScriptExecRequest,
 };
 
-impl TryFrom<RpcMessage> for LoginResponse {
-    type Error = ();
-
-    fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
-        if let RpcMessage::LoginResponse(resp) = msg {
-            Ok(resp)
-        } else {
-            Err(())
-        }
-    }
+macro_rules! impl_tryfrom {
+    ($($variant:ident => $ty:ty),* $(,)?) => {
+        $(
+            impl TryFrom<RpcMessage> for $ty {
+                type Error = ();
+                fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
+                    if let RpcMessage::$variant(inner) = msg {
+                        Ok(inner)
+                    } else {
+                        Err(())
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl TryFrom<RpcMessage> for ScreenshotResponse {
-    type Error = ();
-
-    fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
-        if let RpcMessage::ScreenshotResponse(resp) = msg {
-            Ok(resp)
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl TryFrom<RpcMessage> for ScriptExecResponse {
-    type Error = ();
-
-    fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
-        if let RpcMessage::ScriptExecResponse(resp) = msg {
-            Ok(resp)
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl TryFrom<RpcMessage> for Pong {
-    type Error = ();
-
-    fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
-        if let RpcMessage::PingResponse(resp) = msg {
-            Ok(resp)
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl TryFrom<RpcMessage> for RpcError {
-    type Error = ();
-
-    fn try_from(msg: RpcMessage) -> Result<Self, Self::Error> {
-        if let RpcMessage::Error(err) = msg {
-            Ok(err)
-        } else {
-            Err(())
-        }
-    }
+impl_tryfrom! {
+    LoginResponse => LoginResponse,
+    ScreenshotResponse => ScreenshotResponse,
+    ScriptExecResponse => ScriptExecResponse,
+    PingResponse => Pong,
+    Error => RpcError,
+    LoginRequest => LoginRequest,
+    ScreenshotRequest => ScreenshotRequest,
+    ScriptExecRequest => ScriptExecRequest,
 }

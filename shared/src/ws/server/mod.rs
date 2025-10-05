@@ -1,4 +1,7 @@
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use axum::{
@@ -12,7 +15,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{Notify, broadcast, mpsc};
 
 use crate::{log, ws::request_tracker::RequestTracker};
 
@@ -35,14 +38,22 @@ pub enum OutboundMsg {
     Close,
 }
 
+#[derive(Clone)]
+pub struct ServerState {
+    pub inbound_tx: mpsc::Sender<InboundMsg>,
+    pub outbound_tx: broadcast::Sender<OutboundMsg>,
+    pub tracker: RequestTracker,
+    pub stop: Arc<Notify>,
+}
+
 async fn ws_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ws: WebSocketUpgrade,
-    Extension(inbound_tx): Extension<mpsc::Sender<InboundMsg>>,
-    Extension(outbound_tx): Extension<broadcast::Sender<OutboundMsg>>,
+    Extension(state): Extension<ServerState>,
 ) -> impl IntoResponse {
-    let handle_socket =
-        move |socket: WebSocket| websocket_loop(socket, inbound_tx.clone(), outbound_tx.clone());
+    let handle_socket = move |socket: WebSocket| {
+        websocket_loop(socket, state.inbound_tx.clone(), state.outbound_tx.clone())
+    };
     match addr.ip() {
         IpAddr::V4(ip) if ip.is_loopback() => ws.on_upgrade(handle_socket),
         IpAddr::V6(ip) if ip.is_loopback() => ws.on_upgrade(handle_socket),
@@ -124,7 +135,8 @@ pub async fn server(
     port: u16,
     inbound_tx: mpsc::Sender<InboundMsg>,
     outbound_tx: broadcast::Sender<OutboundMsg>,
-    state: RequestTracker,
+    tracker: RequestTracker,
+    stop: std::sync::Arc<tokio::sync::Notify>,
 ) -> Result<()> {
     log::debug!("Initializing server {}", port);
     let config = RustlsConfig::from_pem(cert_pem.to_vec(), key_pem.to_vec())
@@ -132,17 +144,35 @@ pub async fn server(
         .map_err(|e| anyhow::anyhow!("Failed to create RustlsConfig: {}", e))?;
     log::debug!("TLS configuration loaded");
 
+    let handle = axum_server::Handle::new();
+    let handle_stop = stop.clone();
+
+    let state = ServerState {
+        inbound_tx,
+        outbound_tx,
+        tracker,
+        stop,
+    };
+
     let app = Router::new()
         .merge(routes::routes())
         .route("/ws", get(ws_handler))
-        .layer(Extension(inbound_tx))
-        .layer(Extension(outbound_tx))
         .layer(Extension(state));
 
     let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port);
     log::info!("Starting Web server on https://{}", addr);
 
+    tokio::spawn({
+        let handle = handle.clone();
+        async move {
+            handle_stop.notified().await;
+            log::info!("Stop signal received, shutting down server...");
+            handle.graceful_shutdown(None);
+        }
+    });
+
     axum_server::bind_rustls(addr, config)
+        .handle(handle)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start server: {}", e))?;
@@ -154,40 +184,3 @@ mod test_certs;
 
 #[cfg(test)]
 mod tests;
-
-// /// Processor loop: consumes inbound messages and publishes outbound
-// pub async fn processor_loop(
-//     mut inbound_rx: mpsc::Receiver<InboundMsg>,
-//     outbound_tx: broadcast::Sender<OutboundMsg>,
-// ) {
-//     while let Some(msg) = inbound_rx.recv().await {
-//         match msg {
-//             InboundMsg::Json(val) => {
-//                 log::debug!("Processor got JSON: {val}");
-//                 // ejemplo: si recibimos {"cmd":"ping"} respondemos con pong
-//                 if val.get("cmd") == Some(&serde_json::Value::String("ping".into())) {
-//                     let _ = outbound_tx.send(OutboundMsg::Json(serde_json::json!({
-//                         "cmd": "pong"
-//                     })));
-//                 } else {
-//                     // reenvío broadcast
-//                     let _ = outbound_tx.send(OutboundMsg::Json(val));
-//                 }
-//             }
-//             InboundMsg::Ping(data) => {
-//                 log::debug!("Processor got Ping: {data:?}");
-//                 let _ = outbound_tx.send(OutboundMsg::Pong(data));
-//             }
-//             InboundMsg::Pong(data) => {
-//                 log::debug!("Processor got Pong: {data:?}");
-//                 // Usually we don't need to respond to Pong
-//             }
-//             InboundMsg::Binary(bin) => {
-//                 log::error!("Unexpected binary inbound: {bin:?}");
-//             }
-//             InboundMsg::Close => {
-//                 log::info!("Client closed connection");
-//             }
-//         }
-//     }
-// }
