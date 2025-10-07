@@ -1,12 +1,27 @@
 use crate::platform::Platform;
 use std::sync::Arc;
 
-use shared::testing::fake::{Calls, FakeBrokerApi, FakeOperations};
+use shared::{
+    config::ActorConfiguration,
+    testing::fake::{Calls, FakeBrokerApi, FakeOperations},
+};
 
 pub async fn create_fake_platform() -> Platform {
-    let config = {
-        let mut cfg = shared::config::new_config_loader();
-        cfg.config(true).unwrap()
+    let config = ActorConfiguration {
+        broker_url: "https://localhost".to_string(),
+        verify_ssl: true,
+        actor_type: Some(shared::config::ActorType::Managed),
+        master_token: None,
+        own_token: None,
+        restrict_net: None,
+        pre_command: None,
+        runonce_command: None,
+        post_command: None,
+        log_level: 0,
+        timeout: None,
+        no_proxy: false,
+        config: None,
+        data: None,
     };
     let operations = Arc::new(FakeOperations::new(Calls::new()));
     let broker_api = Arc::new(tokio::sync::RwLock::new(FakeBrokerApi::new(Calls::new())));

@@ -35,6 +35,8 @@ use crate::log;
 pub mod consts;
 pub mod types;
 
+pub mod sync;
+
 use anyhow::Result;
 use async_trait::async_trait;
 

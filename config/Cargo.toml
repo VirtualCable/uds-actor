@@ -1,0 +1,10 @@
+[package]
+name = "config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+shared = { path = "../shared" }
+anyhow = "1.0"
+
+fltk = { version = "1.5.17", features = ["fltk-bundled"] }

@@ -8,8 +8,8 @@ async fn test_async_main() {
     let stop = Arc::new(Notify::new());
     let stop_clone = stop.clone();
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        stop_clone.notify_one();
+         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+         stop_clone.notify_one();
     });
     let platform = create_fake_platform().await;
     let result = async_main(platform, stop).await;

@@ -1,7 +1,8 @@
 [workspace]
 resolver = "3"
 members = [
-    "client",
+    "client", 
+    "config",
     "macros", 
     "service",
     "shared"
