@@ -8,7 +8,7 @@ use axum::{
     Extension, Router,
     body::Body,
     extract::{
-        ConnectInfo, Path,
+        ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderValue, Request, StatusCode},
@@ -18,16 +18,18 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use socket2::{Domain, Socket, Type};
 use tokio::{
-    sync::{broadcast, mpsc, Notify}, try_join
+    sync::{Notify, broadcast, mpsc},
+    try_join,
 };
 
 use crate::{log, ws::request_tracker::RequestTracker};
 
 mod routes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WsFrame {
     Json(serde_json::Value),
     Binary(Vec<u8>), // Unexpected
@@ -35,16 +37,14 @@ pub enum WsFrame {
     Close,
 }
 
-pub type ClientMsg = WsFrame;
-pub type ServerMsg = WsFrame;
-
 #[derive(Clone)]
 pub struct ServerInfo {
     pub cert_pem: Vec<u8>,
     pub key_pem: Vec<u8>,
     pub port: u16,
-    pub workers_to_wsclient: mpsc::Sender<ServerMsg>,
-    pub wsclient_to_workers: broadcast::Sender<ClientMsg>,
+    pub workers_tx: mpsc::Sender<WsFrame>, // workers → WS client
+    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>, // unique receiver
+    pub wsclient_to_workers: broadcast::Sender<WsFrame>,
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
     pub secret: String,
@@ -52,8 +52,9 @@ pub struct ServerInfo {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub workers_to_wsclient: mpsc::Sender<ServerMsg>,
-    pub wsclient_to_workers: broadcast::Sender<ClientMsg>,
+    pub workers_tx: mpsc::Sender<WsFrame>,
+    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>,
+    pub wsclient_to_workers: broadcast::Sender<WsFrame>,
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
     pub secret: String,
@@ -62,7 +63,8 @@ pub struct ServerState {
 impl From<&ServerInfo> for ServerState {
     fn from(info: &ServerInfo) -> Self {
         ServerState {
-            workers_to_wsclient: info.workers_to_wsclient.clone(),
+            workers_tx: info.workers_tx.clone(),
+            workers_rx: info.workers_rx.clone(),
             wsclient_to_workers: info.wsclient_to_workers.clone(),
             tracker: info.tracker.clone(),
             stop: info.stop.clone(),
@@ -83,17 +85,22 @@ async fn check_secret(
     // If actor is "actor"
     let path = req.uri().path();
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
-    if segments.first() == Some(&"actor") {
-        if segments.get(1).map(|s| s == &state.secret) != Some(true) {
-            log::warn!("Invalid or missing secret in actor request");
-            return Err(StatusCode::FORBIDDEN);
+    match segments.first() {
+        Some(&"") => {} // Root path, allow
+        Some(&"actor") => {
+            if segments.get(1).map(|s| s == &state.secret) != Some(true) {
+                log::warn!("Invalid or missing secret in actor request");
+                return Err(StatusCode::FORBIDDEN);
+            }
         }
-    } else if segments.first() == Some(&"ws") && !addr.ip().is_loopback() {  // Allow / from anywhere
-        log::warn!("Non-localhost request without actor prefix");
-        return Err(StatusCode::FORBIDDEN);
-    } else if !segments.is_empty() {
-        log::warn!("Invalid path: {:?}", segments);
-        return Err(StatusCode::NOT_FOUND);
+        Some(&"ws") if addr.ip().is_loopback() => {
+            // Allow /ws from anywhere
+        }
+        Some(_) => {
+            log::warn!("Invalid path: {:?}", segments);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        None => unreachable!("split() always yields at least one element"),
     }
 
     let mut response = next.run(req).await;
@@ -109,71 +116,97 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     Extension(state): Extension<ServerState>,
 ) -> impl IntoResponse {
+    // Clonamos lo que necesitamos del estado
+    let wsclient_to_workers = state.wsclient_to_workers.clone();
+    let stop = state.stop.clone();
+
+    // El Receiver único lo tienes guardado en tu ServerState,
+    // probablemente envuelto en Arc<Mutex<Receiver<WsFrame>>>
+    let workers_rx = state.workers_rx.clone();
+
     let handle_socket = move |socket: WebSocket| {
-        websocket_loop(socket, state.workers_to_wsclient.clone(), state.wsclient_to_workers.clone())
+        websocket_loop(
+            socket,
+            workers_rx,          // único Receiver de workers → WS client
+            wsclient_to_workers, // broadcast Sender de WS client → workers
+            stop,
+        )
     };
+
     ws.on_upgrade(handle_socket)
 }
 
-async fn websocket_loop(
+pub async fn websocket_loop(
     socket: WebSocket,
-    workers_to_wsclient: mpsc::Sender<ClientMsg>,
-    wsclient_to_workers: broadcast::Sender<ServerMsg>,
+    workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>, // unique receiver
+    wsclient_to_workers: broadcast::Sender<WsFrame>,
+    stop: Arc<Notify>,
 ) {
-    // let (mut sender, mut receiver) = socket.split();
-    // let mut outbound_rx = wsclient_to_workers.subscribe();
+    let (mut ws_sender, mut ws_receiver) = socket.split();
 
-    // // Forward outbound messages
-    // let forward = tokio::spawn(async move {
-    //     while let Ok(msg) = outbound_rx.recv().await {
-    //         match msg {
-    //             ServerMsg::Json(val) => {
-    //                 if let Ok(txt) = serde_json::to_string(&val) {
-    //                     let _ = sender.send(Message::Text(txt.into())).await;
-    //                 }
-    //             }
-    //             ServerMsg::Binary(data) => {
-    //                 let _ = sender.send(Message::Binary(data.into())).await;
-    //             }
-    //             ServerMsg::Ping(data) => {
-    //                 let _ = sender.send(Message::Ping(data.into())).await;
-    //             }
-    //             ServerMsg::Close => {
-    //                 let _ = sender.send(Message::Close(None)).await;
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // });
+    // Task A: WS client → workers (igual que antes)
+    let mut tx_task = {
+        let wsclient_to_workers = wsclient_to_workers.clone();
+        tokio::spawn(async move {
+            while let Some(Ok(msg)) = ws_receiver.next().await {
+                let frame = match msg {
+                    Message::Text(txt) => match serde_json::from_str::<serde_json::Value>(&txt) {
+                        Ok(val) => WsFrame::Json(val),
+                        Err(e) => {
+                            log::warn!("Invalid WS JSON: {e}");
+                            continue;
+                        }
+                    },
+                    Message::Binary(data) => WsFrame::Binary(data.into()),
+                    Message::Ping(data) => WsFrame::Ping(data.into()),
+                    Message::Close(_) => WsFrame::Close,
+                    _ => continue,
+                };
+                if let Err(e) = wsclient_to_workers.send(frame) {
+                    log::warn!("Failed to broadcast WS->workers: {e}");
+                    break;
+                }
+            }
+        })
+    };
 
-    // // Read inbound messages
-    // while let Some(Ok(msg)) = receiver.next().await {
-    //     match msg {
-    //         Message::Text(text) => match serde_json::from_str::<serde_json::Value>(&text) {
-    //             Ok(val) => {
-    //                 let _ = inbound_tx.send(ClientMsg::Json(val)).await;
-    //             }
-    //             Err(e) => {
-    //                 log::error!("Invalid JSON from client: {e}, raw: {text}");
-    //             }
-    //         },
-    //         Message::Binary(bin) => {
-    //             log::error!("Unexpected binary message: {bin:?}");
-    //             // But anyway send it to processing
-    //             let _ = inbound_tx.send(ClientMsg::Binary(bin.to_vec())).await;
-    //         }
-    //         Message::Ping(bytes) | Message::Pong(bytes) => {
-    //             log::debug!("Received ping/pong: {:?}", bytes);
-    //             let _ = inbound_tx.send(ClientMsg::Ping(bytes.to_vec())).await;
-    //         }
-    //         Message::Close(_) => {
-    //             let _ = inbound_tx.send(ClientMsg::Close).await;
-    //             break;
-    //         }
-    //     }
-    // }
+    // Task B: workers → WS client (consume the single Receiver)
+    let mut rx_task = {
+        let workers_rx = workers_rx.clone();
+        tokio::spawn(async move {
+            loop {
+                let msg_opt = { workers_rx.lock().await.recv().await };
+                let Some(server_msg) = msg_opt else { break };
 
-    // forward.abort();
+                let ws_msg = match server_msg {
+                    WsFrame::Json(val) => match serde_json::to_string(&val) {
+                        Ok(txt) => Message::Text(txt.into()),
+                        Err(e) => {
+                            log::warn!("Failed to serialize JSON: {e}");
+                            continue;
+                        }
+                    },
+                    WsFrame::Binary(data) => Message::Binary(data.into()),
+                    WsFrame::Ping(data) => Message::Ping(data.into()),
+                    WsFrame::Close => Message::Close(None),
+                };
+
+                if ws_sender.send(ws_msg).await.is_err() {
+                    break;
+                }
+            }
+        })
+    };
+
+    tokio::select! {
+        _ = &mut tx_task => { rx_task.abort(); }
+        _ = &mut rx_task => { tx_task.abort(); }
+        _ = stop.notified() => {
+            log::info!("Stopping WebSocket loop");
+            tx_task.abort();
+            rx_task.abort();
+        }
+    }
 }
 
 pub async fn server(config: &ServerInfo) -> Result<()> {

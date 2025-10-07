@@ -26,8 +26,11 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     log::setup_logging("debug", crate::log::LogType::Tests);
     crate::tls::init_tls(None);
 
-    let (workers_to_wsclient, _rx) = mpsc::channel(100);
-    let (wsclient_to_workers, _) = broadcast::channel(100);
+    // Create the single channel for workers → WS client
+    let (workers_tx, workers_rx) = mpsc::channel::<WsFrame>(100);
+
+    // Broadcast channel for WS client → workers
+    let (wsclient_to_workers, _) = broadcast::channel::<WsFrame>(100);
 
     let tracker = RequestTracker::new();
     let (cert_pem, key_pem) = super::test_certs::test_cert_and_key();
@@ -37,7 +40,8 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
         cert_pem: cert_pem.to_vec(),
         key_pem: key_pem.to_vec(),
         port,
-        workers_to_wsclient: workers_to_wsclient.clone(),
+        workers_tx, // sender side for workers
+        workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver
         wsclient_to_workers: wsclient_to_workers.clone(),
         tracker: tracker.clone(),
         stop: notify.clone(),

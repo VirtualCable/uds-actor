@@ -1,5 +1,5 @@
 use crate::ws::{
-    server::ClientMsg,
+    server::WsFrame,
     types::{RpcEnvelope, RpcMessage},
 };
 use axum::{http::StatusCode, Json};
@@ -46,7 +46,7 @@ where
 /// Wait until receiving a `RpcEnvelope<T>` from the broadcast channel.
 /// Cancels if the `stop` is triggered.
 pub async fn wait_for_request<T>(
-    mut rx: broadcast::Receiver<ClientMsg>,
+    mut rx: broadcast::Receiver<WsFrame>,
     stop: Option<Arc<Notify>>,
 ) -> Option<RpcEnvelope<T>>
 where
@@ -67,7 +67,7 @@ where
             // Normal reception
             msg = rx.recv() => {
                 crate::log::debug!("Received client->worker message: {:?}", msg);
-                if let Ok(ClientMsg::Json(val)) = msg
+                if let Ok(WsFrame::Json(val)) = msg
                    && let Ok(env) = serde_json::from_value::<RpcEnvelope<RpcMessage>>(val)
                    && let Ok(inner) = T::try_from(env.msg.clone()) {
                     return Some(RpcEnvelope {
