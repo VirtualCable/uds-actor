@@ -31,7 +31,7 @@ pub async fn get_screenshot(
     log::debug!("Screenshot requested via WebSocket API with id {}", id);
 
     // Register the request
-    let resolver_rx = tracker.register(id).await;
+    let (resolver_rx, id) = tracker.register().await;
 
         // Build the envelope with the typed request
     let envelope = RpcEnvelope {
@@ -59,7 +59,7 @@ pub async fn get_uuid(
     log::debug!("UUID requested via WebSocket API with id {}", id);
 
     // Register the request
-    let resolver_rx = tracker.register(id).await;
+    let (resolver_rx, id) = tracker.register().await;
 
     // Build the envelope with the typed request
     let envelope = RpcEnvelope {

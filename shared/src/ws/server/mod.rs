@@ -1,6 +1,9 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{atomic::{AtomicBool, Ordering}, Arc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use anyhow::Result;
@@ -106,10 +109,7 @@ async fn check_secret(
     Ok(response)
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    Extension(state): Extension<ServerState>,
-) -> Response {
+async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerState>) -> Response {
     let ws_active = state.ws_active.clone();
     if ws_active.swap(true, Ordering::SeqCst) {
         // ya estaba true → hay cliente activo
@@ -124,7 +124,6 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| {
         websocket_loop(socket, workers_rx, wsclient_to_workers, stop, ws_active)
     })
-    
 }
 
 pub async fn websocket_loop(
@@ -145,8 +144,6 @@ pub async fn websocket_loop(
                     Message::Text(txt) => {
                         if let Ok(env) = serde_json::from_str::<RpcEnvelope<RpcMessage>>(&txt) {
                             env
-                        } else if let Ok(msg) = serde_json::from_str::<RpcMessage>(&txt) {
-                            RpcEnvelope { id: None, msg }
                         } else {
                             log::warn!("Invalid WS JSON: {txt}");
                             continue;

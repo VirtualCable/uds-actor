@@ -1,10 +1,16 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{collections::HashMap, sync::{atomic::{AtomicU64, Ordering}, Arc}, time::Instant};
 use tokio::sync::{Mutex, oneshot};
 
 use crate::{
     log,
     ws::types::{RequestId, RpcError, RpcMessage},
 };
+
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_id() -> u64 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Represents a pending request waiting for a response.
 /// Stores the creation time and the oneshot sender to notify the waiter.
@@ -14,7 +20,7 @@ struct Pending {
 }
 
 /// Internal state holding all pending requests.
-struct State {
+struct TrackerState {
     pending: HashMap<RequestId, Pending>,
 }
 
@@ -22,7 +28,7 @@ struct State {
 /// Provides methods to register, resolve and cleanup requests.
 #[derive(Clone)]
 pub struct RequestTracker {
-    inner: Arc<Mutex<State>>,
+    inner: Arc<Mutex<TrackerState>>,
     timeout: std::time::Duration,
 }
 
@@ -30,7 +36,7 @@ impl RequestTracker {
     /// Create a new RequestState with a default timeout of 30 seconds.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(State {
+            inner: Arc::new(Mutex::new(TrackerState {
                 pending: HashMap::new(),
             })),
             timeout: std::time::Duration::from_secs(30),
@@ -45,7 +51,8 @@ impl RequestTracker {
 
     /// Register a new request and return a receiver to await the response.
     /// The caller awaits on the returned oneshot::Receiver<Result<String>>.
-    pub async fn register(&self, id: RequestId) -> oneshot::Receiver<RpcMessage> {
+    pub async fn register(&self) -> (oneshot::Receiver<RpcMessage>, u64) {
+        let id = next_id();
         let (tx, rx) = oneshot::channel();
         let mut guard = self.inner.lock().await;
         guard.pending.insert(
@@ -55,7 +62,7 @@ impl RequestTracker {
                 tx,
             },
         );
-        rx
+        (rx, id)
     }
 
     /// Resolve a request by id with a successful payload.
