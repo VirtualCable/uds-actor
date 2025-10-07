@@ -34,10 +34,10 @@ use libc::{self, sockaddr};
 
 use anyhow::Result;
 
-use crate::{log, operations::NetworkInterfaceInfo};
+use crate::{log, operations::NetworkInterface};
 
 /// Returns iterator (Vec) of InterfaceInfo for “valid” interfaces.
-pub fn get_network_info() -> Result<Vec<NetworkInterfaceInfo>> {
+pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
     let names = list_interfaces()?;
 
     let mut out = Vec::new();
@@ -46,9 +46,9 @@ pub fn get_network_info() -> Result<Vec<NetworkInterfaceInfo>> {
         let mac = get_mac_addr(&ifname);
         if let (Some(ip_address), Some(mac)) = (ip, mac) {
             if mac != "00:00:00:00:00:00" && !ip_address.starts_with("169.254") {
-                out.push(NetworkInterfaceInfo {
+                out.push(NetworkInterface {
                     name: ifname,
-                    ip_address,
+                    ip_addr: ip_address,
                     mac,
                 });
             }
@@ -271,7 +271,7 @@ mod tests {
             log::info!(
                 "Interface: {}, IP: {}, MAC: {}",
                 info.name,
-                info.ip_address,
+                info.ip_addr,
                 info.mac
             );
         }

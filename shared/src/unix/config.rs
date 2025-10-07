@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::{
-    config::{ActorConfiguration, ConfigLoader},
+    config::{ActorConfiguration, Configuration},
     log,
 };
 
@@ -10,7 +10,7 @@ pub struct UnixConfig {
     actor: Option<ActorConfiguration>,
 }
 
-impl ConfigLoader for UnixConfig {
+impl Configuration for UnixConfig {
     fn load_config(&mut self) -> Result<ActorConfiguration> {
         // If not exists
         if !std::path::Path::new(CONFIG_PATH).exists() {
@@ -55,7 +55,7 @@ impl ConfigLoader for UnixConfig {
     }
 }
 
-pub fn new_config_loader() -> Box<dyn ConfigLoader> {
+pub fn new_config_loader() -> Box<dyn Configuration> {
     Box::new(UnixConfig::default())
 }
 
