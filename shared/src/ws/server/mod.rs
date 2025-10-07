@@ -1,6 +1,6 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::Arc,
+    sync::{atomic::{AtomicBool, Ordering}, Arc},
 };
 
 use anyhow::Result;
@@ -18,7 +18,6 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use socket2::{Domain, Socket, Type};
 use tokio::{
     sync::{Notify, broadcast, mpsc},
@@ -35,19 +34,14 @@ use crate::{
 
 mod routes;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WsFrame {
-    Json(serde_json::Value),
-}
-
 #[derive(Clone)]
 pub struct ServerInfo {
     pub cert_pem: Vec<u8>,
     pub key_pem: Vec<u8>,
     pub port: u16,
-    pub workers_tx: mpsc::Sender<WsFrame>, // workers → WS client
-    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>, // unique receiver
-    pub wsclient_to_workers: broadcast::Sender<WsFrame>,
+    pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>, // workers → WS client
+    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
+    pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>, // WS client → workers
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
     pub secret: String,
@@ -55,12 +49,13 @@ pub struct ServerInfo {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub workers_tx: mpsc::Sender<WsFrame>,
-    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>,
-    pub wsclient_to_workers: broadcast::Sender<WsFrame>,
+    pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>,
+    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
+    pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
     pub secret: String,
+    pub ws_active: Arc<AtomicBool>,
 }
 
 impl From<&ServerInfo> for ServerState {
@@ -72,20 +67,18 @@ impl From<&ServerInfo> for ServerState {
             tracker: info.tracker.clone(),
             stop: info.stop.clone(),
             secret: info.secret.clone(),
+            ws_active: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 /// Middleware for verifying the secret in the path
-/// and restricting access to localhost for non-actor routes
-/// Also, ensures Actor Version is set in headers
 async fn check_secret(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(state): Extension<ServerState>,
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, axum::http::StatusCode> {
-    // If actor is "actor"
     let path = req.uri().path();
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     match segments.first() {
@@ -107,8 +100,6 @@ async fn check_secret(
     }
 
     let mut response = next.run(req).await;
-
-    // Añadir cabecera personalizada
     response
         .headers_mut()
         .insert("Actor-Version", HeaderValue::from_static("1.0"));
@@ -118,32 +109,30 @@ async fn check_secret(
 async fn ws_handler(
     ws: WebSocketUpgrade,
     Extension(state): Extension<ServerState>,
-) -> impl IntoResponse {
-    // Clonamos lo que necesitamos del estado
+) -> Response {
+    let ws_active = state.ws_active.clone();
+    if ws_active.swap(true, Ordering::SeqCst) {
+        // ya estaba true → hay cliente activo
+        log::warn!("WebSocket connection attempt while another is active");
+        return (StatusCode::CONFLICT, "Another WebSocket client is active").into_response();
+    }
+
     let wsclient_to_workers = state.wsclient_to_workers.clone();
     let stop = state.stop.clone();
+    let workers_rx = state.workers_rx; // moverlo aquí si solo hay un cliente
 
-    // El Receiver único lo tienes guardado en tu ServerState,
-    // probablemente envuelto en Arc<Mutex<Receiver<WsFrame>>>
-    let workers_rx = state.workers_rx.clone();
-
-    let handle_socket = move |socket: WebSocket| {
-        websocket_loop(
-            socket,
-            workers_rx,          // único Receiver de workers → WS client
-            wsclient_to_workers, // broadcast Sender de WS client → workers
-            stop,
-        )
-    };
-
-    ws.on_upgrade(handle_socket)
+    ws.on_upgrade(move |socket| {
+        websocket_loop(socket, workers_rx, wsclient_to_workers, stop, ws_active)
+    })
+    
 }
 
 pub async fn websocket_loop(
     socket: WebSocket,
-    workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<WsFrame>>>, // unique receiver
-    wsclient_to_workers: broadcast::Sender<WsFrame>,
+    workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
+    wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     stop: Arc<Notify>,
+    ws_active: Arc<AtomicBool>,
 ) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
@@ -152,36 +141,33 @@ pub async fn websocket_loop(
         let wsclient_to_workers = wsclient_to_workers.clone();
         tokio::spawn(async move {
             while let Some(Ok(msg)) = ws_receiver.next().await {
-                let frame = match msg {
-                    Message::Text(txt) => match serde_json::from_str::<serde_json::Value>(&txt) {
-                        Ok(val) => WsFrame::Json(val),
-                        Err(e) => {
-                            log::warn!("Invalid WS JSON: {e}");
+                let env = match msg {
+                    Message::Text(txt) => {
+                        if let Ok(env) = serde_json::from_str::<RpcEnvelope<RpcMessage>>(&txt) {
+                            env
+                        } else if let Ok(msg) = serde_json::from_str::<RpcMessage>(&txt) {
+                            RpcEnvelope { id: None, msg }
+                        } else {
+                            log::warn!("Invalid WS JSON: {txt}");
                             continue;
                         }
+                    }
+                    Message::Ping(data) => RpcEnvelope {
+                        id: None,
+                        msg: RpcMessage::Ping(Ping(data.to_vec())),
                     },
-                    Message::Ping(data) => {
-                        let envelope = RpcEnvelope {
-                            id: None,
-                            msg: RpcMessage::Ping(Ping(data.to_vec())),
-                        };
-                        WsFrame::Json(serde_json::to_value(&envelope).unwrap())
-                    }
-                    Message::Close(_) => {
-                        let envelope = RpcEnvelope {
-                            id: None,
-                            msg: RpcMessage::Close(Close),
-                        };
-                        WsFrame::Json(serde_json::to_value(&envelope).unwrap())
-                    }
+                    Message::Close(_) => RpcEnvelope {
+                        id: None,
+                        msg: RpcMessage::Close(Close),
+                    },
                     Message::Binary(_) => {
-                        log::warn!("Unexpected binary WS message");
+                        log::warn!("Unexpected binary");
                         continue;
                     }
                     _ => continue,
                 };
 
-                if let Err(e) = wsclient_to_workers.send(frame) {
+                if let Err(e) = wsclient_to_workers.send(env) {
                     log::warn!("Failed to broadcast WS->workers: {e}");
                     break;
                 }
@@ -195,17 +181,15 @@ pub async fn websocket_loop(
         tokio::spawn(async move {
             loop {
                 let msg_opt = { workers_rx.lock().await.recv().await };
-                let Some(WsFrame::Json(val)) = msg_opt else {
-                    break;
-                };
+                let Some(env) = msg_opt else { break };
 
-                match serde_json::to_string(&val) {
+                match serde_json::to_string(&env) {
                     Ok(txt) => {
                         if ws_sender.send(Message::Text(txt.into())).await.is_err() {
                             break;
                         }
                     }
-                    Err(e) => log::warn!("Failed to serialize JSON: {e}"),
+                    Err(e) => log::warn!("Failed to serialize RpcEnvelope: {e}"),
                 }
             }
         })
@@ -220,6 +204,7 @@ pub async fn websocket_loop(
             rx_task.abort();
         }
     }
+    ws_active.store(false, Ordering::SeqCst);
 }
 
 pub async fn server(config: &ServerInfo) -> Result<()> {
@@ -240,7 +225,6 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
         .route_layer(middleware::from_fn(check_secret))
         .layer(Extension(state));
 
-    // Graceful shutdown on notify
     tokio::spawn({
         let handle = handle.clone();
         async move {
@@ -250,28 +234,24 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
         }
     });
 
-    // Helper para IPv6 only
     fn bind_ipv6_only(port: u16) -> std::io::Result<std::net::TcpListener> {
         let socket = Socket::new(Domain::IPV6, Type::STREAM, None)?;
-        socket.set_only_v6(true)?; // <- no dual-stack
+        socket.set_only_v6(true)?;
         socket.set_reuse_address(true)?;
         socket.bind(&SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port).into())?;
         socket.listen(128)?;
         Ok(socket.into())
     }
 
-    // IPv4 listener
     let listener_v4: std::net::TcpListener =
         std::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, config.port))?;
     listener_v4.set_nonblocking(true)?;
 
-    // IPv6 listener
     let listener_v6 = bind_ipv6_only(config.port)?;
     listener_v6.set_nonblocking(true)?;
 
     let svc = app.into_make_service_with_connect_info::<SocketAddr>();
 
-    // Ojo: aquí usamos from_tcp_rustls en lugar de bind_rustls
     let server_v4 = axum_server::from_tcp_rustls(listener_v4, tls_config.clone())
         .handle(handle.clone())
         .serve(svc.clone());
@@ -281,7 +261,6 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
         .serve(svc);
 
     try_join!(server_v4, server_v6)?;
-
     Ok(())
 }
 

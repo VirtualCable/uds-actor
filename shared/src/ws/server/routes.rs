@@ -7,7 +7,6 @@ use axum::{
 };
 use chrono::Utc;
 
-use crate::ws::server::WsFrame;
 use crate::ws::types::{LogoffRequest, PreConnect, RpcEnvelope};
 use crate::{
     log,
@@ -34,15 +33,14 @@ pub async fn get_screenshot(
     // Register the request
     let resolver_rx = tracker.register(id).await;
 
-    // Build the envelope with the typed request
+        // Build the envelope with the typed request
     let envelope = RpcEnvelope {
         id: Some(id),
         msg: RpcMessage::ScreenshotRequest(ScreenshotRequest),
     };
 
     // Serialize and broadcast
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast ScreenshotRequest to workers: {e}");
     }
 
@@ -70,8 +68,7 @@ pub async fn get_uuid(
     };
 
     // Serialize and broadcast
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast UUidRequest to workers: {e}");
     }
 
@@ -101,8 +98,7 @@ pub async fn post_logout(
         msg: RpcMessage::LogoffRequest(LogoffRequest),
     };
 
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = state.wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = state.wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast LogoffRequest to workers: {e}");
     }
 
@@ -119,8 +115,7 @@ pub async fn post_message(
         msg: RpcMessage::MessageRequest(req),
     };
 
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = state.wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = state.wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast MessageRequest to workers: {e}");
     }
 
@@ -140,8 +135,7 @@ pub async fn post_script(
         }),
     };
 
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = state.wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = state.wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast ScriptExecRequest to workers: {e}");
     }
 
@@ -157,8 +151,7 @@ pub async fn post_pre_connect(
         msg: RpcMessage::PreConnect(PreConnect),
     };
 
-    let val = serde_json::to_value(&envelope).unwrap();
-    if let Err(e) = state.wsclient_to_workers.send(WsFrame::Json(val)) {
+    if let Err(e) = state.wsclient_to_workers.send(envelope) {
         log::warn!("Failed to broadcast PreConnect to workers: {e}");
     }
 

@@ -26,10 +26,10 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     crate::tls::init_tls(None);
 
     // Create the single channel for workers → WS client
-    let (workers_tx, workers_rx) = mpsc::channel::<WsFrame>(100);
+    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(100);
 
     // Broadcast channel for WS client → workers
-    let (wsclient_to_workers, _) = broadcast::channel::<WsFrame>(100);
+    let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
 
     let tracker = RequestTracker::new();
     let (cert_pem, key_pem) = super::test_certs::test_cert_and_key();

@@ -1,7 +1,4 @@
-use crate::ws::{
-    server::WsFrame,
-    types::{RpcEnvelope, RpcMessage},
-};
+use crate::ws::types::{RpcEnvelope, RpcMessage};
 use axum::{http::StatusCode, Json};
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, Notify};
@@ -46,7 +43,7 @@ where
 /// Wait until receiving a `RpcEnvelope<T>` from the broadcast channel.
 /// Cancels if the `stop` is triggered.
 pub async fn wait_for_request<T>(
-    mut rx: broadcast::Receiver<WsFrame>,
+    mut rx: broadcast::Receiver<RpcEnvelope<RpcMessage>>,
     stop: Option<Arc<Notify>>,
 ) -> Option<RpcEnvelope<T>>
 where
@@ -66,14 +63,19 @@ where
 
             // Normal reception
             msg = rx.recv() => {
-                crate::log::debug!("Received client->worker message: {:?}", msg);
-                if let Ok(WsFrame::Json(val)) = msg
-                   && let Ok(env) = serde_json::from_value::<RpcEnvelope<RpcMessage>>(val)
-                   && let Ok(inner) = T::try_from(env.msg.clone()) {
-                    return Some(RpcEnvelope {
-                        id: env.id,
-                        msg: inner,
-                    });
+                match msg {
+                    Ok(env) => {
+                        if let Ok(inner) = T::try_from(env.msg.clone()) {
+                            return Some(RpcEnvelope {
+                                id: env.id,
+                                msg: inner,
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        crate::log::warn!("Broadcast receive error: {e}");
+                        return None;
+                    }
                 }
             }
         }
