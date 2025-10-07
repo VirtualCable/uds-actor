@@ -8,8 +8,7 @@ use super::*;
 use crate::ws::{
     request_tracker::RequestTracker,
     types::{
-        LogoffRequest, MessageRequest, PreConnect, RpcMessage, ScreenshotRequest,
-        ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
+        LogoffRequest, MessageRequest, Ping, PreConnect, RpcMessage, ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse
     },
     wait_for_request,
 };
@@ -362,7 +361,7 @@ async fn test_ws_no_localhost_ipv4() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
+    assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
     server_task.abort();
 }
 
@@ -384,7 +383,7 @@ async fn test_ws_no_localhost_ipv6() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
+    assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
     server_task.abort();
 }
 
@@ -394,7 +393,7 @@ async fn test_ws_no_localhost_ipv6() {
 async fn test_ws_connect_insecure_tls() {
     let (server_info, server_task) = create_test_server_task(34569, "-secret-");
 
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let rx = server_info.wsclient_to_workers.subscribe();
 
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -424,8 +423,8 @@ async fn test_ws_connect_insecure_tls() {
     // do not have response, but sends on tx a ping message
 
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let res = rx.recv().await;
-        log::debug!("Received inbound message: {:?}", res);
+        // let res = rx.recv().await;
+        wait_for_request::<Ping>(rx, None).await;
     })
     .await
     .unwrap(); // Fail if timeout

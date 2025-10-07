@@ -37,6 +37,7 @@ pub enum RpcMessage {
     PreConnect(PreConnect),       // From broker for server
     LogoutRequest(LogoutRequest), // From client ws
     MessageRequest(MessageRequest),
+    Close(Close),                  // From client ws
 
     // Error response with
     Error(RpcError),
@@ -105,3 +106,6 @@ pub struct LogoffRequest;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ping(pub Vec<u8>); // Payload is arbitrary data, to be sent back as-is
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Close;

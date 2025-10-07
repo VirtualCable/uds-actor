@@ -25,16 +25,19 @@ use tokio::{
     try_join,
 };
 
-use crate::{log, ws::request_tracker::RequestTracker};
+use crate::{
+    log,
+    ws::{
+        request_tracker::RequestTracker,
+        types::{Close, Ping, RpcEnvelope, RpcMessage},
+    },
+};
 
 mod routes;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WsFrame {
     Json(serde_json::Value),
-    Binary(Vec<u8>), // Unexpected
-    Ping(Vec<u8>),
-    Close,
 }
 
 #[derive(Clone)]
@@ -144,7 +147,7 @@ pub async fn websocket_loop(
 ) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
-    // Task A: WS client → workers (igual que antes)
+    // Task A: WS client → workers
     let mut tx_task = {
         let wsclient_to_workers = wsclient_to_workers.clone();
         tokio::spawn(async move {
@@ -157,11 +160,27 @@ pub async fn websocket_loop(
                             continue;
                         }
                     },
-                    Message::Binary(data) => WsFrame::Binary(data.into()),
-                    Message::Ping(data) => WsFrame::Ping(data.into()),
-                    Message::Close(_) => WsFrame::Close,
+                    Message::Ping(data) => {
+                        let envelope = RpcEnvelope {
+                            id: None,
+                            msg: RpcMessage::Ping(Ping(data.to_vec())),
+                        };
+                        WsFrame::Json(serde_json::to_value(&envelope).unwrap())
+                    }
+                    Message::Close(_) => {
+                        let envelope = RpcEnvelope {
+                            id: None,
+                            msg: RpcMessage::Close(Close),
+                        };
+                        WsFrame::Json(serde_json::to_value(&envelope).unwrap())
+                    }
+                    Message::Binary(_) => {
+                        log::warn!("Unexpected binary WS message");
+                        continue;
+                    }
                     _ => continue,
                 };
+
                 if let Err(e) = wsclient_to_workers.send(frame) {
                     log::warn!("Failed to broadcast WS->workers: {e}");
                     break;
@@ -170,29 +189,23 @@ pub async fn websocket_loop(
         })
     };
 
-    // Task B: workers → WS client (consume the single Receiver)
+    // Task B: workers → WS client
     let mut rx_task = {
         let workers_rx = workers_rx.clone();
         tokio::spawn(async move {
             loop {
                 let msg_opt = { workers_rx.lock().await.recv().await };
-                let Some(server_msg) = msg_opt else { break };
-
-                let ws_msg = match server_msg {
-                    WsFrame::Json(val) => match serde_json::to_string(&val) {
-                        Ok(txt) => Message::Text(txt.into()),
-                        Err(e) => {
-                            log::warn!("Failed to serialize JSON: {e}");
-                            continue;
-                        }
-                    },
-                    WsFrame::Binary(data) => Message::Binary(data.into()),
-                    WsFrame::Ping(data) => Message::Ping(data.into()),
-                    WsFrame::Close => Message::Close(None),
+                let Some(WsFrame::Json(val)) = msg_opt else {
+                    break;
                 };
 
-                if ws_sender.send(ws_msg).await.is_err() {
-                    break;
+                match serde_json::to_string(&val) {
+                    Ok(txt) => {
+                        if ws_sender.send(Message::Text(txt.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => log::warn!("Failed to serialize JSON: {e}"),
                 }
             }
         })
