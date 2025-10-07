@@ -15,7 +15,6 @@ pub struct RpcError {
     pub message: String,
 }
 
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "kind", content = "msg")]
 pub enum RpcMessage {
@@ -23,19 +22,21 @@ pub enum RpcMessage {
     LoginRequest(LoginRequest),
     ScreenshotRequest(ScreenshotRequest),
     ScriptExecRequest(ScriptExecRequest),
+    UUidRequest(UUidRequest), // No payload
 
     // Responses with id
     LoginResponse(LoginResponse),
     ScreenshotResponse(ScreenshotResponse),
     ScriptExecResponse(ScriptExecResponse),
-    PingResponse(Pong),
+    // Message does not have a response
+    UUidResponse(UUidResponse), // UUID as string
 
     // Notifications (no id)
-    Ping(Ping),
-    Pong(Pong),
-    LogoffRequest(LogoffRequest),
-    LogoutRequest(LogoutRequest),
-    ShowMessage(ShowMessage),
+    Ping(Ping),                // Used to maintain connection alive
+    LogoffRequest(LogoffRequest), // From broker for client
+    PreConnect(PreConnect),       // From broker for server
+    LogoutRequest(LogoutRequest), // From client ws
+    MessageRequest(MessageRequest),
 
     // Error response with
     Error(RpcError),
@@ -45,6 +46,15 @@ pub enum RpcMessage {
 pub struct LoginRequest {
     pub username: String,
     pub session_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LoginResponse {
+    pub ip: String,
+    pub hostname: String,
+    pub deadline: Option<u32>,
+    pub max_idle: Option<u32>,
+    pub session_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -67,9 +77,6 @@ pub struct ScriptExecResponse {
     pub result: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct LogoffRequest;
-
 /// Payload for logout
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogoutRequest {
@@ -79,22 +86,22 @@ pub struct LogoutRequest {
     pub session_id: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct LoginResponse {
-    pub ip: String,
-    pub hostname: String,
-    pub deadline: Option<u32>,
-    pub max_idle: Option<u32>,
-    pub session_id: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageRequest {
+    pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Ping;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UUidRequest;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Pong;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UUidResponse(pub String);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ShowMessage {
-    pub text: String,
-}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreConnect;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogoffRequest;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ping(pub Vec<u8>); // Payload is arbitrary data, to be sent back as-is

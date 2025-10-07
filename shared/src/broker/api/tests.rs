@@ -157,8 +157,8 @@ async fn test_register() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
     let payload = types::RegisterRequest {
-        version: consts::VERSION,
-        build: consts::BUILD,
+        version: crate::consts::VERSION,
+        build: crate::consts::BUILD,
         username: "testuser",
         hostname: "testhost",
         ip: "10.0.0.1",
@@ -229,8 +229,8 @@ async fn test_initialize() {
     let payload = types::InitializationRequest {
         actor_type: crate::config::ActorType::Managed,
         token: api.get_token().unwrap(),
-        version: consts::VERSION,
-        build: consts::BUILD,
+        version: crate::consts::VERSION,
+        build: crate::consts::BUILD,
         id: create_test_id().iter().cloned().map(Into::into).collect(),
     };
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();

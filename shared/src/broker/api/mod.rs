@@ -175,8 +175,8 @@ impl BrokerApi {
         os: &str,
     ) -> Result<String, types::RestError> {
         let payload = types::RegisterRequest {
-            version: consts::VERSION,
-            build: consts::BUILD,
+            version: crate::consts::VERSION,
+            build: crate::consts::BUILD,
             username,
             hostname,
             ip: &interface.ip_addr,
@@ -198,8 +198,8 @@ impl BrokerApi {
         let payload = types::InitializationRequest {
             actor_type: self.actor_type.clone(),
             token: self.get_token()?,
-            version: consts::VERSION,
-            build: consts::BUILD,
+            version: crate::consts::VERSION,
+            build: crate::consts::BUILD,
             id: interfaces.iter().cloned().map(Into::into).collect(),
         };
 

@@ -1,19 +1,18 @@
 use crate::ws::{
-    server::OutboundMsg,
+    server::ClientMsg,
     types::{RpcEnvelope, RpcMessage},
 };
-use axum::{Json, http::StatusCode};
+use axum::{http::StatusCode, Json};
 use std::sync::Arc;
-use tokio::sync::oneshot;
-use tokio::sync::{Notify, broadcast};
+use tokio::sync::{broadcast, oneshot, Notify};
 
 pub mod client;
 pub mod server;
-
 pub mod rcptraits;
 pub mod request_tracker;
 pub mod types;
 
+/// Wait for a response from the tracker (oneshot channel).
 pub async fn wait_response<T>(
     rx: oneshot::Receiver<RpcMessage>,
     stop: Option<Arc<Notify>>,
@@ -22,7 +21,7 @@ where
     T: TryFrom<RpcMessage>,
 {
     tokio::select! {
-        // Cancelación externa
+        // External stop
         _ = async {
             if let Some(stop) = &stop {
                 stop.notified().await;
@@ -31,23 +30,23 @@ where
             Err(StatusCode::REQUEST_TIMEOUT)
         }
 
-        // Respuesta normal
+        // Normal response
         res = rx => {
             match res {
                 Ok(msg) => match T::try_from(msg) {
                     Ok(val) => Ok(Json(val)),
                     Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
                 },
-                Err(_) => Err(StatusCode::GATEWAY_TIMEOUT), // canal roto
+                Err(_) => Err(StatusCode::GATEWAY_TIMEOUT), // Broken channel
             }
         }
     }
 }
 
-/// Wait until receiving a `RpcEnvelope<T>` from the channel.
+/// Wait until receiving a `RpcEnvelope<T>` from the broadcast channel.
 /// Cancels if the `stop` is triggered.
 pub async fn wait_for_request<T>(
-    mut rx: broadcast::Receiver<OutboundMsg>,
+    mut rx: broadcast::Receiver<ClientMsg>,
     stop: Option<Arc<Notify>>,
 ) -> Option<RpcEnvelope<T>>
 where
@@ -56,6 +55,7 @@ where
     crate::log::debug!("Waiting for request...");
     loop {
         tokio::select! {
+            // External stop
             _ = async {
                 if let Some(stop) = &stop {
                     stop.notified().await;
@@ -64,9 +64,10 @@ where
                 return None;
             }
 
+            // Normal reception
             msg = rx.recv() => {
-                crate::log::debug!("Received outbound message: {:?}", msg);
-                if let Ok(OutboundMsg::Json(val)) = msg
+                crate::log::debug!("Received client->worker message: {:?}", msg);
+                if let Ok(ClientMsg::Json(val)) = msg
                    && let Ok(env) = serde_json::from_value::<RpcEnvelope<RpcMessage>>(val)
                    && let Ok(inner) = T::try_from(env.msg.clone()) {
                     return Some(RpcEnvelope {
