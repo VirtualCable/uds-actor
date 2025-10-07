@@ -1,5 +1,5 @@
-use std::{pin::Pin, sync::Arc};
 use anyhow::Result;
+use std::{pin::Pin, sync::Arc};
 use tokio::sync::Notify;
 
 use shared::{log, service::AsyncService};
@@ -8,7 +8,8 @@ mod platform;
 
 fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
-        async_main(stop).await.unwrap_or_else(|e| {
+        let platform = platform::Platform::new(); // If no config, panic, we need config
+        async_main(platform, stop).await.unwrap_or_else(|e| {
             log::error!("Error in async_main: {}", e);
         });
     })
@@ -36,18 +37,23 @@ fn main() {
     }
 }
 
-async fn async_main(stop: Arc<Notify>) -> Result<()> {
+// Real "main" async logic of the service
+async fn async_main(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
     log::info!("Service main async logic started");
 
-    let platform = platform::Platform::new(); // If no config, panic, we need config
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
     let interfaces = platform.operations().get_network_info()?;
-    broker.write().await.initialize(interfaces.as_slice()).await.map_err(|e| {
-        log::error!("Failed to initialize with broker: {:?}", e);
-        anyhow::anyhow!("Failed to initialize with broker: {:?}", e)
-    })?;
+    broker
+        .write()
+        .await
+        .initialize(interfaces.as_slice())
+        .await
+        .map_err(|e| {
+            log::error!("Failed to initialize with broker: {:?}", e);
+            anyhow::anyhow!("Failed to initialize with broker: {:?}", e)
+        })?;
 
     let start = std::time::Instant::now();
     loop {
@@ -65,3 +71,9 @@ async fn async_main(stop: Arc<Notify>) -> Result<()> {
     log::info!("Service main async logic exiting");
     Ok(())
 }
+
+#[cfg(test)]
+pub mod testing;
+
+#[cfg(test)]
+mod tests;

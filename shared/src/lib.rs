@@ -42,6 +42,10 @@ pub mod windows;
 #[cfg(not(target_os = "windows"))]
 pub mod unix;
 
+// Mods used only for tests, so removed on release builds
+#[cfg(debug_assertions)]
+pub mod testing;
+
 #[macro_export]
 macro_rules! debug_dev {
     ($($arg:tt)*) => {
