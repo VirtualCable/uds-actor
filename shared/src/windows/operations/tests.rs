@@ -53,17 +53,21 @@ fn test_get_os_version() {
 // logoff is not tested to avoid logging off the test user
 
 #[test]
+#[ignore = "Manual test, requires user interaction (stay ilde :) )"]
 fn test_idle_timer() {
     setup_logging("debug", LogType::Tests);
     let ops = new_operations();
     let result = ops.init_idle_timer();
     assert!(result.is_ok());
+    // Wait a bit
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    // Get idle duration
     let result = ops.get_idle_duration();
     info!("Idle duration result: {:?}", result);
 
     assert!(result.is_ok());
     let duration = result.unwrap();
-    // Duration should be non-negative
+    // Duration should be non-negative, hopefully we don't moved the mouse :D
     assert!(duration.as_millis() >= 1);
 }
 
