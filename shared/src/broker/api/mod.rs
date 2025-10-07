@@ -100,15 +100,15 @@ pub struct UdsBrokerApi {
     client: Client,
     api_url: String,
     secret: Option<String>,
-    config: std::sync::Arc<tokio::sync::RwLock<crate::config::ActorConfiguration>>,
+    token: Option<String>,
+    actor_type: crate::config::ActorType,
 }
 
 #[allow(dead_code)]
 impl UdsBrokerApi {
     pub fn new(
-        config: std::sync::Arc<tokio::sync::RwLock<crate::config::ActorConfiguration>>,
+        cfg: crate::config::ActorConfiguration,
     ) -> Self {
-        let cfg = config.blocking_read();
         let mut builder = ClientBuilder::new()
             .timeout(cfg.timeout())
             .connection_verbose(cfg!(debug_assertions))
@@ -134,13 +134,12 @@ impl UdsBrokerApi {
         );
         let api_url = normalize_api_url(cfg.broker_url.as_str());
 
-        drop(cfg); // Drop read lock
-
         Self {
             api_url,
             client,
-            config,
             secret,
+            token: Some(cfg.token().clone()),
+            actor_type: cfg.actor_type.unwrap()
         }
     }
 
@@ -191,18 +190,12 @@ impl UdsBrokerApi {
     }
 
     pub fn get_token(&self) -> Result<String, types::RestError> {
-        let cfg = self.config.blocking_read();
-        let token = cfg.token();
-        if token.is_empty() {
-            Err(types::RestError::Other("No token set".to_string()))
-        } else {
-            Ok(token)
-        }
+        let token = self.token.clone();
+        token.ok_or_else(|| types::RestError::Other("No token set".to_string()))
     }
 
     pub fn actor_type(&self) -> crate::config::ActorType {
-        let cfg = self.config.blocking_read();
-        cfg.actor_type.clone().unwrap_or(crate::config::ActorType::Unmanaged)
+        self.actor_type.clone()
     }
 }
 
@@ -252,12 +245,8 @@ impl BrokerApi for UdsBrokerApi {
         &self,
         interfaces: &[crate::operations::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError> {
-        let actor_type = {
-            let cfg = self.config.read().await;
-            cfg.actor_type.clone().unwrap_or(crate::config::ActorType::Unmanaged)
-        };
         let payload = types::InitializationRequest {
-            actor_type,
+            actor_type: self.actor_type(),
             token: &self.get_token()?,
             version: crate::consts::VERSION,
             build: crate::consts::BUILD,

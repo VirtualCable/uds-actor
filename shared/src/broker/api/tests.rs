@@ -46,7 +46,7 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
 
     info!("Setting up mock server and API client");
     let broker = UdsBrokerApi::new(
-        std::sync::Arc::new(tokio::sync::RwLock::new(config)),
+        config
     );
     // Pass the base url (without /ui) to the API
     (

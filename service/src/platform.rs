@@ -10,14 +10,14 @@ pub struct Platform {
 impl Platform {
     pub fn new() -> Self {
         let mut cfg = shared::config::new_config_loader();
-        let config = cfg.config(true).unwrap();
+        let cfg = cfg.config(true).unwrap();
 
         // If no config, panic, we need config
-        let config = Arc::new(tokio::sync::RwLock::new(config));
+        let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
 
         let operations = shared::operations::new_operations();
         // TODO: Config for BrokerApi from config data
-        let broker_api = shared::broker::api::UdsBrokerApi::new(config.clone());
+        let broker_api = shared::broker::api::UdsBrokerApi::new(cfg);
 
         Self {
             config,
@@ -46,17 +46,17 @@ impl Platform {
         operations: Option<Arc<dyn shared::operations::Operations>>,
         broker_api: Option<Arc<tokio::sync::RwLock<dyn shared::broker::api::BrokerApi>>>,
     ) -> Self {
-        let config = if let Some(cfg) = config {
+        let cfg = if let Some(cfg) = config {
             cfg
         } else {
             let mut cfg = shared::config::new_config_loader();
             cfg.config(true).unwrap()
         };
-        let config = Arc::new(tokio::sync::RwLock::new(config));
+        let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
         let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
         let broker_api = broker_api.unwrap_or_else(|| {
             Arc::new(tokio::sync::RwLock::new(
-                shared::broker::api::UdsBrokerApi::new(config.clone())
+                shared::broker::api::UdsBrokerApi::new(cfg)
             ))
         });
 
