@@ -1,9 +1,12 @@
 // Fake api to test run function
 use crate::{
     actions::Actions,
+    broker::api,
     operations::{NetworkInterface, Operations},
 };
 use std::sync::{Arc, RwLock};
+
+use super::test_certs;
 
 #[derive(Clone, Default)]
 pub struct Calls {
@@ -204,5 +207,171 @@ impl Operations for FakeOperations {
             _path
         ));
         Ok(())
+    }
+}
+
+pub struct FakeBrokerApi {
+    calls: Calls,
+    secret: Option<String>,
+}
+
+impl FakeBrokerApi {
+    pub fn new(calls: Calls) -> Self {
+        Self {
+            calls,
+            secret: None,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl api::BrokerApi for FakeBrokerApi {
+    fn get_secret(&self) -> Result<&str, api::types::RestError> {
+        self.calls.push("broker_api::get_secret()");
+        self.secret
+            .as_deref()
+            .ok_or_else(|| api::types::RestError::Other("No secret set".into()))
+    }
+    async fn enumerate_authenticators(
+        &self,
+    ) -> Result<Vec<api::types::Authenticator>, api::types::RestError> {
+        self.calls.push("broker_api::enumerate_authenticators()");
+        Ok(vec![
+            api::types::Authenticator {
+                id: "auth1".to_string(),
+                label: "Auth One".to_string(),
+                auth: "auth1".to_string(),
+                auth_type: "type1".to_string(),
+                priority: 1,
+                is_custom: false,
+            },
+            api::types::Authenticator {
+                id: "auth2".to_string(),
+                label: "Auth Two".to_string(),
+                auth: "auth2".to_string(),
+                auth_type: "type2".to_string(),
+                priority: 2,
+                is_custom: true,
+            },
+        ])
+    }
+    async fn register(
+        &self,
+        username: &str,
+        hostname: &str,
+        interface: &crate::operations::NetworkInterface,
+        command: &api::types::RegisterCommandData,
+        log_level: api::types::LogLevel,
+        os: &str,
+    ) -> Result<String, api::types::RestError> {
+        self.calls.push(format!(
+            "broker_api::register({}, {}, {:?}, {:?}, {:?}, {})",
+            username, hostname, interface, command, log_level, os
+        ));
+        Ok("fake_registration_token".into())
+    }
+    async fn initialize(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+    ) -> Result<api::types::InitializationResponse, api::types::RestError> {
+        self.calls
+            .push(format!("broker_api::initialize({:?})", interfaces));
+        Ok(api::types::InitializationResponse {
+            master_token: Some("fake_master_token".into()),
+            token: Some("fake_token".into()),
+            unique_id: Some("fake_unique_id".into()),
+            os: None,
+        })
+    }
+    async fn ready(
+        &self,
+        ip: &str,
+        port: u16,
+    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+        self.calls
+            .push(format!("broker_api::ready({}, {})", ip, port));
+        let (cert, key) = test_certs::test_cert_and_key();
+        Ok(api::types::CertificateInfo {
+            key: String::from_utf8_lossy(key).into_owned(),
+            certificate: String::from_utf8_lossy(cert).into_owned(),
+            password: "".into(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
+        })
+    }
+    async fn unmanaged_ready(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        port: u16,
+    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+        self.calls.push(format!(
+            "broker_api::unmanaged_ready({:?}, {})",
+            interfaces, port
+        ));
+        let (cert, key) = test_certs::test_cert_and_key();
+        Ok(api::types::CertificateInfo {
+            key: String::from_utf8_lossy(key).into_owned(),
+            certificate: String::from_utf8_lossy(cert).into_owned(),
+            password: "".into(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
+        })
+    }
+    async fn notify_new_ip(
+        &self,
+        ip: &str,
+        port: u16,
+    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+        self.calls
+            .push(format!("broker_api::notify_new_ip({}, {})", ip, port));
+        let (cert, key) = test_certs::test_cert_and_key();
+        Ok(api::types::CertificateInfo {
+            key: String::from_utf8_lossy(key).into_owned(),
+            certificate: String::from_utf8_lossy(cert).into_owned(),
+            password: "".into(),
+            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
+        })
+    }
+    async fn login(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        username: &str,
+        session_type: &str,
+    ) -> Result<api::types::LoginResponse, api::types::RestError> {
+        self.calls.push(format!(
+            "broker_api::login({:?}, {}, {})",
+            interfaces, username, session_type
+        ));
+        Ok(api::types::LoginResponse {
+            ip: "fake_ip".into(),
+            hostname: "fakeHost".into(),
+            deadline: Some(3600),
+            max_idle: Some(600),
+            session_id: Some("fake_session_id".into()),
+        })
+    }
+    async fn logout(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        username: &str,
+        session_type: &str,
+        session_id: &str,
+    ) -> Result<String, api::types::RestError> {
+        self.calls.push(format!(
+            "broker_api::logout({:?}, {}, {}, {})",
+            interfaces, username, session_type, session_id
+        ));
+        Ok("Logged out".into())
+    }
+    async fn log(
+        &self,
+        level: api::types::LogLevel,
+        message: &str,
+    ) -> Result<String, api::types::RestError> {
+        self.calls
+            .push(format!("broker_api::log({:?}, {})", level, message));
+        Ok("Log received".into())
+    }
+    async fn test(&self) -> Result<String, api::types::RestError> {
+        self.calls.push("broker_api::test()");
+        Ok("Test successful".into())
     }
 }

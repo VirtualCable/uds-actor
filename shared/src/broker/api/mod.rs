@@ -26,9 +26,9 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+use rand::prelude::*;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 use crate::log;
 
@@ -36,59 +36,111 @@ pub mod consts;
 pub mod types;
 
 use anyhow::Result;
+use async_trait::async_trait;
+
+/// Trait that contains the public API methods of BrokerApi (everything except `new`)
+#[async_trait]
+pub trait BrokerApi: Send + Sync {
+    fn get_secret(&self) -> Result<&str, types::RestError>;
+
+    async fn enumerate_authenticators(&self)
+    -> Result<Vec<types::Authenticator>, types::RestError>;
+
+    async fn register(
+        &self,
+        username: &str,
+        hostname: &str,
+        interface: &crate::operations::NetworkInterface,
+        command: &types::RegisterCommandData,
+        log_level: types::LogLevel,
+        os: &str,
+    ) -> Result<String, types::RestError>;
+
+    async fn initialize(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+    ) -> Result<types::InitializationResponse, types::RestError>;
+
+    async fn ready(&self, ip: &str, port: u16) -> Result<types::CertificateInfo, types::RestError>;
+
+    async fn unmanaged_ready(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        port: u16,
+    ) -> Result<types::CertificateInfo, types::RestError>;
+
+    async fn notify_new_ip(
+        &self,
+        ip: &str,
+        port: u16,
+    ) -> Result<types::CertificateInfo, types::RestError>;
+
+    async fn login(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        username: &str,
+        session_type: &str,
+    ) -> Result<types::LoginResponse, types::RestError>;
+
+    async fn logout(
+        &self,
+        interfaces: &[crate::operations::NetworkInterface],
+        username: &str,
+        session_type: &str,
+        session_id: &str,
+    ) -> Result<String, types::RestError>;
+
+    async fn log(&self, level: types::LogLevel, message: &str) -> Result<String, types::RestError>;
+
+    async fn test(&self) -> Result<String, types::RestError>;
+}
 
 /// Client for REST API
-pub struct BrokerApi {
-    api_url: String,
+pub struct UdsBrokerApi {
     client: Client,
+    api_url: String,
     secret: Option<String>,
-    token: Option<String>,
-    actor_type: crate::config::ActorType,
+    config: std::sync::Arc<tokio::sync::RwLock<crate::config::ActorConfiguration>>,
 }
 
 #[allow(dead_code)]
-impl BrokerApi {
+impl UdsBrokerApi {
     pub fn new(
-        api_url: &str,
-        verify_ssl: bool,
-        timeout: Duration,
-        no_proxy: bool,
-        actor_type: Option<crate::config::ActorType>,
+        config: std::sync::Arc<tokio::sync::RwLock<crate::config::ActorConfiguration>>,
     ) -> Self {
+        let cfg = config.blocking_read();
         let mut builder = ClientBuilder::new()
-            .timeout(timeout)
+            .timeout(cfg.timeout())
             .connection_verbose(cfg!(debug_assertions))
-            .danger_accept_invalid_certs(!verify_ssl);
+            .danger_accept_invalid_certs(!cfg.verify_ssl);
 
-        if no_proxy {
+        if cfg.no_proxy {
             builder = builder.no_proxy();
         }
 
         // panic if client cannot be built, as this is a programming error (invalid URL, etc)
         let client = builder
             .build()
-            .map_err(|e| types::RestError::Other(e.to_string())).unwrap();
+            .map_err(|e| types::RestError::Other(e.to_string()))
+            .unwrap();
+
+        // Generate a secret using random rand crate
+        let rng = rand::rng();
+        let secret = Some(
+            rng.sample_iter(&rand::distr::Alphanumeric)
+                .take(32)
+                .map(char::from)
+                .collect(),
+        );
+        let api_url = normalize_api_url(cfg.broker_url.as_str());
+
+        drop(cfg); // Drop read lock
 
         Self {
-            api_url: normalize_api_url(api_url),
+            api_url,
             client,
-            secret: None,
-            token: None,
-            actor_type: actor_type.unwrap_or(crate::config::ActorType::Managed),
-        }
-    }
-
-    pub fn with_secret(self, secret: &str) -> Self {
-        Self {
-            secret: Some(secret.to_string()),
-            ..self
-        }
-    }
-
-    pub fn with_token(self, token: &str) -> Self {
-        Self {
-            token: Some(token.to_string()),
-            ..self
+            config,
+            secret,
         }
     }
 
@@ -105,6 +157,10 @@ impl BrokerApi {
 
     fn api_url(&self, method: &str) -> String {
         self.api_url.clone() + method
+    }
+
+    fn secret(&self) -> Option<String> {
+        self.secret.clone()
     }
 
     async fn do_post<T: for<'de> Deserialize<'de>, P: Serialize>(
@@ -134,29 +190,32 @@ impl BrokerApi {
         }
     }
 
-    pub fn set_secret(&mut self, secret: &str) {
-        self.secret = Some(secret.to_string());
+    pub fn get_token(&self) -> Result<String, types::RestError> {
+        let cfg = self.config.blocking_read();
+        let token = cfg.token();
+        if token.is_empty() {
+            Err(types::RestError::Other("No token set".to_string()))
+        } else {
+            Ok(token)
+        }
     }
 
-    pub fn set_token(&mut self, token: &str) {
-        self.token = Some(token.to_string());
+    pub fn actor_type(&self) -> crate::config::ActorType {
+        let cfg = self.config.blocking_read();
+        cfg.actor_type.clone().unwrap_or(crate::config::ActorType::Unmanaged)
     }
+}
 
-    pub fn get_secret(&self) -> Result<&str, types::RestError> {
+#[async_trait]
+impl BrokerApi for UdsBrokerApi {
+    fn get_secret(&self) -> Result<&str, types::RestError> {
         self.secret
             .as_ref()
             .map(|s| s.as_ref())
             .ok_or_else(|| types::RestError::Other("No secret set".to_string()))
     }
 
-    pub fn get_token(&self) -> Result<&str, types::RestError> {
-        self.token
-            .as_ref()
-            .map(|s| s.as_ref())
-            .ok_or_else(|| types::RestError::Other("No token set".to_string()))
-    }
-
-    pub async fn enumerate_authenticators(
+    async fn enumerate_authenticators(
         &self,
     ) -> Result<Vec<types::Authenticator>, types::RestError> {
         let response: types::ApiResponse<Vec<types::Authenticator>> =
@@ -164,8 +223,7 @@ impl BrokerApi {
         response.result()
     }
 
-    /// Registers the actor, returns the registration token as String
-    pub async fn register(
+    async fn register(
         &self,
         username: &str,
         hostname: &str,
@@ -186,18 +244,21 @@ impl BrokerApi {
             os,
         };
 
-        // Returns the registration token as string
         let response: types::ApiResponse<String> = self.do_post("register", &payload).await?;
         response.result()
     }
 
-    pub async fn initialize(
+    async fn initialize(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError> {
+        let actor_type = {
+            let cfg = self.config.read().await;
+            cfg.actor_type.clone().unwrap_or(crate::config::ActorType::Unmanaged)
+        };
         let payload = types::InitializationRequest {
-            actor_type: self.actor_type.clone(),
-            token: self.get_token()?,
+            actor_type,
+            token: &self.get_token()?,
             version: crate::consts::VERSION,
             build: crate::consts::BUILD,
             id: interfaces.iter().cloned().map(Into::into).collect(),
@@ -208,13 +269,9 @@ impl BrokerApi {
         response.result()
     }
 
-    pub async fn ready(
-        &self,
-        ip: &str,
-        port: u16,
-    ) -> Result<types::CertificateInfo, types::RestError> {
+    async fn ready(&self, ip: &str, port: u16) -> Result<types::CertificateInfo, types::RestError> {
         let payload = types::ReadyRequest {
-            token: self.get_token()?,
+            token: &self.get_token()?,
             secret: self.get_secret()?,
             ip,
             port,
@@ -225,17 +282,14 @@ impl BrokerApi {
         response.result()
     }
 
-    // Notifies a ready from an unmanaged actor
-    // Data passed in are used for callbacks
-    // That will be 'https://{ip}:{port}/actor/{secret}
-    pub async fn unmanaged_ready(
+    async fn unmanaged_ready(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         port: u16,
     ) -> Result<types::CertificateInfo, types::RestError> {
         let payload = types::UnmanagedReadyRequest {
             id: interfaces.iter().cloned().map(Into::into).collect(),
-            token: self.get_token()?,
+            token: &self.get_token()?,
             secret: self.get_secret()?,
             port,
         };
@@ -245,13 +299,13 @@ impl BrokerApi {
         response.result()
     }
 
-    pub async fn notify_new_ip(
+    async fn notify_new_ip(
         &self,
         ip: &str,
         port: u16,
     ) -> Result<types::CertificateInfo, types::RestError> {
         let payload = types::ReadyRequest {
-            token: self.get_token()?,
+            token: &self.get_token()?,
             secret: self.get_secret()?,
             ip,
             port,
@@ -262,16 +316,16 @@ impl BrokerApi {
         response.result()
     }
 
-    pub async fn login(
+    async fn login(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         username: &str,
         session_type: &str,
     ) -> Result<types::LoginResponse, types::RestError> {
         let payload = types::LoginRequest {
-            actor_type: self.actor_type.clone(),
+            actor_type: self.actor_type(),
             id: interfaces.iter().cloned().map(Into::into).collect(),
-            token: self.get_token()?,
+            token: &self.get_token()?,
             username,
             session_type,
         };
@@ -281,7 +335,7 @@ impl BrokerApi {
         response.result()
     }
 
-    pub async fn logout(
+    async fn logout(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         username: &str,
@@ -289,9 +343,9 @@ impl BrokerApi {
         session_id: &str,
     ) -> Result<String, types::RestError> {
         let payload = types::LogoutRequest {
-            actor_type: self.actor_type.clone(),
+            actor_type: self.actor_type(),
             id: interfaces.iter().cloned().map(Into::into).collect(),
-            token: self.get_token()?,
+            token: &self.get_token()?,
             username,
             session_type,
             session_id,
@@ -301,15 +355,9 @@ impl BrokerApi {
         response.result()
     }
 
-    /// Sends a log message to the server
-    /// Returns "ok" if successful (basically, if no Error, it's ok)
-    pub async fn log(
-        &self,
-        level: types::LogLevel,
-        message: &str,
-    ) -> Result<String, types::RestError> {
+    async fn log(&self, level: types::LogLevel, message: &str) -> Result<String, types::RestError> {
         let payload = types::LogRequest {
-            token: self.get_token()?,
+            token: &self.get_token()?,
             level,
             message,
             timestamp: chrono::Utc::now().timestamp(),
@@ -319,12 +367,10 @@ impl BrokerApi {
         response.result()
     }
 
-    /// Tests connectivity and authentication with the server
-    /// Returns "ok" if successful (basically, if no Error, it's ok)
-    pub async fn test(&self) -> Result<String, types::RestError> {
+    async fn test(&self) -> Result<String, types::RestError> {
         let payload = types::TestRequest {
-            actor_type: self.actor_type.clone(),
-            token: self.get_token()?,
+            actor_type: self.actor_type(),
+            token: &self.get_token()?,
         };
 
         let response: types::ApiResponse<String> = self.do_post("test", &payload).await?;

@@ -35,7 +35,7 @@ pub struct ActorDataConfiguration {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorConfiguration {
-    pub host: String,
+    pub broker_url: String,
     pub verify_ssl: bool,
     pub actor_type: Option<ActorType>,
     pub master_token: Option<String>, // Configured master token. Will be replaced by unique one if unmanaged
@@ -45,8 +45,29 @@ pub struct ActorConfiguration {
     pub runonce_command: Option<String>,
     pub post_command: Option<String>,
     pub log_level: i32,
+    pub timeout: Option<u64>, // Timeout for API calls, in seconds
+    pub no_proxy: bool,       // If true, do not use proxy from env vars
+    // Additional configuration data from server
     pub config: Option<ActorDataConfiguration>,
     pub data: Option<serde_json::Value>,
+}
+
+impl ActorConfiguration {
+    pub fn token(&self) -> String {
+        if let Some(token) = self.master_token.clone() {
+            token
+        } else {
+            self.own_token.as_deref().unwrap_or("").to_string()
+        }
+    }
+
+    pub fn timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.timeout.unwrap_or(10))
+    }
+
+    pub fn no_proxy(&self) -> bool {
+        self.no_proxy
+    }
 }
 
 pub trait Configuration {
@@ -74,7 +95,7 @@ mod tests {
 
     fn get_test_config() -> ActorConfiguration {
         ActorConfiguration {
-            host: "https://example.com".to_string(),
+            broker_url: "https://example.com".to_string(),
             verify_ssl: true,
             actor_type: Some(ActorType::Managed),
             master_token: Some("master123".to_string()),
@@ -84,6 +105,8 @@ mod tests {
             runonce_command: None,
             post_command: None,
             log_level: 3,
+            timeout: Some(15),
+            no_proxy: false,
             config: None,
             data: None,
         }
@@ -110,7 +133,7 @@ mod tests {
             }
         }
 
-        a.host == b.host
+        a.broker_url == b.broker_url
             && a.verify_ssl == b.verify_ssl
             && a.actor_type == b.actor_type
             && a.master_token == b.master_token
@@ -120,6 +143,8 @@ mod tests {
             && a.runonce_command == b.runonce_command
             && a.post_command == b.post_command
             && a.log_level == b.log_level
+            && a.timeout == b.timeout
+            && a.no_proxy == b.no_proxy
     }
 
     #[test]

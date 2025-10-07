@@ -20,9 +20,8 @@ use shared::ws::{
     wait_for_request,
 };
 
-use shared::log;
+use shared::{log, testing::test_certs};
 
-mod helpers;
 
 type ServerTaskResult = (
     ServerInfo,
@@ -40,7 +39,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
 
     let tracker = RequestTracker::new();
-    let (cert_pem, key_pem) = helpers::test_certs::test_cert_and_key();
+    let (cert_pem, key_pem) = test_certs::test_cert_and_key();
     let notify = Arc::new(tokio::sync::Notify::new());
 
     let server_info = ServerInfo {

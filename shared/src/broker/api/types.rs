@@ -184,11 +184,16 @@ impl From<crate::operations::NetworkInterface> for InterfaceInfo {
     }
 }
 
+// TODO: On a future, use the new authenticator structure from server
+// when server is updated to a version that supports it
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Authenticator {
-    pub auth_id: String,
-    pub auth_small_name: String,
+    #[serde(rename = "auth_id")]
+    pub id: String,
+    #[serde(rename = "auth_small_name")]
+    pub label: String,
     pub auth: String,
+    #[serde(rename = "type")]
     pub auth_type: String,
     pub priority: i32,
     pub is_custom: bool,

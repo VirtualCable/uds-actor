@@ -33,24 +33,25 @@ use mockito::{Matcher, Server};
 
 // Helper to create a ServerRestApi pointing to mockito server
 // Helper to create a mockito server and a ServerRestApi pointing to it
-async fn setup_server_and_api() -> (mockito::ServerGuard, BrokerApi) {
+async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
     log::setup_logging("debug", log::LogType::Tests);
 
-    info!("Setting up mock server and API client");
     let server = Server::new_async().await;
     let url = server.url() + "/"; // For testing, our base URL will be the mockito server
+
+    let mut config = crate::config::ActorConfiguration::default();
+    config.broker_url = url;
+    config.master_token = Some("token".to_string());
+    config.actor_type = Some(crate::config::ActorType::Managed);
+
+    info!("Setting up mock server and API client");
+    let broker = UdsBrokerApi::new(
+        std::sync::Arc::new(tokio::sync::RwLock::new(config)),
+    );
     // Pass the base url (without /ui) to the API
     (
         server,
-        BrokerApi::new(
-            &url,
-            false,
-            std::time::Duration::from_secs(5),
-            true,
-            Some(crate::config::ActorType::Managed),
-        )
-        .with_token("token")
-        .with_secret("secret"),
+        broker
     )
 }
 
@@ -115,16 +116,16 @@ async fn test_enumerate_authenticators() {
     let result = types::ApiResponse::<Vec<types::Authenticator>> {
         result: vec![
             types::Authenticator {
-                auth_id: "auth1".to_string(),
-                auth_small_name: "Auth One".to_string(),
+                id: "auth1".to_string(),
+                label: "Auth One".to_string(),
                 auth: "auth1".to_string(),
                 auth_type: "type1".to_string(),
                 priority: 1,
                 is_custom: false,
             },
             types::Authenticator {
-                auth_id: "auth2".to_string(),
-                auth_small_name: "Auth Two".to_string(),
+                id: "auth2".to_string(),
+                label: "Auth Two".to_string(),
                 auth: "auth2".to_string(),
                 auth_type: "type2".to_string(),
                 priority: 2,
@@ -148,8 +149,8 @@ async fn test_enumerate_authenticators() {
     );
     let auths = response.unwrap();
     assert_eq!(auths.len(), 2);
-    assert_eq!(auths[0].auth_id, "auth1");
-    assert_eq!(auths[1].auth_id, "auth2");
+    assert_eq!(auths[0].id, "auth1");
+    assert_eq!(auths[1].id, "auth2");
 }
 
 #[tokio::test]
@@ -228,7 +229,7 @@ async fn test_initialize() {
     };
     let payload = types::InitializationRequest {
         actor_type: crate::config::ActorType::Managed,
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         version: crate::consts::VERSION,
         build: crate::consts::BUILD,
         id: create_test_id().iter().cloned().map(Into::into).collect(),
@@ -263,7 +264,7 @@ async fn test_ready() {
         error: None,
     };
     let payload = types::ReadyRequest {
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         secret: api.get_secret().unwrap(),
         ip: "10.0.0.1",
         port: 1234,
@@ -297,7 +298,7 @@ async fn test_unmanaged_ready() {
     };
     let payload = types::UnmanagedReadyRequest {
         id: create_test_id().iter().cloned().map(Into::into).collect(),
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         secret: api.get_secret().unwrap(),
         port: 1234,
     }; // Note: unmanaged actors also use the same ready request
@@ -334,7 +335,7 @@ async fn test_ready_ip_changed() {
         error: None,
     };
     let payload = types::ReadyRequest {
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         secret: api.get_secret().unwrap(),
         ip: "10.0.0.1",
         port: 1234,
@@ -364,7 +365,7 @@ async fn test_logout() {
     let payload = types::LogoutRequest {
         actor_type: crate::config::ActorType::Managed,
         id: create_test_id().iter().cloned().map(Into::into).collect(),
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         username: "testuser",
         session_type: "session",
         session_id: "session123",
@@ -399,7 +400,7 @@ async fn test_log() {
         error: None,
     };
     let payload = types::LogRequest {
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
         level: types::LogLevel::Info,
         message: "Test log message",
         timestamp: 1234567890,
@@ -436,7 +437,7 @@ async fn test_test() {
     };
     let payload = types::TestRequest {
         actor_type: crate::config::ActorType::Managed,
-        token: api.get_token().unwrap(),
+        token: &api.get_token().unwrap(),
     };
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for test: {}", payload_value);
