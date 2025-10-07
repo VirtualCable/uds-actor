@@ -147,7 +147,7 @@ impl crate::operations::Operations for UnixOperations {
         session::logout()
     }
 
-    fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterfaceInfo>> {
+    fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterface>> {
         log::debug!("UnixOperations::get_network_info called");
         network::get_network_info()
     }
