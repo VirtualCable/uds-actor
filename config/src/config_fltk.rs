@@ -47,12 +47,11 @@ pub struct ConfigGui {
 
 impl ConfigGui {
     pub fn new() -> Self {
-	let mut win = Window::new(2238, 1686, 614, 342, None);
+	let mut win = Window::new(2660, 1369, 614, 342, None);
 	win.set_label(r#"UDS Actor config"#);
 	win.set_type(WindowType::Double);
 	win.make_resizable(true);
 	win.set_frame(FrameType::UpBox);
-	win.set_label_font(Font::by_index(8));
 	win.size_range(524, 332, 0, 0, );
 	let mut fl2rust_widget_0 = Tabs::new(0, 0, 614, 286, None);
 	win.resizable(&fl2rust_widget_0);
