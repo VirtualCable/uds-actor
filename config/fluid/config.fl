@@ -4,7 +4,8 @@ header_name {.h}
 code_name {.cxx}
 class ConfigGui {open
 } {
-  Function {make_window()} {} {
+  Function {new()} {selected
+  } {
     Fl_Window win {
       label {UDS Actor config} open
       xywh {2238 1686 614 342} type Double box UP_BOX labelfont 8 resizable size_range {524 332 0 0} visible
