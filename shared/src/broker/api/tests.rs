@@ -45,14 +45,9 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
     config.actor_type = Some(crate::config::ActorType::Managed);
 
     info!("Setting up mock server and API client");
-    let broker = UdsBrokerApi::new(
-        config
-    );
+    let broker = UdsBrokerApi::new(config, false, None);
     // Pass the base url (without /ui) to the API
-    (
-        server,
-        broker
-    )
+    (server, broker)
 }
 
 // Helper to create an id with some interfaces
@@ -313,10 +308,7 @@ async fn test_unmanaged_ready() {
         .create_async()
         .await;
     let response = api
-        .unmanaged_ready(
-            create_test_id().as_slice(),
-            payload.port,
-        )
+        .unmanaged_ready(create_test_id().as_slice(), payload.port)
         .await;
     assert!(response.is_ok(), "Unmanaged ready failed: {:?}", response);
 }

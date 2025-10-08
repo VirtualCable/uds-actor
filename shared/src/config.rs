@@ -45,8 +45,6 @@ pub struct ActorConfiguration {
     pub runonce_command: Option<String>,
     pub post_command: Option<String>,
     pub log_level: i32,
-    pub timeout: Option<u64>, // Timeout for API calls, in seconds
-    pub no_proxy: bool,       // If true, do not use proxy from env vars
     // Additional configuration data from server
     pub config: Option<ActorDataConfiguration>,
     pub data: Option<serde_json::Value>,
@@ -59,14 +57,6 @@ impl ActorConfiguration {
         } else {
             self.own_token.as_deref().unwrap_or("").to_string()
         }
-    }
-
-    pub fn timeout(&self) -> std::time::Duration {
-        std::time::Duration::from_secs(self.timeout.unwrap_or(10))
-    }
-
-    pub fn no_proxy(&self) -> bool {
-        self.no_proxy
     }
 }
 
@@ -105,8 +95,6 @@ mod tests {
             runonce_command: None,
             post_command: None,
             log_level: 3,
-            timeout: Some(15),
-            no_proxy: false,
             config: None,
             data: None,
         }
@@ -143,8 +131,6 @@ mod tests {
             && a.runonce_command == b.runonce_command
             && a.post_command == b.post_command
             && a.log_level == b.log_level
-            && a.timeout == b.timeout
-            && a.no_proxy == b.no_proxy
     }
 
     #[test]

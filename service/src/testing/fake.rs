@@ -18,8 +18,6 @@ pub async fn create_fake_platform() -> Platform {
         runonce_command: None,
         post_command: None,
         log_level: 0,
-        timeout: None,
-        no_proxy: false,
         config: None,
         data: None,
     };

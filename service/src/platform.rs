@@ -17,7 +17,7 @@ impl Platform {
 
         let operations = shared::operations::new_operations();
         // TODO: Config for BrokerApi from config data
-        let broker_api = shared::broker::api::UdsBrokerApi::new(cfg);
+        let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
 
         Self {
             config,
@@ -56,7 +56,7 @@ impl Platform {
         let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
         let broker_api = broker_api.unwrap_or_else(|| {
             Arc::new(tokio::sync::RwLock::new(
-                shared::broker::api::UdsBrokerApi::new(cfg)
+                shared::broker::api::UdsBrokerApi::new(cfg, false, None)
             ))
         });
 

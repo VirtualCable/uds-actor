@@ -110,13 +110,16 @@ pub struct UdsBrokerApi {
 impl UdsBrokerApi {
     pub fn new(
         cfg: crate::config::ActorConfiguration,
+        skip_proxy: bool,
+        timeout: Option<std::time::Duration>,
+
     ) -> Self {
         let mut builder = ClientBuilder::new()
-            .timeout(cfg.timeout())
+            .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
             .connection_verbose(cfg!(debug_assertions))
             .danger_accept_invalid_certs(!cfg.verify_ssl);
 
-        if cfg.no_proxy {
+        if skip_proxy {
             builder = builder.no_proxy();
         }
 
