@@ -25,7 +25,6 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use super::*;
-use super::{consts, types};
 
 use crate::log::{self, info};
 
@@ -66,71 +65,34 @@ fn create_test_id() -> Vec<crate::operations::NetworkInterface> {
     ]
 }
 
-#[tokio::test]
-async fn test_normalize_api_url() {
-    // If it ends with /, it is returned as is
-    assert_eq!(
-        normalize_api_url("https://example.com/"),
-        "https://example.com/"
-    );
-    assert_eq!(
-        normalize_api_url("https://example.com/somepath/"),
-        "https://example.com/somepath/"
-    );
-    assert_eq!(
-        normalize_api_url("https://example.com:8080/"),
-        "https://example.com:8080/"
-    );
-    assert_eq!(
-        normalize_api_url("https://example.com:8080/somepath/"),
-        "https://example.com:8080/somepath/"
-    );
-    // If it does not end with /, and has no path, append the default path
-    assert_eq!(
-        normalize_api_url("https://example.com"),
-        format!("https://example.com/{}", consts::UDS_ACTOR_ENDPOINT)
-    );
-    assert_eq!(
-        normalize_api_url("https://example.com:8080"),
-        format!("https://example.com:8080/{}", consts::UDS_ACTOR_ENDPOINT)
-    );
-    // If it does not end with /, but has a path, append also the default path
-    assert_eq!(
-        normalize_api_url("https://example.com/somepath"),
-        format!(
-            "https://example.com/somepath/{}",
-            consts::UDS_ACTOR_ENDPOINT
-        )
-    );
+fn rest_actor_path(method: &str) -> String {
+    format!("/{}{}", consts::REST_ACTOR_PATH, method)
 }
 
 #[tokio::test]
 async fn test_enumerate_authenticators() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let result = types::ApiResponse::<Vec<types::Authenticator>> {
-        result: vec![
-            types::Authenticator {
-                id: "auth1".to_string(),
-                label: "Auth One".to_string(),
-                auth: "auth1".to_string(),
-                auth_type: "type1".to_string(),
-                priority: 1,
-                is_custom: false,
-            },
-            types::Authenticator {
-                id: "auth2".to_string(),
-                label: "Auth Two".to_string(),
-                auth: "auth2".to_string(),
-                auth_type: "type2".to_string(),
-                priority: 2,
-                is_custom: true,
-            },
-        ],
-        error: None,
-    };
+    let result = vec![
+        types::Authenticator {
+            id: "auth1".to_string(),
+            label: "Auth One".to_string(),
+            auth: "auth1".to_string(),
+            auth_type: "type1".to_string(),
+            priority: 1,
+            custom: false,
+        },
+        types::Authenticator {
+            id: "auth2".to_string(),
+            label: "Auth Two".to_string(),
+            auth: "auth2".to_string(),
+            auth_type: "type2".to_string(),
+            priority: 2,
+            custom: true,
+        },
+    ];
     let _m = server
-        .mock("POST", "/auth/auths")
+        .mock("GET", "/auth/auths")
         .match_header("content-type", "application/json")
         .with_body(serde_json::to_string(&result).unwrap())
         .with_status(200)
@@ -149,10 +111,42 @@ async fn test_enumerate_authenticators() {
 }
 
 #[tokio::test]
+async fn test_api_login() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let login_req = types::ApiLoginRequest {
+        auth: "auth1",
+        username: "testuser",
+        password: "testpass",
+    };
+    let result = types::ApiLoginResponse {
+        token: "logintoken".to_string(),
+        result: "ok".to_string(),
+        error: None,
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&login_req).unwrap();
+    info!("Payload for api_login: {}", payload_value);
+    let _m = server
+        .mock("POST", "/auth/login")
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api
+        .api_login(login_req.auth, login_req.username, login_req.password)
+        .await;
+    assert!(response.is_ok(), "API login failed: {:?}", response);
+    let token = response.unwrap();
+    assert_eq!(token, "logintoken");
+}
+
+#[tokio::test]
 async fn test_register() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let payload = types::RegisterRequest {
+    let reg_req = types::RegisterRequest {
         version: crate::consts::VERSION,
         build: crate::consts::BUILD,
         username: "testuser",
@@ -173,11 +167,11 @@ async fn test_register() {
         error: None,
     };
 
-    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    let payload_value: serde_json::Value = serde_json::to_value(&reg_req).unwrap();
     info!("Payload for register: {}", payload_value);
 
     let _m = server
-        .mock("POST", "/register")
+        .mock("POST", rest_actor_path("register").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::PartialJson(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -185,20 +179,7 @@ async fn test_register() {
         .create_async()
         .await;
 
-    let response = api
-        .register(
-            payload.username,
-            payload.hostname,
-            &crate::operations::NetworkInterface {
-                name: "eth0".to_string(),
-                mac: payload.mac.to_string(),
-                ip_addr: payload.ip.to_string(),
-            },
-            &payload.command,
-            payload.log_level,
-            payload.os,
-        )
-        .await;
+    let response = api.register(&reg_req).await;
 
     assert!(response.is_ok(), "Register failed: {:?}", response);
     let token = response.unwrap();
@@ -233,7 +214,7 @@ async fn test_initialize() {
     info!("Payload for initialize: {}", payload_value);
 
     let _m = server
-        .mock("POST", "/initialize")
+        .mock("POST", rest_actor_path("initialize").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -267,7 +248,7 @@ async fn test_ready() {
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for ready: {}", payload_value);
     let _m = server
-        .mock("POST", "/ready")
+        .mock("POST", rest_actor_path("ready").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -300,7 +281,7 @@ async fn test_unmanaged_ready() {
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for unmanaged ready: {}", payload_value);
     let _m = server
-        .mock("POST", "/unmanaged")
+        .mock("POST", rest_actor_path("unmanaged").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -335,7 +316,7 @@ async fn test_ready_ip_changed() {
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for ready: {}", payload_value);
     let _m = server
-        .mock("POST", "/ipchange")
+        .mock("POST", rest_actor_path("ipchange").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -365,7 +346,7 @@ async fn test_logout() {
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for logout: {}", payload_value);
     let _m = server
-        .mock("POST", "/logout")
+        .mock("POST", rest_actor_path("logout").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -408,7 +389,7 @@ async fn test_log() {
 
     info!("Payload for log: {}", payload_value);
     let _m = server
-        .mock("POST", "/log")
+        .mock("POST", rest_actor_path("log").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::PartialJson(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())
@@ -434,7 +415,7 @@ async fn test_test() {
     let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
     info!("Payload for test: {}", payload_value);
     let _m = server
-        .mock("POST", "/test")
+        .mock("POST", rest_actor_path("test").as_str())
         .match_header("content-type", "application/json")
         .match_body(Matcher::Json(payload_value))
         .with_body(serde_json::to_string(&result).unwrap())

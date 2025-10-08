@@ -26,9 +26,9 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-// Must end in /
-pub const UDS_ACTOR_ENDPOINT: &str = "uds/rest/actor/v3/";
+pub const REST_ACTOR_PATH: &str = "actor/v3/";
 
+// Must end in /
 pub const UDS_ACTOR_AGENT: &str = concat!(
     "UDS Actor v",
     env!("CARGO_PKG_VERSION"),  // concat needs literals

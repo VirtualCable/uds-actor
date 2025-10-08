@@ -243,7 +243,7 @@ impl api::BrokerApi for FakeBrokerApi {
                 auth: "auth1".to_string(),
                 auth_type: "type1".to_string(),
                 priority: 1,
-                is_custom: false,
+                custom: false,
             },
             api::types::Authenticator {
                 id: "auth2".to_string(),
@@ -251,23 +251,30 @@ impl api::BrokerApi for FakeBrokerApi {
                 auth: "auth2".to_string(),
                 auth_type: "type2".to_string(),
                 priority: 2,
-                is_custom: true,
+                custom: true,
             },
         ])
     }
-    async fn register(
+
+    async fn api_login(
         &self,
+        auth: &str,
         username: &str,
-        hostname: &str,
-        interface: &crate::operations::NetworkInterface,
-        command: &api::types::RegisterCommandData,
-        log_level: api::types::LogLevel,
-        os: &str,
+        _password: &str,
     ) -> Result<String, api::types::RestError> {
         self.calls.push(format!(
-            "broker_api::register({}, {}, {:?}, {:?}, {:?}, {})",
-            username, hostname, interface, command, log_level, os
+            "broker_api::api_login({}, {}, ***)",
+            auth, username
         ));
+        Ok("fake_auth_token".into())
+    }
+
+    async fn register(
+        &self,
+        req: &api::types::RegisterRequest,
+    ) -> Result<String, api::types::RestError> {
+        self.calls
+            .push(format!("broker_api::register({:?})", req));
         Ok("fake_registration_token".into())
     }
     async fn initialize(

@@ -2,7 +2,7 @@ use shared::config::{ActorConfiguration, ActorType};
 
 pub fn create_config(hostname: &str, verify_ssl: bool) -> ActorConfiguration {
     ActorConfiguration {
-        broker_url: format!("https://{hostname}"),
+        broker_url: format!("https://{hostname}/uds/rest/"),
         verify_ssl,
         actor_type: Some(ActorType::Managed),
         master_token: None,

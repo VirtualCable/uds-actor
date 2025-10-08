@@ -43,19 +43,24 @@ use async_trait::async_trait;
 /// Trait that contains the public API methods of BrokerApi (everything except `new`)
 #[async_trait]
 pub trait BrokerApi: Send + Sync {
+    fn clear_headers(&self) {}
+    fn set_header(&self, _key: &str, _value: &str) {}
+
     fn get_secret(&self) -> Result<&str, types::RestError>;
 
     async fn enumerate_authenticators(&self)
     -> Result<Vec<types::Authenticator>, types::RestError>;
 
+    async fn api_login(
+        &self,
+        auth: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<String, types::RestError>;
+
     async fn register(
         &self,
-        username: &str,
-        hostname: &str,
-        interface: &crate::operations::NetworkInterface,
-        command: &types::RegisterCommandData,
-        log_level: types::LogLevel,
-        os: &str,
+        info: &types::RegisterRequest,
     ) -> Result<String, types::RestError>;
 
     async fn initialize(
@@ -104,15 +109,15 @@ pub struct UdsBrokerApi {
     secret: Option<String>,
     token: Option<String>,
     actor_type: crate::config::ActorType,
+    custom_headers: reqwest::header::HeaderMap,
 }
 
 #[allow(dead_code)]
 impl UdsBrokerApi {
     pub fn new(
-        cfg: crate::config::ActorConfiguration,
+        cfg: &crate::config::ActorConfiguration,
         skip_proxy: bool,
         timeout: Option<std::time::Duration>,
-
     ) -> Self {
         let mut builder = ClientBuilder::new()
             .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
@@ -137,14 +142,28 @@ impl UdsBrokerApi {
                 .map(char::from)
                 .collect(),
         );
-        let api_url = normalize_api_url(cfg.broker_url.as_str());
+        let api_url = cfg.broker_url.clone();
+        let actor_type = cfg.actor_type.clone().unwrap_or_default();
 
         Self {
             api_url,
             client,
             secret,
             token: Some(cfg.token().clone()),
-            actor_type: cfg.actor_type.unwrap()
+            actor_type,
+            custom_headers: reqwest::header::HeaderMap::new(),
+        }
+    }
+
+    fn clear_headers(&mut self) {
+        self.custom_headers.clear();
+    }
+
+    fn set_header(&mut self, key: &str, value: &str) {
+        if let Ok(header_value) = reqwest::header::HeaderValue::from_str(value)
+            && let Ok(header_name) = reqwest::header::HeaderName::from_bytes(key.as_bytes())
+        {
+            self.custom_headers.insert(header_name, header_value);
         }
     }
 
@@ -156,11 +175,20 @@ impl UdsBrokerApi {
             USER_AGENT,
             HeaderValue::from_str(consts::UDS_ACTOR_AGENT).unwrap(),
         );
+        // Add custom headers
+        for (key, value) in self.custom_headers.iter() {
+            headers.insert(key, value.clone());
+        }
         headers
     }
 
     fn api_url(&self, method: &str) -> String {
-        self.api_url.clone() + method
+        // if / is on url, do not transform (already a path), else add consts::REST_ACTOR_PATH
+        if method.contains('/') {
+            self.api_url.clone() + method
+        } else {
+            self.api_url.clone() + consts::REST_ACTOR_PATH + method
+        }
     }
 
     fn secret(&self) -> Option<String> {
@@ -178,6 +206,31 @@ impl UdsBrokerApi {
             .post(self.api_url(method))
             .headers(self.headers())
             .json(payload)
+            .send()
+            .await
+            .map_err(|e| types::RestError::Connection(e.to_string()))?;
+
+        if resp.status().is_success() {
+            let json = resp
+                .json::<T>()
+                .await
+                .map_err(|e| types::RestError::Other(e.to_string()))?;
+            Ok(json)
+        } else {
+            let txt = resp.text().await.unwrap_or_default();
+            Err(types::RestError::Other(txt))
+        }
+    }
+
+    async fn do_get<T: for<'de> Deserialize<'de>>(
+        &self,
+        url: &str,
+    ) -> Result<T, types::RestError> {
+        log::debug!("GET to {}", url);
+        let resp = self
+            .client
+            .get(self.api_url(url))
+            .headers(self.headers())
             .send()
             .await
             .map_err(|e| types::RestError::Connection(e.to_string()))?;
@@ -216,33 +269,36 @@ impl BrokerApi for UdsBrokerApi {
     async fn enumerate_authenticators(
         &self,
     ) -> Result<Vec<types::Authenticator>, types::RestError> {
-        let response: types::ApiResponse<Vec<types::Authenticator>> =
-            self.do_post("auth/auths", &()).await?;
-        response.result()
+        // GET on "auth/auths"
+        let response: Vec<types::Authenticator> = self.do_get("auth/auths").await?;
+
+        Ok(response)
+    }
+
+    /// Log in to the API
+    async fn api_login(
+        &self,
+        auth: &str, // Auhthenticator name
+        username: &str,
+        password: &str,
+    ) -> Result<String, types::RestError> {
+        let auth_info = types::ApiLoginRequest {
+            auth,
+            username,
+            password,
+        };
+        let response: types::ApiLoginResponse =
+            self.do_post("auth/login", &auth_info).await?;
+        Ok(response.token)
     }
 
     async fn register(
         &self,
-        username: &str,
-        hostname: &str,
-        interface: &crate::operations::NetworkInterface,
-        command: &types::RegisterCommandData,
-        log_level: types::LogLevel,
-        os: &str,
+        info: &types::RegisterRequest,
     ) -> Result<String, types::RestError> {
-        let payload = types::RegisterRequest {
-            version: crate::consts::VERSION,
-            build: crate::consts::BUILD,
-            username,
-            hostname,
-            ip: &interface.ip_addr,
-            mac: &interface.mac,
-            command: command.clone(),
-            log_level,
-            os,
-        };
-
-        let response: types::ApiResponse<String> = self.do_post("register", &payload).await?;
+        // Now, register
+        let response: types::ApiResponse<String> =
+            self.do_post("register", &info).await?;
         response.result()
     }
 
@@ -369,15 +425,6 @@ impl BrokerApi for UdsBrokerApi {
 
         let response: types::ApiResponse<String> = self.do_post("test", &payload).await?;
         response.result()
-    }
-}
-
-pub fn normalize_api_url(api_url: &str) -> String {
-    // If api_url ends with a /, we assume it is a full path already
-    if !api_url.ends_with('/') {
-        format!("{}/{}", api_url, consts::UDS_ACTOR_ENDPOINT)
-    } else {
-        api_url.to_string()
     }
 }
 

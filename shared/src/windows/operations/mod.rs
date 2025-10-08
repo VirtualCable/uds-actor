@@ -431,6 +431,11 @@ impl Operations for WindowsOperations {
                             data[4] as u8,
                             data[5] as u8,
                         );
+                        // Skip loopback, fe800::/7 and 169.254.0.0/16 (link-local)
+                        if ip.is_loopback() || ip.is_link_local() {
+                            addr = (*addr).Next;
+                            continue;
+                        }
                         results.push(NetworkInterface {
                             name: name.clone(),
                             ip_addr: ip.to_string(),

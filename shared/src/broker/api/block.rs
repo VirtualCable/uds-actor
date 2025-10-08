@@ -27,25 +27,22 @@ fn create_runtime() -> Result<Runtime> {
 /// runtime, run the async `register` call and return the resulting String or
 /// an anyhow::Error on failure.
 pub fn register(
-	cfg: ActorConfiguration,
-	username: &str,
-	hostname: &str,
-	interface: crate::operations::NetworkInterface,
-	command: types::RegisterCommandData,
-	os: &str,
+	cfg: &ActorConfiguration,
+	req: &types::RegisterRequest,
+	token: &str,  // Registation need api token
 ) -> Result<String> {
 	let rt = create_runtime()?;
-    let loglevel = cfg.log_level;
 	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
+	api.set_header("X-Auth-Token", token);
 
-	let res = rt.block_on(async { api.register(username, hostname, &interface, &command, loglevel.into(), os).await });
+	let res = rt.block_on(async { api.register(req).await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
 }
 
 /// Synchronous wrapper for `UdsBrokerApi::test`.
-pub fn test(cfg: ActorConfiguration) -> Result<String> {
+pub fn test(cfg: &ActorConfiguration, timeout: Option<std::time::Duration>) -> Result<String> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
+	let api = UdsBrokerApi::new(cfg, false, timeout);
 
 	let res = rt.block_on(async { api.test().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
@@ -53,12 +50,26 @@ pub fn test(cfg: ActorConfiguration) -> Result<String> {
 
 /// Synchronous wrapper for `UdsBrokerApi::enumerate_authenticators`.
 pub fn enumerate_authenticators(
-	cfg: ActorConfiguration,
+	cfg: &ActorConfiguration,
+	timeout: Option<std::time::Duration>,
 ) -> Result<Vec<types::Authenticator>> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(800)));
+	let api = UdsBrokerApi::new(cfg, false, timeout);
 
 	let res = rt.block_on(async { api.enumerate_authenticators().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
 }
 
+/// Synchronous wrapper for `UdsBrokerApi::api_login`.
+pub fn api_login(
+	cfg: &ActorConfiguration,
+	auth: &str,
+	username: &str,
+	password: &str,
+) -> Result<String> {
+	let rt = create_runtime()?;
+	let api = UdsBrokerApi::new(cfg, false, None);
+
+	let res = rt.block_on(async { api.api_login(auth, username, password).await });
+	res.map_err(|e| anyhow!(format!("{:?}", e)))
+}

@@ -41,6 +41,13 @@ pub enum RestError {
 //   Requests
 // ************
 #[derive(Debug, Serialize)]
+pub struct ApiLoginRequest<'a> {
+    pub auth: &'a str,
+    pub username: &'a str,
+    pub password: &'a str,
+}
+
+#[derive(Debug, Serialize)]
 pub struct InitializationRequest<'a> {
     #[serde(rename = "type")]
     pub actor_type: ActorType,
@@ -119,6 +126,13 @@ pub struct TestRequest<'a> {
 //   Responses
 // ************
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ApiLoginResponse {
+    pub result: String, // Info
+    pub error: Option<String>,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InitializationResponse {
     pub master_token: Option<String>, // New master token (if unmanaged, this will be unique, may be same as provided)
     pub token: Option<String>, // For managed only. Will replace master_token by a new unique token provided by server
@@ -190,13 +204,13 @@ impl From<crate::operations::NetworkInterface> for InterfaceInfo {
 pub struct Authenticator {
     #[serde(rename = "auth_id")]
     pub id: String,
-    #[serde(rename = "auth_small_name")]
+    #[serde(rename = "auth_label")]
     pub label: String,
     pub auth: String,
     #[serde(rename = "type")]
     pub auth_type: String,
     pub priority: i32,
-    pub is_custom: bool,
+    pub custom: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
