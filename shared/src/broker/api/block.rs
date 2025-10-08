@@ -36,7 +36,7 @@ pub fn register(
 ) -> Result<String> {
 	let rt = create_runtime()?;
     let loglevel = cfg.log_level;
-	let api = UdsBrokerApi::new(cfg, false, None);
+	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
 
 	let res = rt.block_on(async { api.register(username, hostname, &interface, &command, loglevel.into(), os).await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
@@ -45,7 +45,7 @@ pub fn register(
 /// Synchronous wrapper for `UdsBrokerApi::test`.
 pub fn test(cfg: ActorConfiguration) -> Result<String> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, None);
+	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
 
 	let res = rt.block_on(async { api.test().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
@@ -56,7 +56,7 @@ pub fn enumerate_authenticators(
 	cfg: ActorConfiguration,
 ) -> Result<Vec<types::Authenticator>> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, None);
+	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(800)));
 
 	let res = rt.block_on(async { api.enumerate_authenticators().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))

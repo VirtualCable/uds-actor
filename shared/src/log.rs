@@ -26,8 +26,15 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{fs, fs::OpenOptions, io::{self, Write}, panic, path::PathBuf, sync::OnceLock};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use std::{
+    fs,
+    fs::OpenOptions,
+    io::{self, Write},
+    panic,
+    path::PathBuf,
+    sync::OnceLock,
+};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
@@ -86,6 +93,7 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
 pub enum LogType {
     Client,
     Service,
+    Config,
     Tests,
 }
 
@@ -113,11 +121,16 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             "UDSACTOR_CLIENT_LOG_USE_DATETIME",
             "udsactor-client",
         ),
-        LogType::Service => ("UDSACTOR_LOG_LEVEL", "UDSACTOR_LOG_PATH", "UDSACTOR_LOG_USE_DATETIME", "udsactor"),
-        LogType::Tests => (
-            "UDSACTOR_TESTS_LOG_LEVEL",
-            "UDSACTOR_TESTS_LOG_PATH",
-            "UDSACTOR_TESTS_LOG_USE_DATETIME",
+        LogType::Service => (
+            "UDSACTOR_LOG_LEVEL",
+            "UDSACTOR_LOG_PATH",
+            "UDSACTOR_LOG_USE_DATETIME",
+            "udsactor",
+        ),
+        LogType::Tests | LogType::Config => (
+            "UDSACTOR_LOG_LEVEL",
+            "UDSACTOR_LOG_PATH",
+            "UDSACTOR_LOG_USE_DATETIME",
             "udsactor-tests",
         ),
     };
@@ -195,7 +208,6 @@ mod tests {
         trace!("Trace entry");
     }
 
-    
     #[test]
     fn test_logging_on_default_path() {
         setup_logging("debug", LogType::Tests);
