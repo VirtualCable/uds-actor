@@ -13,7 +13,7 @@ Function {make_window()} {open
     } {
       Fl_Group tab_uds_server {
         label {UDS Server} open
-        xywh {0 23 614 263} hide
+        xywh {0 23 614 263}
       } {
         Fl_Flex flx_tab_uds_server {open
           xywh {11 32 591 247} gap 16 fixed_size_tuples {5  0 32  1 32  2 32  3 32  4 32 }
@@ -25,8 +25,8 @@ Function {make_window()} {open
               label {SSL validation}
               xywh {27 36 128 24}
             }
-            Fl_Choice choice_ssl_validation {open
-              xywh {171 36 415 24} down_box BORDER_BOX labeltype NO_LABEL when 1 resizable
+            Fl_Choice choice_ssl_validation {open selected
+              xywh {171 36 415 24} down_box BORDER_BOX labeltype NO_LABEL resizable
             } {}
           }
           Fl_Flex flx_uds_server {open
@@ -77,7 +77,7 @@ Function {make_window()} {open
       }
       Fl_Group tab_advanced {
         label Advanced open
-        xywh {0 23 614 263}
+        xywh {0 23 614 263} hide
       } {
         Fl_Flex flx_tab_advanced {open
           xywh {11 32 591 247} gap 16 fixed_size_tuples {5  0 32  1 32  2 32  3 32  4 32 }
@@ -168,7 +168,7 @@ Function {make_window()} {open
         xywh {221 302 173 28}
       }
       Fl_Button button_close {
-        label Close selected
+        label Close
         xywh {426 302 172 28}
       }
     }
