@@ -87,8 +87,13 @@ pub async fn task(
         if remaining.as_secs() == 0 {
             let message = format!("idle of {}s reached", max_idle.as_secs());
             shared::log::info!("{}", message);
+            // Ensure all windows are closed
+            platform.gui().close_all_windows();
             // Use logoff in case of idle, should fire stop process
             operations.logoff().ok();
+            // Just in case, ensure session manager is notified to stop
+            // On RDP session, we may be disconnected and no message is received
+            session_manager.stop().await;
 
             return Ok(Some(message)); // Message to include on logout reason
         }

@@ -2,7 +2,6 @@ use super::*;
 use reqwest::Client;
 use tokio::task::JoinHandle;
 
-
 /// Helper that starts the real server in the background and returns everything needed
 async fn spawn_server() -> (
     String,                         // base URL (e.g. "http://127.0.0.1:12345")
@@ -40,13 +39,15 @@ async fn test_ping() {
 
 #[tokio::test]
 async fn test_logout() {
-    let (base_url, _platform, handle, client) = spawn_server().await;
+    let (base_url, platform, handle, client) = spawn_server().await;
 
     let res = client
         .post(format!("{}/logout", base_url))
         .send()
         .await
         .unwrap();
+
+    platform.session_manager().stop().await;
 
     assert_eq!(res.status(), 200);
     assert_eq!(res.text().await.unwrap(), "ok");
@@ -75,7 +76,6 @@ async fn test_screenshot() {
 
     // PNG header check
     assert!(decoded.starts_with(&[0x89, 0x50, 0x4E, 0x47]));
-
 }
 
 #[tokio::test]

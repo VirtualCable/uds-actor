@@ -145,8 +145,10 @@ pub fn setup_logging(level: &str, log_type: LogType) {
         .unwrap_or(false);
 
     let log_name = if use_datetime {
+        let op = crate::operations::new_operations();
+        let computer_name = op.get_computer_name().unwrap_or_else(|_| "unknown".into());
         let dt = chrono::Local::now();
-        format!("{}-{}", log_name, dt.format("%Y%m%d-%H%M%S"))
+        format!("{}-{}-{}", log_name, computer_name, dt.format("%Y%m%d-%H%M%S"))
     } else {
         log_name.to_string()
     } + ".log";

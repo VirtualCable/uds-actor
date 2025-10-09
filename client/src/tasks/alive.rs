@@ -26,6 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
 
+#[allow(dead_code)]
 pub async fn task(platform: platform::Platform) -> anyhow::Result<Option<String>> {
     // Ping our server every 15 seconds to let it know we are alive
     let api = platform.api();

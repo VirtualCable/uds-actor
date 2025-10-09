@@ -98,7 +98,8 @@ async fn run(platform: platform::Platform) {
 
     let deadline_task = tokio::spawn(tasks::deadline::task(login_info.deadline, platform.clone()));
 
-    let alive_task = tokio::spawn(tasks::alive::task(platform.clone()));
+    // On legacy, no ping is needed
+    //let alive_task = tokio::spawn(tasks::alive::task(platform.clone()));
 
     let session_manager = platform.session_manager();
     // Await for session end
@@ -109,7 +110,7 @@ async fn run(platform: platform::Platform) {
     let mut reason = None;
     if tokio::time::timeout(join_timeout, async {
         let _ = server_task.await;
-        for task in [idle_task, deadline_task, alive_task] {
+        for task in [idle_task, deadline_task] {
             let res = task.await;
             if let Ok(Ok(Some(r))) = res {
                 reason = Some(r);

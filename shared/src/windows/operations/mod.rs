@@ -322,7 +322,11 @@ impl Operations for WindowsOperations {
     fn logoff(&self) -> anyhow::Result<()> {
         log::debug!("Logoff called");
         unsafe {
-            _ = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
+            let result = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
+            if let Err(e) = result {
+                log::error!("ExitWindowsEx failed: {}", e.message());
+                return Err(anyhow::anyhow!("ExitWindowsEx failed: {}", e.message()));
+            }
         }
         Ok(())
     }
