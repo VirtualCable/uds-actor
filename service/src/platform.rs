@@ -9,7 +9,7 @@ pub struct Platform {
 
 impl Platform {
     pub fn new() -> Self {
-        let mut cfg = shared::config::new_config_loader();
+        let mut cfg = shared::config::new_config_storage();
         let cfg = cfg.config(true).unwrap();
 
         // If no config, panic, we need config
@@ -49,7 +49,7 @@ impl Platform {
         let cfg = if let Some(cfg) = config {
             cfg
         } else {
-            let mut cfg = shared::config::new_config_loader();
+            let mut cfg = shared::config::new_config_storage();
             cfg.config(true).unwrap()
         };
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));

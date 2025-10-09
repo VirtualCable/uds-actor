@@ -43,8 +43,8 @@ use async_trait::async_trait;
 /// Trait that contains the public API methods of BrokerApi (everything except `new`)
 #[async_trait]
 pub trait BrokerApi: Send + Sync {
-    fn clear_headers(&self) {}
-    fn set_header(&self, _key: &str, _value: &str) {}
+    fn clear_headers(&mut self);
+    fn set_header(&mut self, _key: &str, _value: &str);
 
     fn get_secret(&self) -> Result<&str, types::RestError>;
 
@@ -58,10 +58,7 @@ pub trait BrokerApi: Send + Sync {
         password: &str,
     ) -> Result<String, types::RestError>;
 
-    async fn register(
-        &self,
-        info: &types::RegisterRequest,
-    ) -> Result<String, types::RestError>;
+    async fn register(&self, info: &types::RegisterRequest) -> Result<String, types::RestError>;
 
     async fn initialize(
         &self,
@@ -115,7 +112,7 @@ pub struct UdsBrokerApi {
 #[allow(dead_code)]
 impl UdsBrokerApi {
     pub fn new(
-        cfg: &crate::config::ActorConfiguration,
+        cfg: crate::config::ActorConfiguration,
         skip_proxy: bool,
         timeout: Option<std::time::Duration>,
     ) -> Self {
@@ -152,18 +149,6 @@ impl UdsBrokerApi {
             token: Some(cfg.token().clone()),
             actor_type,
             custom_headers: reqwest::header::HeaderMap::new(),
-        }
-    }
-
-    fn clear_headers(&mut self) {
-        self.custom_headers.clear();
-    }
-
-    fn set_header(&mut self, key: &str, value: &str) {
-        if let Ok(header_value) = reqwest::header::HeaderValue::from_str(value)
-            && let Ok(header_name) = reqwest::header::HeaderName::from_bytes(key.as_bytes())
-        {
-            self.custom_headers.insert(header_name, header_value);
         }
     }
 
@@ -222,10 +207,7 @@ impl UdsBrokerApi {
         }
     }
 
-    async fn do_get<T: for<'de> Deserialize<'de>>(
-        &self,
-        url: &str,
-    ) -> Result<T, types::RestError> {
+    async fn do_get<T: for<'de> Deserialize<'de>>(&self, url: &str) -> Result<T, types::RestError> {
         log::debug!("GET to {}", url);
         let resp = self
             .client
@@ -266,6 +248,18 @@ impl BrokerApi for UdsBrokerApi {
             .ok_or_else(|| types::RestError::Other("No secret set".to_string()))
     }
 
+    fn clear_headers(&mut self) {
+        self.custom_headers.clear();
+    }
+
+    fn set_header(&mut self, key: &str, value: &str) {
+        if let Ok(header_value) = reqwest::header::HeaderValue::from_str(value)
+            && let Ok(header_name) = reqwest::header::HeaderName::from_bytes(key.as_bytes())
+        {
+            self.custom_headers.insert(header_name, header_value);
+        }
+    }
+
     async fn enumerate_authenticators(
         &self,
     ) -> Result<Vec<types::Authenticator>, types::RestError> {
@@ -287,18 +281,13 @@ impl BrokerApi for UdsBrokerApi {
             username,
             password,
         };
-        let response: types::ApiLoginResponse =
-            self.do_post("auth/login", &auth_info).await?;
+        let response: types::ApiLoginResponse = self.do_post("auth/login", &auth_info).await?;
         Ok(response.token)
     }
 
-    async fn register(
-        &self,
-        info: &types::RegisterRequest,
-    ) -> Result<String, types::RestError> {
+    async fn register(&self, info: &types::RegisterRequest) -> Result<String, types::RestError> {
         // Now, register
-        let response: types::ApiResponse<String> =
-            self.do_post("register", &info).await?;
+        let response: types::ApiResponse<String> = self.do_post("register", &info).await?;
         response.result()
     }
 

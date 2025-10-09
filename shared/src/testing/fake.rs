@@ -226,6 +226,15 @@ impl FakeBrokerApi {
 
 #[async_trait::async_trait]
 impl api::BrokerApi for FakeBrokerApi {
+    fn clear_headers(&mut self) {
+        self.calls.push("broker_api::clear_headers()");
+    }
+
+    fn set_header(&mut self, key: &str, value: &str) {
+        self.calls
+            .push(format!("broker_api::set_header({}, {})", key, value));
+    }
+
     fn get_secret(&self) -> Result<&str, api::types::RestError> {
         self.calls.push("broker_api::get_secret()");
         self.secret
@@ -240,7 +249,7 @@ impl api::BrokerApi for FakeBrokerApi {
             api::types::Authenticator {
                 id: "auth1".to_string(),
                 label: "Auth One".to_string(),
-                auth: "auth1".to_string(),
+                name: "auth1".to_string(),
                 auth_type: "type1".to_string(),
                 priority: 1,
                 custom: false,
@@ -248,7 +257,7 @@ impl api::BrokerApi for FakeBrokerApi {
             api::types::Authenticator {
                 id: "auth2".to_string(),
                 label: "Auth Two".to_string(),
-                auth: "auth2".to_string(),
+                name: "auth2".to_string(),
                 auth_type: "type2".to_string(),
                 priority: 2,
                 custom: true,
@@ -273,8 +282,7 @@ impl api::BrokerApi for FakeBrokerApi {
         &self,
         req: &api::types::RegisterRequest,
     ) -> Result<String, api::types::RestError> {
-        self.calls
-            .push(format!("broker_api::register({:?})", req));
+        self.calls.push(format!("broker_api::register({:?})", req));
         Ok("fake_registration_token".into())
     }
     async fn initialize(

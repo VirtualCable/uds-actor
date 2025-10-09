@@ -27,12 +27,12 @@ fn create_runtime() -> Result<Runtime> {
 /// runtime, run the async `register` call and return the resulting String or
 /// an anyhow::Error on failure.
 pub fn register(
-	cfg: &ActorConfiguration,
+	cfg: ActorConfiguration,
 	req: &types::RegisterRequest,
 	token: &str,  // Registation need api token
 ) -> Result<String> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
+	let mut api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
 	api.set_header("X-Auth-Token", token);
 
 	let res = rt.block_on(async { api.register(req).await });
@@ -40,7 +40,7 @@ pub fn register(
 }
 
 /// Synchronous wrapper for `UdsBrokerApi::test`.
-pub fn test(cfg: &ActorConfiguration, timeout: Option<std::time::Duration>) -> Result<String> {
+pub fn test(cfg: ActorConfiguration, timeout: Option<std::time::Duration>) -> Result<String> {
 	let rt = create_runtime()?;
 	let api = UdsBrokerApi::new(cfg, false, timeout);
 
@@ -50,7 +50,7 @@ pub fn test(cfg: &ActorConfiguration, timeout: Option<std::time::Duration>) -> R
 
 /// Synchronous wrapper for `UdsBrokerApi::enumerate_authenticators`.
 pub fn enumerate_authenticators(
-	cfg: &ActorConfiguration,
+	cfg: ActorConfiguration,
 	timeout: Option<std::time::Duration>,
 ) -> Result<Vec<types::Authenticator>> {
 	let rt = create_runtime()?;
@@ -62,7 +62,7 @@ pub fn enumerate_authenticators(
 
 /// Synchronous wrapper for `UdsBrokerApi::api_login`.
 pub fn api_login(
-	cfg: &ActorConfiguration,
+	cfg: ActorConfiguration,
 	auth: &str,
 	username: &str,
 	password: &str,

@@ -104,7 +104,7 @@ unsafe fn fix_registry_permissions(hkey: HKEY) -> Result<()> {
 const PATH: PCWSTR = w!("SOFTWARE\\UDSActor");
 
 fn get_key_root() -> HKEY {
-    if cfg!(test) || (cfg!(debug_assertions) && std::env::var("UDS_USE_CURRENT_USER").is_ok()) {
+    if cfg!(test) || cfg!(debug_assertions) {
         HKEY_CURRENT_USER
     } else {
         HKEY_LOCAL_MACHINE
@@ -246,6 +246,6 @@ impl Configuration for WindowsConfig {
     }
 }
 
-pub fn new_config_loader() -> Box<dyn Configuration> {
+pub fn new_config_storage() -> Box<dyn Configuration> {
     Box::new(WindowsConfig::default())
 }

@@ -77,7 +77,7 @@ async fn test_enumerate_authenticators() {
         types::Authenticator {
             id: "auth1".to_string(),
             label: "Auth One".to_string(),
-            auth: "auth1".to_string(),
+            name: "auth1".to_string(),
             auth_type: "type1".to_string(),
             priority: 1,
             custom: false,
@@ -85,7 +85,7 @@ async fn test_enumerate_authenticators() {
         types::Authenticator {
             id: "auth2".to_string(),
             label: "Auth Two".to_string(),
-            auth: "auth2".to_string(),
+            name: "auth2".to_string(),
             auth_type: "type2".to_string(),
             priority: 2,
             custom: true,
@@ -153,12 +153,12 @@ async fn test_register() {
         hostname: "testhost",
         ip: "10.0.0.1",
         mac: "00:11:22:33:44:55",
-        command: types::RegisterCommandData {
+        commands: types::RegisterCommands {
             pre_command: Some("echo pre".to_string()),
             runonce_command: Some("echo runonce".to_string()),
             post_command: Some("echo post".to_string()),
         },
-        log_level: types::LogLevel::Debug,
+        log_level: types::LogLevel::Debug.into(), // log level as u32
         os: "linux",
     };
 

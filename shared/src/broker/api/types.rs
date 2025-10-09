@@ -65,8 +65,8 @@ pub struct RegisterRequest<'a> {
     pub hostname: &'a str,
     pub ip: &'a str,
     pub mac: &'a str,
-    pub command: RegisterCommandData,
-    pub log_level: LogLevel,
+    pub commands: RegisterCommands,
+    pub log_level: u32,
     pub os: &'a str,
 }
 
@@ -200,21 +200,25 @@ impl From<crate::operations::NetworkInterface> for InterfaceInfo {
 
 // TODO: On a future, use the new authenticator structure from server
 // when server is updated to a version that supports it
+// Note that renamed fields are already present on 5.0 servers
+// But initally, we will use the old ones for compatibility with older servers
+// So we can use it now on 4.x, but we will rename the fields to the new ones
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Authenticator {
-    #[serde(rename = "auth_id")]
+    #[serde(rename = "auth_id")]  // On future releases, this will be "id"
     pub id: String,
-    #[serde(rename = "auth_label")]
+    #[serde(rename = "auth_label")]  // On future releases, this will be "label"
     pub label: String,
-    pub auth: String,
-    #[serde(rename = "type")]
+    #[serde(rename = "auth")]  // On future releases, this will be "name"
+    pub name: String,
+    #[serde(rename = "type")]  // "type" is a reserved word, so we use "auth_type" in struct
     pub auth_type: String,
     pub priority: i32,
     pub custom: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct RegisterCommandData {
+pub struct RegisterCommands {
     pub pre_command: Option<String>,
     pub runonce_command: Option<String>,
     pub post_command: Option<String>,
@@ -245,8 +249,35 @@ pub enum LogLevel {
     Fatal = 60000,
 }
 
-impl From<i32> for LogLevel {
-    fn from(value: i32) -> Self {
+// From u8, wil get from 0 to 5, where 0 is Debug and 5 is Fatal
+impl From<u8> for LogLevel {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => LogLevel::Debug,
+            1 => LogLevel::Info,
+            2 => LogLevel::Warn,
+            3 => LogLevel::Error,
+            4 => LogLevel::Fatal,
+            _ => LogLevel::Other,
+        }
+    }
+}
+
+impl From<LogLevel> for u8 {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Debug => 0,
+            LogLevel::Info => 1,
+            LogLevel::Warn => 2,
+            LogLevel::Error => 3,
+            LogLevel::Fatal => 4,
+            LogLevel::Other => 5,
+        }
+    }
+}
+
+impl From<u32> for LogLevel {
+    fn from(value: u32) -> Self {
         match value {
             20000 => LogLevel::Debug,
             30000 => LogLevel::Info,
@@ -258,7 +289,7 @@ impl From<i32> for LogLevel {
     }
 }
 
-impl From<LogLevel> for i32 {
+impl From<LogLevel> for u32 {
     fn from(level: LogLevel) -> Self {
         match level {
             LogLevel::Debug => 20000,

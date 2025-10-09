@@ -44,7 +44,7 @@ pub struct ActorConfiguration {
     pub pre_command: Option<String>,
     pub runonce_command: Option<String>,
     pub post_command: Option<String>,
-    pub log_level: i32,
+    pub log_level: u32,
     // Additional configuration data from server
     pub config: Option<ActorDataConfiguration>,
     pub data: Option<serde_json::Value>,
@@ -73,10 +73,10 @@ pub trait Configuration {
 }
 
 #[cfg(target_os = "windows")]
-pub use crate::windows::config::new_config_loader;
+pub use crate::windows::config::new_config_storage;
 
 #[cfg(target_family = "unix")]
-pub use crate::unix::config::new_config_loader;
+pub use crate::unix::config::new_config_storage;
 
 #[cfg(test)]
 mod tests {
@@ -138,7 +138,7 @@ mod tests {
         log::setup_logging("debug", crate::log::LogType::Tests);
 
         let test_cfg = get_test_config();
-        let mut config = new_config_loader();
+        let mut config = new_config_storage();
         let res = config.save_config(&test_cfg);
         assert!(res.is_ok(), "Failed to save config: {:?}", res.err());
         let loaded_cfg = config.load_config().unwrap();

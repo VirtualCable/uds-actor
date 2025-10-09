@@ -55,7 +55,7 @@ impl Configuration for UnixConfig {
     }
 }
 
-pub fn new_config_loader() -> Box<dyn Configuration> {
+pub fn new_config_storage() -> Box<dyn Configuration> {
     Box::new(UnixConfig::default())
 }
 
