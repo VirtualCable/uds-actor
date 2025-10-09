@@ -37,15 +37,11 @@ pub trait Actions: Send + Sync {
     // behavior is required.
     async fn notify_user(&self, message: &str, gui: crate::gui::GuiHandle) -> anyhow::Result<()> {
         crate::log::info!("Notify user: {}", message);
-        return Ok(());  // Temporarily disabled, for debug purposes
         let message = message.to_string();
         // ensure_dialogs_closed().await;
         // Execute the dialog on a background thread
         tokio::spawn(async move {
-            let result = gui.message_dialog("Notification", &message).await;
-            if let Err(e) = result {
-                crate::log::error!("Failed to show notification dialog: {}", e);
-            }
+            gui.message_dialog("Notification", &message).await;
         });
         Ok(())
     }
