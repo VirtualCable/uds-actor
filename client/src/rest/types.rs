@@ -79,7 +79,7 @@ impl<T> ApiResponse<T> {
     pub fn result(self) -> anyhow::Result<T> {
         if self.is_error() {
             Err(self.error())
-        } else {    
+        } else {
             Ok(self.result)
         }
     }
@@ -91,16 +91,7 @@ impl<T> ApiResponse<T> {
 pub struct LoginResponse {
     pub ip: String,
     pub hostname: String,
-    pub deadline: Option<u32>,  // Stamp, in seconds, when the session will expire
+    pub deadline: Option<u32>, // Stamp, in seconds, when the session will expire
     pub max_idle: Option<u32>, // Max idle time in seconds
     pub session_id: String,
 }
-
-/// Empty payload for ping
-#[derive(Debug, Clone, Serialize, Default)]
-pub struct PingRequest {}
-
-/// Ping response
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(transparent)]
-pub struct PingResponse(pub String);
