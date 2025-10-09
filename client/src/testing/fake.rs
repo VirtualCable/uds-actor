@@ -88,10 +88,6 @@ impl ClientRest for FakeApi {
         self.calls.push(format!("api::logout({:?})", reason));
         Ok(())
     }
-    async fn ping(&self) -> anyhow::Result<bool> {
-        self.calls.push("api::ping()");
-        Ok(true)
-    }
 }
 
 pub async fn create_platform(

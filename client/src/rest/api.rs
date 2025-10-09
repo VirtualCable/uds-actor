@@ -47,7 +47,6 @@ pub trait ClientRest: Send + Sync {
         session_type: Option<&str>,
     ) -> anyhow::Result<LoginResponse>;
     async fn logout(&self, reason: Option<&str>) -> anyhow::Result<()>;
-    async fn ping(&self) -> anyhow::Result<bool>;
 }
 
 #[derive(Debug, Clone)]
@@ -182,15 +181,6 @@ impl ClientRest for ClientRestSession {
         };
         let _: ApiResponse<String> = self.post("logout", &payload).await?;
         Ok(())
-    }
-
-    async fn ping(&self) -> anyhow::Result<bool> {
-        debug!("Pinging server...");
-        let payload = PingRequest::default();
-        let response: ApiResponse<PingResponse> = self.post("ping", &payload).await?;
-        let result = response.result()?;
-        debug!("Ping response: {:?}", result);
-        Ok(result.0 == "pong")
     }
 }
 

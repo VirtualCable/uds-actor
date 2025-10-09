@@ -44,7 +44,6 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, ClientRestSession) {
     (server, ClientRestSession::new(&url, false))
 }
 
-
 #[tokio::test]
 async fn test_register() {
     let (mut server, mut api) = setup_server_and_api().await;
@@ -54,12 +53,11 @@ async fn test_register() {
         .match_body(Matcher::Json(json!({"callback_url": "http://callback"})))
         .with_body("{\"result\": \"ok\"}")
         .with_status(200)
-        .create_async() 
+        .create_async()
         .await;
     let response = api.register("http://callback").await;
     assert!(response.is_ok(), "Register failed: {:?}", response);
 }
-
 
 #[tokio::test]
 async fn test_unregister() {
@@ -75,7 +73,6 @@ async fn test_unregister() {
     let _ = api.register("http://callback").await;
     assert!(api.unregister().await.is_ok());
 }
-
 
 #[tokio::test]
 async fn test_login() {
@@ -102,7 +99,6 @@ async fn test_login() {
     assert_eq!(info.session_id, "sessid");
 }
 
-
 #[tokio::test]
 async fn test_logout() {
     let (mut server, mut api) = setup_server_and_api().await;
@@ -127,18 +123,4 @@ async fn test_logout() {
     api.set_session_type(&logout_payload.session_type);
     let res = api.logout(None).await.is_ok();
     assert!(res, "Logout failed: {:?}", res);
-}
-
-
-#[tokio::test]
-async fn test_ping() {
-    let (mut server, api) = setup_server_and_api().await;
-    let _m = server
-        .mock("POST", "/ui/ping")
-        .match_header("content-type", "application/json")
-        .with_status(200)
-        .with_body("{\"result\": \"pong\"}")
-        .create_async()
-        .await;
-    assert!(api.ping().await.unwrap());
 }
