@@ -2,10 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use fltk::{enums::CallbackTrigger, prelude::*};
 
-use crate::config_fltk::ConfigGui;
+use crate::config_unmanaged_fltk::ConfigGui;
 
 mod callbacks;
-mod config_fltk;
+mod config_unmanaged_fltk;
 mod regcfg;
 
 use shared::log;

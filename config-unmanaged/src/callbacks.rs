@@ -4,7 +4,7 @@ use fltk::prelude::*;
 
 use shared::{broker::api::types, config, log, operations::NetworkInterface};
 
-use crate::{config_fltk::ConfigGui, regcfg};
+use crate::{config_unmanaged_fltk::ConfigGui, regcfg};
 
 pub fn uds_server_changed(
     cfg_window: &ConfigGui,

@@ -2,7 +2,7 @@ use fltk::prelude::*;
 
 use shared::{broker::api::types, config, log};
 
-use crate::config_fltk::ConfigGui;
+use crate::config_unmanaged_fltk::ConfigGui;
 
 pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfiguration {
     config::ActorConfiguration {
