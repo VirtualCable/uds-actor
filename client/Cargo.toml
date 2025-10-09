@@ -24,8 +24,7 @@ base64 = "0.22.1"
 
 
 [build-dependencies]
-chrono = "0.4.42"
-winres = "0.1.12"
+builder = { path = "../builder" }
 
 
 [dev-dependencies]

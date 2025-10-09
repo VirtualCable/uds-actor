@@ -26,57 +26,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use chrono::Datelike;
-use winres::WindowsResource;
-
-fn build_windows() {
-    println!("cargo:rerun-if-changed=img/uds.bmp");
-
-    let current_year = chrono::Utc::now().year();
-    let base_date = chrono::NaiveDate::from_ymd_opt(1972, 7, 1).unwrap();
-    let today = chrono::Utc::now().date_naive();
-    let build_days = (today - base_date).num_days();
-
-    let (major, minor, patch, build) = (
-        env!("CARGO_PKG_VERSION_MAJOR").parse::<u64>().unwrap(),
-        env!("CARGO_PKG_VERSION_MINOR").parse::<u64>().unwrap(),
-        env!("CARGO_PKG_VERSION_PATCH").parse::<u64>().unwrap(),
-        build_days as u64,
-    );
-
-    let version: u64 = (major << 48) | (minor << 32) | (patch << 16) | build;
-    // Set executable metadata with winres
-
-    let mut res = WindowsResource::new();
-    res.set_icon("../img/uds.ico");
-
-    res.set_version_info(winres::VersionInfo::FILEVERSION, version);
-    res.set_version_info(winres::VersionInfo::PRODUCTVERSION, version);
-
-    res.set_language(0x0409);
-
-    res.set("FileVersion", &format!("{major}.{minor}.{patch}.{build}"));
-    res.set(
-        "ProductVersion",
-        &format!("{major}.{minor}.{patch}.{build}"),
-    );
-    res.set("ProductName", "UDS Actor Service");
-    res.set("FileDescription", "UDS Actor Service");
-    res.set(
-        "LegalCopyright",
-        format!("Copyright © 2012-{current_year} Virtual Cable S.L.U.").as_str(),
-    );
-    res.set("CompanyName", "Virtual Cable S.L.U.");
-
-    res.append_rc_content(r##"101      BITMAP      DISCARDABLE "../img/uds.bmp""##);
-
-    // Compile resources
-    res.compile().unwrap();
-}
-
 fn main() {
-    // Only build windows resources if on windows
-    if cfg!(target_os = "windows") {
-        build_windows();
-    }
+    #[cfg(windows)]
+    builder::build_windows(
+        "UDS Actor Service",
+        "UDS Actor Service",
+        None,
+        None,
+    );
 }
