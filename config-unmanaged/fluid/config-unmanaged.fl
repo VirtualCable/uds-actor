@@ -12,8 +12,8 @@ class ConfigGui {open
   Function {new()} {open
   } {
     Fl_Window win {
-      label {UDS Actor config} open selected
-      xywh {2366 1616 618 265} type Double box UP_BOX resizable hotspot size_range {524 332 0 0} visible
+      label {UDS Actor config} open
+      xywh {3021 1499 618 265} type Double box UP_BOX resizable hotspot size_range {524 332 0 0} visible
     } {
       Fl_Group {} {open
         xywh {0 0 622 285} labeltype NO_LABEL resizable
@@ -28,7 +28,7 @@ class ConfigGui {open
               label {SSL validation}
               xywh {16 16 128 24}
             }
-            Fl_Choice choice_ssl_validation {open
+            Fl_Choice choice_ssl_validation {open selected
               xywh {160 16 439 24} down_box BORDER_BOX labeltype NO_LABEL resizable
             } {}
           }
@@ -50,9 +50,9 @@ class ConfigGui {open
               label {Service Token}
               xywh {16 96 128 24}
             }
-            Fl_Choice choice_authenticator {open
-              xywh {160 96 439 24} down_box BORDER_BOX labeltype NO_LABEL resizable
-            } {}
+            Fl_Input input_token {
+              xywh {160 96 439 24} labeltype NO_LABEL
+            }
           }
           Fl_Flex {} {open
             xywh {0 132 615 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
@@ -61,7 +61,7 @@ class ConfigGui {open
               label {Net Restriction}
               tooltip {Restrict valid detection of network interfaces to this network.} xywh {16 136 128 24}
             }
-            Fl_Input input_username {
+            Fl_Input input_net {
               xywh {160 136 439 24} labeltype NO_LABEL
             }
           }
