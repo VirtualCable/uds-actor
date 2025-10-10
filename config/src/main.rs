@@ -66,24 +66,24 @@ fn main() {
         // Set a callback on input_uds_server to validate the hostname
 
         move |s| {
-            log::debug!("Using hostname: {}", s.value());
-            let hostname = s.value().trim().to_string();
-            if hostname.is_empty() {
+            log::debug!("Using UDS Server: {}", s.value());
+            let uds_server = s.value().trim().to_string();
+            if uds_server.is_empty() {
                 return;
             }
-            // If the hostname hasn't changed, do nothing
+            // If the UDS Server + ssl hasn't changed, do nothing
             if *last_server.lock().unwrap()
-                == hostname.clone()
+                == uds_server.clone()
                     + cfg_window
                         .choice_ssl_validation
                         .value()
                         .to_string()
                         .as_str()
             {
-                log::debug!("Hostname hasn't changed, not re-querying authenticators");
+                log::debug!("UDS Server hasn't changed, not re-querying authenticators");
                 return;
             }
-            *last_server.lock().unwrap() = hostname.clone()
+            *last_server.lock().unwrap() = uds_server.clone()
                 + cfg_window
                     .choice_ssl_validation
                     .value()
@@ -126,6 +126,7 @@ fn main() {
 
     // Fill the fields from existing config
     regcfg::fill_window_fields(&mut cfg_window);
+    callbacks::uds_server_changed(&cfg_window, auths.clone());
 
     cfg_window.win.center_screen();
     app.run().unwrap();

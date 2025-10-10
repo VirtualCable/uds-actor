@@ -10,6 +10,10 @@ pub fn uds_server_changed(
     cfg_window: &ConfigGui,
     saved_auths: Arc<Mutex<Vec<shared::broker::api::types::Authenticator>>>,
 ) {
+    // If udsserver is empty, do nothing
+    if cfg_window.input_uds_server.value().trim().is_empty() {
+        return;
+    }
     let mut cfg_window = cfg_window.clone();
     let hostname = cfg_window.input_uds_server.value().trim().to_string();
     let actor_cfg =

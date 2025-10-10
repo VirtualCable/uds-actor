@@ -30,17 +30,17 @@ pub struct ConfigGui {
     pub win: Window,
     pub choice_ssl_validation: Choice,
     pub input_uds_server: Input,
-    pub choice_authenticator: Choice,
-    pub input_username: Input,
+    pub input_token: Input,
+    pub input_net: Input,
     pub choice_log_level: Choice,
-    pub button_register: Button,
+    pub button_save: Button,
     pub button_test: Button,
     pub button_close: Button,
 }
 
 impl ConfigGui {
     pub fn new() -> Self {
-	let mut win = Window::new(2366, 1616, 618, 265, None);
+	let mut win = Window::new(3021, 1499, 618, 265, None);
 	win.set_label(r#"UDS Actor config"#);
 	win.set_type(WindowType::Double);
 	win.make_resizable(true);
@@ -81,11 +81,8 @@ impl ConfigGui {
 	fl2rust_widget_6.set_margins(16, 4, 16, 4, );
 	let mut fl2rust_widget_7 = Frame::new(16, 96, 128, 24, None);
 	fl2rust_widget_7.set_label(r#"Service Token"#);
-	let mut choice_authenticator = Choice::new(160, 96, 439, 24, None);
-	fl2rust_widget_6.resizable(&choice_authenticator);
-	choice_authenticator.set_down_frame(FrameType::BorderBox);
-	choice_authenticator.set_label_type(LabelType::None);
-	choice_authenticator.end();
+	let mut input_token = Input::new(160, 96, 439, 24, None);
+	input_token.set_label_type(LabelType::None);
 	fl2rust_widget_6.end();
 	let mut fl2rust_widget_8 = Flex::new(0, 132, 615, 32, None);
 	fl2rust_widget_8.set_type(FlexType::Row);
@@ -94,8 +91,8 @@ impl ConfigGui {
 	let mut fl2rust_widget_9 = Frame::new(16, 136, 128, 24, None);
 	fl2rust_widget_9.set_label(r#"Net Restriction"#);
 	fl2rust_widget_9.set_tooltip(r#"Restrict valid detection of network interfaces to this network."#);
-	let mut input_username = Input::new(160, 136, 439, 24, None);
-	input_username.set_label_type(LabelType::None);
+	let mut input_net = Input::new(160, 136, 439, 24, None);
+	input_net.set_label_type(LabelType::None);
 	fl2rust_widget_8.end();
 	let mut fl2rust_widget_10 = Flex::new(0, 172, 615, 32, None);
 	fl2rust_widget_10.set_type(FlexType::Row);
@@ -131,8 +128,8 @@ impl ConfigGui {
 	fl2rust_widget_12.set_type(FlexType::Row);
 	fl2rust_widget_12.set_pad(32);
 	fl2rust_widget_12.set_margins(16, 12, 16, 12, );
-	let mut button_register = Button::new(16, 227, 174, 29, None);
-	button_register.set_label(r#"Register with UDS"#);
+	let mut button_save = Button::new(16, 227, 174, 29, None);
+	button_save.set_label(r#"Save Configuration"#);
 	let mut button_test = Button::new(222, 227, 174, 29, None);
 	button_test.set_label(r#"Test configuration"#);
 	let mut button_close = Button::new(428, 227, 174, 29, None);
@@ -144,10 +141,10 @@ impl ConfigGui {
 	    win,
 	    choice_ssl_validation,
 	    input_uds_server,
-	    choice_authenticator,
-	    input_username,
+	    input_token,
+	    input_net,
 	    choice_log_level,
-	    button_register,
+	    button_save,
 	    button_test,
 	    button_close,
 	}

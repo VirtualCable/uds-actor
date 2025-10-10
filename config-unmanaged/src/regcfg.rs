@@ -4,23 +4,6 @@ use shared::{broker::api::types, config, log};
 
 use crate::config_unmanaged_fltk::ConfigGui;
 
-pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfiguration {
-    config::ActorConfiguration {
-        broker_url: format!("https://{hostname}/uds/rest/"),
-        verify_ssl,
-        actor_type: Some(config::ActorType::Unmanaged),
-        master_token: None,
-        own_token: None,
-        restrict_net: None,
-        pre_command: None,
-        runonce_command: None,
-        post_command: None,
-        log_level: 0,
-        config: None,
-        data: None,
-    }
-}
-
 pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
     // Fill the fields from existing config
     log::debug!("Filling window fields from existing config");
@@ -42,6 +25,16 @@ pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
                 .trim_end_matches("/uds/rest/");
             cfg_window.input_uds_server.set_value(url);
         }
+        cfg_window.input_token.set_value(
+            actor_cfg
+                .master_token
+                .as_ref()
+                .map_or("", |s| s.as_str()),
+        );
+
+        cfg_window
+            .input_net
+            .set_value(actor_cfg.restrict_net.clone().unwrap_or_default().as_str());
 
         let log_level: types::LogLevel = actor_cfg.log_level.into();
 
@@ -52,8 +45,4 @@ pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
     } else {
         log::debug!("No existing config found, using defaults");
     }
-
-    // cfg_window.choice_ssl_validation.set_value(0);
-    // cfg_window.input_uds_server.set_value("172.27.0.1:8443");
-    cfg_window.input_username.set_value("test");
 }

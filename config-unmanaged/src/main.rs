@@ -1,6 +1,4 @@
-use std::sync::{Arc, Mutex};
-
-use fltk::{enums::CallbackTrigger, prelude::*};
+use fltk::prelude::*;
 
 use crate::config_unmanaged_fltk::ConfigGui;
 
@@ -13,16 +11,6 @@ use shared::log;
 fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
-    let operations = shared::operations::new_operations();
-
-    // Our auths list, on Arc to share between threads
-    let auths = Arc::new(Mutex::new(
-        Vec::<shared::broker::api::types::Authenticator>::new(),
-    ));
-    // Las server used. To avoid re-querying the authenticators if the server hasn't changed
-    // we store the last server in a Mutex<String> and only re-query if it changes
-    let last_server = Arc::new(Mutex::new(String::new()));
-
     let app = fltk::app::App::default();
     let mut cfg_window = ConfigGui::new();
 
@@ -30,7 +18,7 @@ fn main() {
     cfg_window.win.set_callback({
         move |_| {
             log::debug!("Window callback triggered: event={:?}", fltk::app::event());
-            if fltk::app::event() == fltk::enums::Event::Shortcut 
+            if fltk::app::event() == fltk::enums::Event::Shortcut
                 && fltk::app::event_key() == fltk::enums::Key::Escape
             {
                 // Just eat the event
@@ -53,66 +41,13 @@ fn main() {
         .add_choice("DEBUG|INFO|WARNING|ERROR|FATAL");
     cfg_window.choice_log_level.set_value(1); // Default to "INFO"
 
-    // Default value for Authenticator is "Administration"
-    cfg_window.choice_authenticator.add_choice("Administration");
-    cfg_window.choice_authenticator.set_value(0); // Default to "Administration"
-
-    cfg_window
-        .input_uds_server
-        .set_trigger(CallbackTrigger::ReleaseAlways);
-    cfg_window.input_uds_server.set_callback({
-        let saved_auths = auths.clone();
+    // Set the callback to register when the "Save" button is clicked
+    cfg_window.button_save.set_callback({
         let cfg_window = cfg_window.clone();
-        // Set a callback on input_uds_server to validate the hostname
-
-        move |s| {
-            log::debug!("Using hostname: {}", s.value());
-            let hostname = s.value().trim().to_string();
-            if hostname.is_empty() {
-                return;
-            }
-            // If the hostname hasn't changed, do nothing
-            if *last_server.lock().unwrap()
-                == hostname.clone()
-                    + cfg_window
-                        .choice_ssl_validation
-                        .value()
-                        .to_string()
-                        .as_str()
-            {
-                log::debug!("Hostname hasn't changed, not re-querying authenticators");
-                return;
-            }
-            *last_server.lock().unwrap() = hostname.clone()
-                + cfg_window
-                    .choice_ssl_validation
-                    .value()
-                    .to_string()
-                    .as_str();
-
-            callbacks::uds_server_changed(&cfg_window, saved_auths.clone());
-        }
-    });
-    // Set the callback to register when the "Register" button is clicked
-    cfg_window.button_register.set_callback({
-        let auths = auths.clone();
-        let cfg_window = cfg_window.clone();
-        // Fail if we can't get at least one network interface
-        let interface = operations
-            .get_network_info()
-            .unwrap()
-            .into_iter()
-            .next()
-            .unwrap();
         // Set a callback on input_uds_server to validate the hostname
 
         move |_| {
-            callbacks::btn_register_clicked(
-                &cfg_window,
-                auths.clone(),
-                operations.clone(),
-                &interface,
-            );
+            callbacks::bnt_save_clicked(&cfg_window);
         }
     });
 
