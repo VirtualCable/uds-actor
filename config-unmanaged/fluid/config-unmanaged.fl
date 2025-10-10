@@ -28,7 +28,7 @@ class ConfigGui {open
               label {SSL validation}
               xywh {16 16 128 24}
             }
-            Fl_Choice choice_ssl_validation {open selected
+            Fl_Choice choice_ssl_validation {open
               xywh {160 16 439 24} down_box BORDER_BOX labeltype NO_LABEL resizable
             } {}
           }
@@ -78,11 +78,11 @@ class ConfigGui {open
           }
         }
       }
-      Fl_Flex {} {
+      Fl_Flex {} {open
         xywh {0 215 618 53} type HORIZONTAL margin {16 12 16 12} gap 32
       } {
-        Fl_Button button_register {
-          label {Register with UDS}
+        Fl_Button button_save {
+          label {Save Configuration} selected
           xywh {16 227 174 29}
         }
         Fl_Button button_test {
