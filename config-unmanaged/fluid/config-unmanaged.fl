@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0403
+version 1.0404
 header_name {.h}
 code_name {.cxx}
 class ConfigGui {open
@@ -7,171 +7,86 @@ class ConfigGui {open
   Function {new()} {open
   } {
     Fl_Window win {
-      label {UDS Actor config} open selected
-      xywh {2660 1369 614 342} type Double box UP_BOX resizable hotspot size_range {524 332 0 0} visible
+      label {UDS Actor config} open
+      xywh {556 730 605 244} type Double box UP_BOX resizable hotspot size_range {524 332 0 0} visible
     } {
-      Fl_Tabs {} {open
-        xywh {0 0 614 286} box UP_BOX resizable
+      Fl_Group {} {open
+        xywh {0 0 609 363} labeltype NO_LABEL
       } {
-        Fl_Group {} {
-          label {UDS Server} open
-          xywh {0 23 614 263}
+        Fl_Flex {} {open
+          xywh {0 0 603 419} resizable gap 16 fixed_size_tuples {5  0 32  1 32  2 32  3 32  4 32 }
         } {
           Fl_Flex {} {open
-            xywh {11 32 591 247} gap 16 fixed_size_tuples {5  0 32  1 32  2 32  3 32  4 32 }
+            xywh {0 0 603 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
           } {
-            Fl_Flex {} {open
-              xywh {11 32 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {SSL validation}
-                xywh {27 36 128 24}
-              }
-              Fl_Choice choice_ssl_validation {open
-                xywh {171 36 415 24} down_box BORDER_BOX labeltype NO_LABEL resizable
-              } {}
+            Fl_Box {} {
+              label {SSL validation}
+              xywh {16 4 128 24}
             }
-            Fl_Flex {} {open
-              xywh {11 80 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {UDS Server}
-                xywh {27 84 128 24}
-              }
-              Fl_Input input_uds_server {
-                xywh {171 84 415 24} labeltype NO_LABEL resizable
-              }
+            Fl_Choice choice_ssl_validation {open
+              xywh {160 4 427 24} down_box BORDER_BOX labeltype NO_LABEL resizable
+            } {}
+          }
+          Fl_Flex {} {open selected
+            xywh {0 48 603 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
+          } {
+            Fl_Box {} {
+              label {UDS Server}
+              xywh {16 52 128 24}
             }
-            Fl_Flex {} {open
-              xywh {11 128 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label Authenticator
-                xywh {27 132 128 24}
-              }
-              Fl_Choice choice_authenticator {open
-                xywh {171 132 415 24} down_box BORDER_BOX labeltype NO_LABEL resizable
-              } {}
-            }
-            Fl_Flex {} {open
-              xywh {11 176 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label Username
-                xywh {27 180 128 24}
-              }
-              Fl_Input input_username {
-                xywh {171 180 415 24} labeltype NO_LABEL
-              }
-            }
-            Fl_Flex {} {open
-              xywh {11 224 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label Password
-                xywh {27 228 128 24}
-              }
-              Fl_Input input_password {
-                xywh {171 228 415 24} type Secret labeltype NO_LABEL
-              }
+            Fl_Input input_uds_server {
+              xywh {160 52 427 24} labeltype NO_LABEL resizable
             }
           }
-        }
-        Fl_Group {} {
-          label Advanced open
-          xywh {0 23 614 263} hide
-        } {
           Fl_Flex {} {open
-            xywh {11 32 591 247} gap 16 fixed_size_tuples {5  0 32  1 32  2 32  3 32  4 32 }
+            xywh {0 96 603 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
           } {
-            Fl_Flex {} {open
-              xywh {11 32 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {Preconnect cmd}
-                xywh {27 36 128 24}
-              }
-              Fl_Flex {} {open
-                xywh {171 36 415 24} type HORIZONTAL gap 12 fixed_size_tuples {1  1 64 }
-              } {
-                Fl_Input input_preconnect_cmd {
-                  xywh {171 36 339 24} labeltype NO_LABEL
-                }
-                Fl_Button browse_preconnect_cmd {
-                  label Browse
-                  xywh {522 36 64 24}
-                }
-              }
+            Fl_Box {} {
+              label Authenticator
+              xywh {16 100 128 24}
             }
-            Fl_Flex {} {open
-              xywh {11 80 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {Runonce cmd}
-                xywh {27 84 128 24}
-              }
-              Fl_Flex {} {open
-                xywh {171 84 415 24} type HORIZONTAL gap 12 fixed_size_tuples {1  1 64 }
-              } {
-                Fl_Input input_runonce_cmd {
-                  xywh {171 84 339 24} labeltype NO_LABEL
-                }
-                Fl_Button browse_runonce_cmd {
-                  label Browse
-                  xywh {522 84 64 24}
-                }
-              }
-            }
-            Fl_Flex {} {open
-              xywh {11 128 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {Postconfig cmd}
-                xywh {27 132 128 24}
-              }
-              Fl_Flex {} {open
-                xywh {171 132 415 24} type HORIZONTAL gap 12 fixed_size_tuples {1  1 64 }
-              } {
-                Fl_Input input_postconfig_cmd {
-                  xywh {171 132 339 24} labeltype NO_LABEL
-                }
-                Fl_Button browse_postconfig_cmd {
-                  label Browse
-                  xywh {522 132 64 24}
-                }
-              }
-            }
-            Fl_Flex {} {open
-              xywh {11 176 591 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
-            } {
-              Fl_Box {} {
-                label {Log level}
-                xywh {27 180 128 24}
-              }
-              Fl_Choice choice_log_level {open
-                xywh {171 180 415 24} down_box BORDER_BOX labeltype NO_LABEL resizable
-              } {}
-            }
-            Fl_Flex {} {open
-              xywh {11 224 591 32} type HORIZONTAL margin {16 4 16 4} gap 16
+            Fl_Choice choice_authenticator {open
+              xywh {160 100 427 24} down_box BORDER_BOX labeltype NO_LABEL resizable
             } {}
+          }
+          Fl_Flex {} {open
+            xywh {0 144 603 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
+          } {
+            Fl_Box {} {
+              label Username
+              xywh {16 148 128 24}
+            }
+            Fl_Input input_username {
+              xywh {160 148 427 24} labeltype NO_LABEL
+            }
+          }
+          Fl_Flex {} {open
+            xywh {0 192 603 32} type HORIZONTAL margin {16 4 16 4} gap 16 fixed_size_tuples {1  0 128 }
+          } {
+            Fl_Box {} {
+              label Password
+              xywh {16 196 128 24}
+            }
+            Fl_Input input_password {
+              xywh {160 196 427 24} type Secret labeltype NO_LABEL
+            }
           }
         }
       }
-      Fl_Flex {} {open
-        xywh {0 286 614 60} type HORIZONTAL margin {16 16 16 16} gap 32
+      Fl_Flex {} {
+        xywh {0 197 605 41} type HORIZONTAL margin {16 16 16 16} gap 32
       } {
         Fl_Button button_register {
           label {Register with UDS}
-          xywh {16 302 173 28}
+          xywh {16 213 170 9}
         }
         Fl_Button button_test {
           label {Test configuration}
-          xywh {221 302 173 28}
+          xywh {218 213 170 9}
         }
         Fl_Button button_close {
           label Close
-          xywh {426 302 172 28}
+          xywh {420 213 169 9}
         }
       }
     }
