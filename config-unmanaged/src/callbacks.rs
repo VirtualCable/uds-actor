@@ -81,7 +81,6 @@ pub fn btn_register_clicked(
         }
     };
     let username = cfg_window.input_username.value().trim().to_string();
-    let password = cfg_window.input_password.value().to_string();
     if hostname.is_empty() || username.is_empty() || password.is_empty() {
         fltk::dialog::alert_default("Hostname, username and password are required");
         return;

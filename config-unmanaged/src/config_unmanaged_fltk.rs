@@ -32,13 +32,6 @@ pub struct ConfigGui {
     pub input_uds_server: Input,
     pub choice_authenticator: Choice,
     pub input_username: Input,
-    pub input_password: Input,
-    pub input_preconnect_cmd: Input,
-    pub browse_preconnect_cmd: Button,
-    pub input_runonce_cmd: Input,
-    pub browse_runonce_cmd: Button,
-    pub input_postconfig_cmd: Input,
-    pub browse_postconfig_cmd: Button,
     pub choice_log_level: Choice,
     pub button_register: Button,
     pub button_test: Button,
@@ -47,193 +40,104 @@ pub struct ConfigGui {
 
 impl ConfigGui {
     pub fn new() -> Self {
-	let mut win = Window::new(2660, 1369, 614, 342, None);
+	let mut win = Window::new(2366, 1616, 618, 265, None);
 	win.set_label(r#"UDS Actor config"#);
 	win.set_type(WindowType::Double);
 	win.make_resizable(true);
 	win.set_frame(FrameType::UpBox);
 	win.size_range(524, 332, 0, 0, );
-	let mut fl2rust_widget_0 = Tabs::new(0, 0, 614, 286, None);
+	let mut fl2rust_widget_0 = Group::new(0, 0, 622, 285, None);
 	win.resizable(&fl2rust_widget_0);
-	fl2rust_widget_0.set_frame(FrameType::UpBox);
-	let mut fl2rust_widget_1 = Group::new(0, 23, 614, 263, None);
-	fl2rust_widget_1.set_label(r#"UDS Server"#);
-	let mut fl2rust_widget_2 = Flex::new(11, 32, 591, 247, None);
-	fl2rust_widget_2.set_type(FlexType::Column);
+	fl2rust_widget_0.set_label_type(LabelType::None);
+	let mut fl2rust_widget_1 = Flex::new(0, 0, 615, 345, None);
+	fl2rust_widget_1.set_type(FlexType::Column);
+	fl2rust_widget_1.set_pad(8);
+	fl2rust_widget_1.set_margins(0, 12, 0, 0, );
+	let mut fl2rust_widget_2 = Flex::new(0, 12, 615, 32, None);
+	fl2rust_widget_2.set_type(FlexType::Row);
 	fl2rust_widget_2.set_pad(16);
-	let mut fl2rust_widget_3 = Flex::new(11, 32, 591, 32, None);
-	fl2rust_widget_3.set_type(FlexType::Row);
-	fl2rust_widget_3.set_pad(16);
-	fl2rust_widget_3.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_4 = Frame::new(27, 36, 128, 24, None);
-	fl2rust_widget_4.set_label(r#"SSL validation"#);
-	let mut choice_ssl_validation = Choice::new(171, 36, 415, 24, None);
-	fl2rust_widget_3.resizable(&choice_ssl_validation);
+	fl2rust_widget_2.set_margins(16, 4, 16, 4, );
+	let mut fl2rust_widget_3 = Frame::new(16, 16, 128, 24, None);
+	fl2rust_widget_3.set_label(r#"SSL validation"#);
+	let mut choice_ssl_validation = Choice::new(160, 16, 439, 24, None);
+	fl2rust_widget_2.resizable(&choice_ssl_validation);
 	choice_ssl_validation.set_down_frame(FrameType::BorderBox);
 	choice_ssl_validation.set_label_type(LabelType::None);
 	choice_ssl_validation.end();
-	fl2rust_widget_3.end();
-	let mut fl2rust_widget_5 = Flex::new(11, 80, 591, 32, None);
-	fl2rust_widget_5.set_type(FlexType::Row);
-	fl2rust_widget_5.set_pad(16);
-	fl2rust_widget_5.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_6 = Frame::new(27, 84, 128, 24, None);
-	fl2rust_widget_6.set_label(r#"UDS Server"#);
-	let mut input_uds_server = Input::new(171, 84, 415, 24, None);
-	fl2rust_widget_5.resizable(&input_uds_server);
+	fl2rust_widget_2.end();
+	let mut fl2rust_widget_4 = Flex::new(0, 52, 615, 32, None);
+	fl2rust_widget_4.set_type(FlexType::Row);
+	fl2rust_widget_4.set_pad(16);
+	fl2rust_widget_4.set_margins(16, 4, 16, 4, );
+	let mut fl2rust_widget_5 = Frame::new(16, 56, 128, 24, None);
+	fl2rust_widget_5.set_label(r#"UDS Server"#);
+	let mut input_uds_server = Input::new(160, 56, 439, 24, None);
+	fl2rust_widget_4.resizable(&input_uds_server);
 	input_uds_server.set_label_type(LabelType::None);
-	fl2rust_widget_5.end();
-	let mut fl2rust_widget_7 = Flex::new(11, 128, 591, 32, None);
-	fl2rust_widget_7.set_type(FlexType::Row);
-	fl2rust_widget_7.set_pad(16);
-	fl2rust_widget_7.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_8 = Frame::new(27, 132, 128, 24, None);
-	fl2rust_widget_8.set_label(r#"Authenticator"#);
-	let mut choice_authenticator = Choice::new(171, 132, 415, 24, None);
-	fl2rust_widget_7.resizable(&choice_authenticator);
+	fl2rust_widget_4.end();
+	let mut fl2rust_widget_6 = Flex::new(0, 92, 615, 32, None);
+	fl2rust_widget_6.set_type(FlexType::Row);
+	fl2rust_widget_6.set_pad(16);
+	fl2rust_widget_6.set_margins(16, 4, 16, 4, );
+	let mut fl2rust_widget_7 = Frame::new(16, 96, 128, 24, None);
+	fl2rust_widget_7.set_label(r#"Service Token"#);
+	let mut choice_authenticator = Choice::new(160, 96, 439, 24, None);
+	fl2rust_widget_6.resizable(&choice_authenticator);
 	choice_authenticator.set_down_frame(FrameType::BorderBox);
 	choice_authenticator.set_label_type(LabelType::None);
 	choice_authenticator.end();
-	fl2rust_widget_7.end();
-	let mut fl2rust_widget_9 = Flex::new(11, 176, 591, 32, None);
-	fl2rust_widget_9.set_type(FlexType::Row);
-	fl2rust_widget_9.set_pad(16);
-	fl2rust_widget_9.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_10 = Frame::new(27, 180, 128, 24, None);
-	fl2rust_widget_10.set_label(r#"Username"#);
-	let mut input_username = Input::new(171, 180, 415, 24, None);
+	fl2rust_widget_6.end();
+	let mut fl2rust_widget_8 = Flex::new(0, 132, 615, 32, None);
+	fl2rust_widget_8.set_type(FlexType::Row);
+	fl2rust_widget_8.set_pad(16);
+	fl2rust_widget_8.set_margins(16, 4, 16, 4, );
+	let mut fl2rust_widget_9 = Frame::new(16, 136, 128, 24, None);
+	fl2rust_widget_9.set_label(r#"Net Restriction"#);
+	fl2rust_widget_9.set_tooltip(r#"Restrict valid detection of network interfaces to this network."#);
+	let mut input_username = Input::new(160, 136, 439, 24, None);
 	input_username.set_label_type(LabelType::None);
-	fl2rust_widget_9.end();
-	let mut fl2rust_widget_11 = Flex::new(11, 224, 591, 32, None);
-	fl2rust_widget_11.set_type(FlexType::Row);
-	fl2rust_widget_11.set_pad(16);
-	fl2rust_widget_11.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_12 = Frame::new(27, 228, 128, 24, None);
-	fl2rust_widget_12.set_label(r#"Password"#);
-	let mut input_password = Input::new(171, 228, 415, 24, None);
-	input_password.set_type(InputType::Secret);
-	input_password.set_label_type(LabelType::None);
-	fl2rust_widget_11.end();
-	fl2rust_widget_3.fixed(&fl2rust_widget_3.child(0).unwrap(), 128);
-	fl2rust_widget_3.recalc();
-	fl2rust_widget_5.fixed(&fl2rust_widget_5.child(0).unwrap(), 128);
-	fl2rust_widget_5.recalc();
-	fl2rust_widget_7.fixed(&fl2rust_widget_7.child(0).unwrap(), 128);
-	fl2rust_widget_7.recalc();
-	fl2rust_widget_9.fixed(&fl2rust_widget_9.child(0).unwrap(), 128);
-	fl2rust_widget_9.recalc();
-	fl2rust_widget_11.fixed(&fl2rust_widget_11.child(0).unwrap(), 128);
-	fl2rust_widget_11.recalc();
-	fl2rust_widget_2.end();
-	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(0).unwrap(), 32);
-	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(1).unwrap(), 32);
-	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(2).unwrap(), 32);
-	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(3).unwrap(), 32);
-	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(4).unwrap(), 32);
-	fl2rust_widget_2.recalc();
-	fl2rust_widget_1.end();
-	let mut fl2rust_widget_13 = Group::new(0, 23, 614, 263, None);
-	fl2rust_widget_13.set_label(r#"Advanced"#);
-	fl2rust_widget_13.hide();
-	let mut fl2rust_widget_14 = Flex::new(11, 32, 591, 247, None);
-	fl2rust_widget_14.set_type(FlexType::Column);
-	fl2rust_widget_14.set_pad(16);
-	let mut fl2rust_widget_15 = Flex::new(11, 32, 591, 32, None);
-	fl2rust_widget_15.set_type(FlexType::Row);
-	fl2rust_widget_15.set_pad(16);
-	fl2rust_widget_15.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_16 = Frame::new(27, 36, 128, 24, None);
-	fl2rust_widget_16.set_label(r#"Preconnect cmd"#);
-	let mut fl2rust_widget_17 = Flex::new(171, 36, 415, 24, None);
-	fl2rust_widget_17.set_type(FlexType::Row);
-	fl2rust_widget_17.set_pad(12);
-	let mut input_preconnect_cmd = Input::new(171, 36, 339, 24, None);
-	input_preconnect_cmd.set_label_type(LabelType::None);
-	let mut browse_preconnect_cmd = Button::new(522, 36, 64, 24, None);
-	browse_preconnect_cmd.set_label(r#"Browse"#);
-	fl2rust_widget_17.end();
-	fl2rust_widget_17.fixed(&fl2rust_widget_17.child(1).unwrap(), 64);
-	fl2rust_widget_17.recalc();
-	fl2rust_widget_15.end();
-	let mut fl2rust_widget_18 = Flex::new(11, 80, 591, 32, None);
-	fl2rust_widget_18.set_type(FlexType::Row);
-	fl2rust_widget_18.set_pad(16);
-	fl2rust_widget_18.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_19 = Frame::new(27, 84, 128, 24, None);
-	fl2rust_widget_19.set_label(r#"Runonce cmd"#);
-	let mut fl2rust_widget_20 = Flex::new(171, 84, 415, 24, None);
-	fl2rust_widget_20.set_type(FlexType::Row);
-	fl2rust_widget_20.set_pad(12);
-	let mut input_runonce_cmd = Input::new(171, 84, 339, 24, None);
-	input_runonce_cmd.set_label_type(LabelType::None);
-	let mut browse_runonce_cmd = Button::new(522, 84, 64, 24, None);
-	browse_runonce_cmd.set_label(r#"Browse"#);
-	fl2rust_widget_20.end();
-	fl2rust_widget_20.fixed(&fl2rust_widget_20.child(1).unwrap(), 64);
-	fl2rust_widget_20.recalc();
-	fl2rust_widget_18.end();
-	let mut fl2rust_widget_21 = Flex::new(11, 128, 591, 32, None);
-	fl2rust_widget_21.set_type(FlexType::Row);
-	fl2rust_widget_21.set_pad(16);
-	fl2rust_widget_21.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_22 = Frame::new(27, 132, 128, 24, None);
-	fl2rust_widget_22.set_label(r#"Postconfig cmd"#);
-	let mut fl2rust_widget_23 = Flex::new(171, 132, 415, 24, None);
-	fl2rust_widget_23.set_type(FlexType::Row);
-	fl2rust_widget_23.set_pad(12);
-	let mut input_postconfig_cmd = Input::new(171, 132, 339, 24, None);
-	input_postconfig_cmd.set_label_type(LabelType::None);
-	let mut browse_postconfig_cmd = Button::new(522, 132, 64, 24, None);
-	browse_postconfig_cmd.set_label(r#"Browse"#);
-	fl2rust_widget_23.end();
-	fl2rust_widget_23.fixed(&fl2rust_widget_23.child(1).unwrap(), 64);
-	fl2rust_widget_23.recalc();
-	fl2rust_widget_21.end();
-	let mut fl2rust_widget_24 = Flex::new(11, 176, 591, 32, None);
-	fl2rust_widget_24.set_type(FlexType::Row);
-	fl2rust_widget_24.set_pad(16);
-	fl2rust_widget_24.set_margins(16, 4, 16, 4, );
-	let mut fl2rust_widget_25 = Frame::new(27, 180, 128, 24, None);
-	fl2rust_widget_25.set_label(r#"Log level"#);
-	let mut choice_log_level = Choice::new(171, 180, 415, 24, None);
-	fl2rust_widget_24.resizable(&choice_log_level);
+	fl2rust_widget_8.end();
+	let mut fl2rust_widget_10 = Flex::new(0, 172, 615, 32, None);
+	fl2rust_widget_10.set_type(FlexType::Row);
+	fl2rust_widget_10.set_pad(16);
+	fl2rust_widget_10.set_margins(16, 4, 16, 4, );
+	let mut fl2rust_widget_11 = Frame::new(16, 176, 128, 24, None);
+	fl2rust_widget_11.set_label(r#"Log Level"#);
+	let mut choice_log_level = Choice::new(160, 176, 439, 24, None);
+	fl2rust_widget_10.resizable(&choice_log_level);
 	choice_log_level.set_down_frame(FrameType::BorderBox);
 	choice_log_level.set_label_type(LabelType::None);
 	choice_log_level.end();
-	fl2rust_widget_24.end();
-	let mut fl2rust_widget_26 = Flex::new(11, 224, 591, 32, None);
-	fl2rust_widget_26.set_type(FlexType::Row);
-	fl2rust_widget_26.set_pad(16);
-	fl2rust_widget_26.set_margins(16, 4, 16, 4, );
-	fl2rust_widget_26.end();
-	fl2rust_widget_15.fixed(&fl2rust_widget_15.child(0).unwrap(), 128);
-	fl2rust_widget_15.recalc();
-	fl2rust_widget_18.fixed(&fl2rust_widget_18.child(0).unwrap(), 128);
-	fl2rust_widget_18.recalc();
-	fl2rust_widget_21.fixed(&fl2rust_widget_21.child(0).unwrap(), 128);
-	fl2rust_widget_21.recalc();
-	fl2rust_widget_24.fixed(&fl2rust_widget_24.child(0).unwrap(), 128);
-	fl2rust_widget_24.recalc();
-	fl2rust_widget_14.end();
-	fl2rust_widget_14.fixed(&fl2rust_widget_14.child(0).unwrap(), 32);
-	fl2rust_widget_14.fixed(&fl2rust_widget_14.child(1).unwrap(), 32);
-	fl2rust_widget_14.fixed(&fl2rust_widget_14.child(2).unwrap(), 32);
-	fl2rust_widget_14.fixed(&fl2rust_widget_14.child(3).unwrap(), 32);
-	fl2rust_widget_14.fixed(&fl2rust_widget_14.child(4).unwrap(), 32);
-	fl2rust_widget_14.recalc();
-	fl2rust_widget_13.end();
+	fl2rust_widget_10.end();
+	fl2rust_widget_2.fixed(&fl2rust_widget_2.child(0).unwrap(), 128);
+	fl2rust_widget_2.recalc();
+	fl2rust_widget_4.fixed(&fl2rust_widget_4.child(0).unwrap(), 128);
+	fl2rust_widget_4.recalc();
+	fl2rust_widget_6.fixed(&fl2rust_widget_6.child(0).unwrap(), 128);
+	fl2rust_widget_6.recalc();
+	fl2rust_widget_8.fixed(&fl2rust_widget_8.child(0).unwrap(), 128);
+	fl2rust_widget_8.recalc();
+	fl2rust_widget_10.fixed(&fl2rust_widget_10.child(0).unwrap(), 128);
+	fl2rust_widget_10.recalc();
+	fl2rust_widget_1.end();
+	fl2rust_widget_1.fixed(&fl2rust_widget_1.child(0).unwrap(), 32);
+	fl2rust_widget_1.fixed(&fl2rust_widget_1.child(1).unwrap(), 32);
+	fl2rust_widget_1.fixed(&fl2rust_widget_1.child(2).unwrap(), 32);
+	fl2rust_widget_1.fixed(&fl2rust_widget_1.child(3).unwrap(), 32);
+	fl2rust_widget_1.fixed(&fl2rust_widget_1.child(4).unwrap(), 32);
+	fl2rust_widget_1.recalc();
 	fl2rust_widget_0.end();
-	let mut fl2rust_widget_27 = Flex::new(0, 286, 614, 60, None);
-	fl2rust_widget_27.set_type(FlexType::Row);
-	fl2rust_widget_27.set_pad(32);
-	fl2rust_widget_27.set_margins(16, 16, 16, 16, );
-	let mut button_register = Button::new(16, 302, 173, 28, None);
+	let mut fl2rust_widget_12 = Flex::new(0, 215, 618, 53, None);
+	fl2rust_widget_12.set_type(FlexType::Row);
+	fl2rust_widget_12.set_pad(32);
+	fl2rust_widget_12.set_margins(16, 12, 16, 12, );
+	let mut button_register = Button::new(16, 227, 174, 29, None);
 	button_register.set_label(r#"Register with UDS"#);
-	let mut button_test = Button::new(221, 302, 173, 28, None);
+	let mut button_test = Button::new(222, 227, 174, 29, None);
 	button_test.set_label(r#"Test configuration"#);
-	let mut button_close = Button::new(426, 302, 172, 28, None);
+	let mut button_close = Button::new(428, 227, 174, 29, None);
 	button_close.set_label(r#"Close"#);
-	fl2rust_widget_27.end();
+	fl2rust_widget_12.end();
 	win.end();
 	win.show();
 	Self {
@@ -242,13 +146,6 @@ impl ConfigGui {
 	    input_uds_server,
 	    choice_authenticator,
 	    input_username,
-	    input_password,
-	    input_preconnect_cmd,
-	    browse_preconnect_cmd,
-	    input_runonce_cmd,
-	    browse_runonce_cmd,
-	    input_postconfig_cmd,
-	    browse_postconfig_cmd,
 	    choice_log_level,
 	    button_register,
 	    button_test,

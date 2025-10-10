@@ -29,10 +29,3 @@ tower = "0.5.2"
 hyper = "1.7.0"
 
 
-[profile.release]
-opt-level = "z"            # For size (use "s" for speed if size is not critical)
-lto = true                 # Link Time Optimization (better optimizations across crates)
-codegen-units = 1         # compiles in a single unit to allow for more cross-crate optimization
-panic = "unwind"           # removes support for backtraces (reduces size)
-strip = "symbols"         # removes debug symbols (requires Rust 1.70+)
-
