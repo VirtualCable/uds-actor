@@ -59,8 +59,8 @@ pub fn new_config_storage() -> Box<dyn Configuration> {
     Box::new(UnixConfig::default())
 }
 
-#[cfg(not(test))]
-const CONFIG_PATH: &str = "/etc/udsactor/config.yaml";
+#[cfg(not(debug_assertions))]
+const CONFIG_PATH: &str = "/etc/udsactor/config.toml";
 
-#[cfg(test)]
-const CONFIG_PATH: &str = "/tmp/udsactor/config.yaml";
+#[cfg(debug_assertions)]
+const CONFIG_PATH: &str = "/tmp/udsactor_config.toml";
