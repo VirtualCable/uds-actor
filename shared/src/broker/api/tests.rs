@@ -238,7 +238,7 @@ async fn test_ready() {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
             password: Some("testpass".to_string()),
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+            ciphers: Some("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string()),
         },
         error: None,
     };
@@ -271,7 +271,7 @@ async fn test_unmanaged_ready() {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
             password: Some("testpass".to_string()),
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+            ciphers: Some("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string()),
         },
         error: None,
     };
@@ -306,7 +306,7 @@ async fn test_ready_ip_changed() {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
             password: Some("testpass".to_string()),
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
+            ciphers: Some("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string()),
         },
         error: None,
     };

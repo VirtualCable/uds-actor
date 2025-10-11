@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::net::TcpStream;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, Stream};
 use rustls_native_certs::load_native_certs;
+use std::net::TcpStream;
+use std::sync::Arc;
 
-use shared::{tls::ciphers, log};
+use shared::{log, tls::ciphers};
 
 // This test tries to connect to www.example.com:443 using the filtered cipher list
 #[test]
@@ -11,15 +11,15 @@ use shared::{tls::ciphers, log};
 fn test_tls_handshake_with_example_com() {
     shared::log::setup_logging("debug", shared::log::LogType::Tests);
     // Pick some ciphers (you can try restricting to one to see if it still works)
-    let ciphers = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384";
+    let ciphers = Some("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384");
 
     // Build provider with your filter
     let provider = ciphers::provider(ciphers);
 
-        let certs = load_native_certs().certs;
+    let certs = load_native_certs().certs;
 
-        let mut root_store = RootCertStore::empty();
-        root_store.add_parsable_certificates(certs);
+    let mut root_store = RootCertStore::empty();
+    root_store.add_parsable_certificates(certs);
 
     // Build client config with our cipher suites
     let config = ClientConfig::builder_with_provider(Arc::new(provider))
@@ -47,5 +47,4 @@ fn test_tls_handshake_with_example_com() {
 
     let resp = String::from_utf8_lossy(&buf[..n]);
     log::info!("Received response:\n{}", resp);
-
 }

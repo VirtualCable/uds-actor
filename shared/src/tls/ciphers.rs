@@ -47,15 +47,13 @@ fn filter_cipher_suites(ciphers: &str) -> Vec<SupportedCipherSuite> {
         .collect()
 }
 
-pub fn provider(list_of_ciphers: &str) -> CryptoProvider {
-    let mut ciphers = filter_cipher_suites(list_of_ciphers);
-    if ciphers.is_empty() {
-        log::warn!(
-            "No valid cipher suites found in {}, using default",
-            list_of_ciphers
-        );
-        ciphers = rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.to_vec();
-    }
+pub fn provider(ciphers: Option<&str>) -> CryptoProvider {
+    let ciphers = if let Some(ciphers) = ciphers {
+        filter_cipher_suites(ciphers)
+    } else {
+        rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.to_vec()
+    };
+
     log::debug!("cipher_suites: {:?}", ciphers);
 
     rustls::crypto::CryptoProvider {
@@ -70,7 +68,7 @@ mod tests {
     #[test]
     fn test_empty_cipher_list() {
         let ciphers = "";
-        let provider = provider(ciphers);
+        let provider = provider(Some(ciphers));
         assert_eq!(
             provider.cipher_suites.len(),
             rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.len()
@@ -80,7 +78,7 @@ mod tests {
     #[test]
     fn test_invalid_cipher_list() {
         let ciphers = "ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512";
-        let provider = provider(ciphers);
+        let provider = provider(Some(ciphers));
         assert_eq!(
             provider.cipher_suites.len(),
             rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.len()
@@ -90,20 +88,29 @@ mod tests {
     #[test]
     fn test_some_valid_cipher_list() {
         let ciphers = "ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-CHACHA20-POLY1305-SHA256";
-        let provider = provider(ciphers);
+        let provider = provider(Some(ciphers));
         assert_eq!(provider.cipher_suites.len(), 2);
     }
 
     #[test]
     fn test_valid_cipher_list() {
         let ciphers = "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256";
-        let provider = provider(ciphers);
+        let provider = provider(Some(ciphers));
         assert_eq!(provider.cipher_suites.len(), 3);
     }
 
     #[test]
     fn invalid_cipher_list_falls_back_to_default() {
-        let provider = provider("INVALID-CIPHER-FOO:BAR");
+        let provider = provider(Some("INVALID-CIPHER-FOO:BAR"));
+        assert_eq!(
+            provider.cipher_suites.len(),
+            aws_lc_rs::DEFAULT_CIPHER_SUITES.len()
+        );
+    }
+
+    #[test]
+    fn none_cipher_list_falls_back_to_default() {
+        let provider = provider(None);
         assert_eq!(
             provider.cipher_suites.len(),
             aws_lc_rs::DEFAULT_CIPHER_SUITES.len()
@@ -112,10 +119,11 @@ mod tests {
 
     #[test]
     fn empty_cipher_list_falls_back_to_default() {
-        let provider = provider("");
+        let provider = provider(Some(""));
         assert_eq!(
             provider.cipher_suites.len(),
             aws_lc_rs::DEFAULT_CIPHER_SUITES.len()
         );
     }
+
 }

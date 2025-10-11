@@ -12,7 +12,7 @@ pub fn test_certinfo() -> CertificateInfo {
         key: String::from_utf8(KEY_PEM.to_vec()).unwrap(),
         certificate: String::from_utf8(CERT_PEM.to_vec()).unwrap(),
         password: None,
-        ciphers: TESTING_CIPHERS.to_string(),
+        ciphers: Some(TESTING_CIPHERS.to_string()),
     }
 }
 
@@ -21,6 +21,6 @@ pub fn test_certinfo_with_pass() -> CertificateInfo {
         key: String::from_utf8(KEY_PEM_WITH_PASS.to_vec()).unwrap(),
         certificate: String::from_utf8(CERT_PEM.to_vec()).unwrap(),
         password: Some(KEY_PASSWORD.to_string()),
-        ciphers: TESTING_CIPHERS.to_string(),
+        ciphers: Some(TESTING_CIPHERS.to_string()),
     }
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use axum_server::tls_rustls::RustlsConfig;
+use rustls::version::{TLS12, TLS13};
 use std::sync::Arc;
 
 use rustls::ServerConfig;
@@ -9,11 +10,9 @@ use pkcs8::EncryptedPrivateKeyInfo;
 use pkcs8::der::Decode;
 use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys}; // necesario para from_der()
 
-use super::CertificateInfo;
+use super::{CertificateInfo, ciphers};
 
-pub fn rustls_config_from_pem(
-    cert_info: CertificateInfo
-) -> Result<RustlsConfig> {
+pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig> {
     // Extract certificate chain
     let cert_pem: Vec<u8> = cert_info.certificate.into();
     let mut cert_reader = cert_pem.as_slice();
@@ -39,7 +38,10 @@ pub fn rustls_config_from_pem(
         _ => parse_unencrypted_key(key_pem.as_slice())?,
     };
 
-    let config = ServerConfig::builder()
+    let provider = ciphers::provider(cert_info.ciphers.as_deref());
+
+    let config: ServerConfig = ServerConfig::builder_with_provider(Arc::new(provider))
+        .with_protocol_versions(&[&TLS13, &TLS12])?
         .with_no_client_auth()
         .with_single_cert(cert_chain, private_key)?;
 
