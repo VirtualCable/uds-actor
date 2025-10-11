@@ -71,6 +71,12 @@ reqwest = { version = "0.12.23", features = [
 ] }
 ipnetwork = "0.21.1"
 
+# For maintain compat with 4.0, we need to decrypt the pem key
+# so we use pkcs8 an pem crates
+pkcs8 = { version = "0.10.2", features = ["encryption"] }
+pem = "3.0.6"
+rustls-pemfile = "2.2.0"
+
 rustls = "0.23.32"
 async-trait = "0.1.89"
 tokio = { version = "1.47.1", features = [

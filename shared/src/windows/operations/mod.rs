@@ -384,7 +384,6 @@ impl Operations for WindowsOperations {
         log::warn!("SESSIONNAME environment variable is not set");
         Ok("unknown".to_string())
     }
-
     fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>> {
         let mut buf_len: u32 = 32_768;
         let mut buf = vec![0u8; buf_len as usize];

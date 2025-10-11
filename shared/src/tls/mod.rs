@@ -2,6 +2,7 @@ use rustls::crypto::CryptoProvider;
 
 pub mod ciphers;
 pub mod noverify;
+pub mod certool;
 
 // Ensure only one initialization happens
 static INIT: std::sync::Once = std::sync::Once::new();

@@ -334,7 +334,7 @@ impl api::BrokerApi for DummyBrokerApi {
         Ok(api::types::CertificateInfo {
             key: String::from_utf8_lossy(key).into_owned(),
             certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: "".into(),
+            password: None,
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
         })
     }
@@ -351,7 +351,7 @@ impl api::BrokerApi for DummyBrokerApi {
         Ok(api::types::CertificateInfo {
             key: String::from_utf8_lossy(key).into_owned(),
             certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: "".into(),
+            password: Some("".into()),
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
         })
     }
@@ -366,7 +366,7 @@ impl api::BrokerApi for DummyBrokerApi {
         Ok(api::types::CertificateInfo {
             key: String::from_utf8_lossy(key).into_owned(),
             certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: "".into(),
+            password: Some("".into()),
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
         })
     }

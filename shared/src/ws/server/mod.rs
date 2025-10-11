@@ -19,7 +19,6 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use socket2::{Domain, Socket, Type};
 use tokio::{
@@ -38,9 +37,18 @@ use crate::{
 mod routes;
 
 #[derive(Clone)]
+pub struct ServerHandle {
+    pub workers_to_wsclient: mpsc::Sender<RpcEnvelope<RpcMessage>>,
+    pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
+    pub tracker: RequestTracker,
+    pub task: Arc<tokio::task::JoinHandle<()>>,
+}
+
+#[derive(Clone)]
 pub struct ServerInfo {
     pub cert_pem: Vec<u8>,
     pub key_pem: Vec<u8>,
+    pub key_password: Option<String>,  // Optional password for encrypted key
     pub port: u16,
     pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>, // workers → WS client
     pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
@@ -58,7 +66,7 @@ pub struct ServerState {
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
     pub secret: String,
-    pub ws_active: Arc<AtomicBool>,
+    pub is_ws_active: Arc<AtomicBool>,
 }
 
 impl From<&ServerInfo> for ServerState {
@@ -70,13 +78,13 @@ impl From<&ServerInfo> for ServerState {
             tracker: info.tracker.clone(),
             stop: info.stop.clone(),
             secret: info.secret.clone(),
-            ws_active: Arc::new(AtomicBool::new(false)),
+            is_ws_active: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 /// Middleware for verifying the secret in the path
-async fn check_secret(
+async fn check_secret_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(state): Extension<ServerState>,
     req: Request<Body>,
@@ -110,7 +118,7 @@ async fn check_secret(
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerState>) -> Response {
-    let ws_active = state.ws_active.clone();
+    let ws_active = state.is_ws_active.clone();
     if ws_active.swap(true, Ordering::SeqCst) {
         // ya estaba true → hay cliente activo
         log::warn!("WebSocket connection attempt while another is active");
@@ -204,13 +212,16 @@ pub async fn websocket_loop(
     ws_active.store(false, Ordering::SeqCst);
 }
 
+/// Main server function
 pub async fn server(config: &ServerInfo) -> Result<()> {
     log::debug!("Initializing server {}", config.port);
     let state = ServerState::from(config);
 
-    let tls_config = RustlsConfig::from_pem(config.cert_pem.clone(), config.key_pem.clone())
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create RustlsConfig: {}", e))?;
+    let tls_config = crate::tls::certool::rustls_config_from_pem(
+        config.cert_pem.clone(),
+        config.key_pem.clone(),
+        config.key_password.clone(),
+    )?;
     log::debug!("TLS configuration loaded");
 
     let handle = axum_server::Handle::new();
@@ -219,7 +230,7 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
     let app = Router::new()
         .merge(routes::routes())
         .route("/ws", get(ws_handler))
-        .route_layer(middleware::from_fn(check_secret))
+        .route_layer(middleware::from_fn(check_secret_middleware))
         .layer(Extension(state));
 
     tokio::spawn({
@@ -261,8 +272,48 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod test_certs;
+// Creates and starts the server, returning a handle to interact with it
+// 
+pub async fn start_server(
+    cert_pem: Vec<u8>,
+    key_pem: Vec<u8>,
+    key_password: Option<String>,
+    stop: Arc<Notify>,
+    secret: String,
+) -> Result<ServerHandle> {
+    // Create channels
+    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
+    let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
+    let tracker = RequestTracker::new();
+
+    // Armar ServerInfo
+    let info = ServerInfo {
+        cert_pem,
+        key_pem,
+        key_password,
+        port: crate::consts::UDS_PORT,
+        workers_tx: workers_tx.clone(),
+        workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)),
+        wsclient_to_workers: wsclient_to_workers.clone(),
+        tracker: tracker.clone(),
+        stop: stop.clone(),
+        secret,
+    };
+
+    // Lanzar el servidor en background
+    let handle = tokio::spawn(async move {
+        if let Err(e) = server(&info).await {
+            log::error!("Server failed: {e}");
+        }
+    });
+
+    Ok(ServerHandle {
+        workers_to_wsclient: workers_tx,
+        wsclient_to_workers,
+        tracker,
+        task: Arc::new(handle),
+    })
+}
 
 #[cfg(test)]
 mod tests;

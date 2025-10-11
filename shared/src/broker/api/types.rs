@@ -234,7 +234,7 @@ pub struct ClientInfo {
 pub struct CertificateInfo {
     pub key: String,
     pub certificate: String,
-    pub password: String,
+    pub password: Option<String>,
     pub ciphers: String,
 }
 

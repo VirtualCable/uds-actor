@@ -33,6 +33,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 // are represented as `Option<u32>`) to keep the trait cross-platform.
 // The Windows implementation will convert those into the appropriate
 // Windows-specific types.
+use anyhow::Result;
 
 // Struct for a network interface information
 #[derive(Debug, Clone)]
@@ -81,23 +82,23 @@ pub struct JoinDomainOptions {
 
 pub trait Operations: Send + Sync {
     /// Check if the current user has the necessary permissions to perform administrative tasks.
-    fn check_permissions(&self) -> anyhow::Result<bool>;
+    fn check_permissions(&self) -> Result<bool>;
 
     /// Get the computer name.
     /// Returns the hostname of the computer.
-    fn get_computer_name(&self) -> anyhow::Result<String>;
+    fn get_computer_name(&self) -> Result<String>;
 
     /// Get the domain name the computer is joined to.
     /// Returns `Ok(None)` if the computer is not joined to any domain.
-    fn get_domain_name(&self) -> anyhow::Result<Option<String>>;
+    fn get_domain_name(&self) -> Result<Option<String>>;
 
     /// Renames the computer to `new_name`.
     /// This may require a reboot to take effect.
-    fn rename_computer(&self, new_name: &str) -> anyhow::Result<()>;
+    fn rename_computer(&self, new_name: &str) -> Result<()>;
 
     /// Joins the computer to a domain with the given options.
     /// The `options` struct contains all necessary information for joining the domain.
-    fn join_domain(&self, options: &JoinDomainOptions) -> anyhow::Result<()>;
+    fn join_domain(&self, options: &JoinDomainOptions) -> Result<()>;
 
     /// Change the password for a user.
     /// This may require the old password, depending on the platform and user privileges.
@@ -106,47 +107,56 @@ pub trait Operations: Send + Sync {
         user: &str,
         old_password: &str,
         new_password: &str,
-    ) -> anyhow::Result<()>;
+    ) -> Result<()>;
 
-    fn get_os_version(&self) -> anyhow::Result<String>;
+    fn get_os_version(&self) -> Result<String>;
 
     /// Reboot the machine. `flags` is an optional platform-specific bitmask
     /// represented as `u32` here; the platform implementation must convert it
     /// to the platform-specific flags type.
-    fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()>;
+    fn reboot(&self, flags: Option<u32>) -> Result<()>;
 
     /// Log off the current user.
-    fn logoff(&self) -> anyhow::Result<()>;
+    fn logoff(&self) -> Result<()>;
 
     // Initializes the idle timer mechanism, if required by the platform.
     // This should be called once during startup.
-    fn init_idle_timer(&self) -> anyhow::Result<()>;
+    fn init_idle_timer(&self) -> Result<()>;
 
     /// Get information about the network interfaces on the machine.
     /// This should return a list of all network interfaces, including their IP and MAC addresses.
-    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>>;
+    /// Excludes loopback and link-local addresses.
+    fn get_network_info(&self) -> Result<Vec<NetworkInterface>>;
+
+    // Implicitly, get first interface (if any)
+    fn get_first_network_interface(&self) -> Result<NetworkInterface> {
+        let ifaces = self.get_network_info()?;
+        ifaces.into_iter().next().ok_or_else(|| {
+            anyhow::anyhow!("No network interfaces found on this machine")
+        })
+    }
 
     /// Get the duration the system has been idle (no user input) as a `Duration`.
     /// The definition of "idle" in our case is the time since the last user interaction.
-    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration>;
+    fn get_idle_duration(&self) -> Result<std::time::Duration>;
 
     /// Get the current user logged into the system.
-    fn get_current_user(&self) -> anyhow::Result<String>;
+    fn get_current_user(&self) -> Result<String>;
 
     // Get the type of session (e.g., "console", "rdp", etc.)
-    fn get_session_type(&self) -> anyhow::Result<String>;
+    fn get_session_type(&self) -> Result<String>;
 
     /// Force a time synchronization with the time server.
-    fn force_time_sync(&self) -> anyhow::Result<()>;
+    fn force_time_sync(&self) -> Result<()>;
 
     /// Protect a file so that only the owner can read/write it.
     /// This is useful for configuration files containing sensitive information.
     /// On Unix, this typically sets permissions to 600. On Windows, it modifies the ACLs.
-    fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()>;
+    fn protect_file_for_owner_only(&self, path: &str) -> Result<()>;
 
     // This specifically checks if there is any installation in progress (like Windows Update)
     // On unix, this will always return false
-    fn is_some_installation_in_progress(&self) -> anyhow::Result<bool>;
+    fn is_some_installation_in_progress(&self) -> Result<bool>;
 }
 
 // Re-export the Windows concrete implementation when building for Windows.

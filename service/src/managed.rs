@@ -11,11 +11,11 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
-    let interfaces = platform.operations().get_network_info()?;
+    let known_interfaces = platform.operations().get_network_info()?;
     broker
         .write()
         .await
-        .initialize(interfaces.as_slice())
+        .initialize(known_interfaces.as_slice())
         .await
         .map_err(|e| {
             log::error!("Failed to initialize with broker: {:?}", e);

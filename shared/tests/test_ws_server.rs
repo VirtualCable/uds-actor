@@ -45,6 +45,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     let server_info = ServerInfo {
         cert_pem: cert_pem.to_vec(),
         key_pem: key_pem.to_vec(),
+        key_password: None,
         port,
         workers_tx, // sender side for workers
         workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver

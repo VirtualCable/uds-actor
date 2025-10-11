@@ -100,13 +100,12 @@ fn main() {
         let auths = auths.clone();
         let cfg_window = cfg_window.clone();
         // Fail if we can't get at least one network interface
-        let interface = operations
-            .get_network_info()
-            .unwrap()
-            .into_iter()
-            .next()
-            .unwrap();
-        // Set a callback on input_uds_server to validate the hostname
+        let interface = operations.get_first_network_interface().unwrap_or_else(|e| {
+            log::error!("No network interfaces found: {}", e);
+            fltk::dialog::alert_default("No network interfaces found, cannot continue");
+            fltk::app::quit();
+            std::process::exit(1);
+        });
 
         move |_| {
             callbacks::btn_register_clicked(

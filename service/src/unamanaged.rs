@@ -3,25 +3,33 @@ use tokio::sync::Notify;
 
 use anyhow::Result;
 
-use shared::log;
+use shared::{log, ws::server};
 
 use crate::platform;
-
 
 pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
-    let interfaces = platform.operations().get_network_info()?;
-    broker
+    let known_interfaces = platform.operations().get_network_info()?;
+
+    let cert_info = broker
         .write()
         .await
-        .initialize(interfaces.as_slice())
+        .unmanaged_ready(known_interfaces.as_slice(), shared::consts::UDS_PORT)
         .await
         .map_err(|e| {
             log::error!("Failed to initialize with broker: {:?}", e);
             anyhow::anyhow!("Failed to initialize with broker: {:?}", e)
         })?;
+
+    let _http_server = server::start_server(
+        cert_info.certificate.into(),
+        cert_info.key.into(),
+        cert_info.password,
+        stop.clone(),
+        platform.broker_api().read().await.get_secret().unwrap().to_string(),
+    );
 
     let start = std::time::Instant::now();
     loop {

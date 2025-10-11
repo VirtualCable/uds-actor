@@ -24,12 +24,14 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
 
     let tracker = RequestTracker::new();
-    let (cert_pem, key_pem) = super::test_certs::test_cert_and_key();
+    let (cert_pem, key_pem, key_password) =
+        crate::testing::test_certs::test_cert_and_key_with_pass();
     let notify = Arc::new(tokio::sync::Notify::new());
 
     let server_info = ServerInfo {
         cert_pem: cert_pem.to_vec(),
         key_pem: key_pem.to_vec(),
+        key_password: Some(key_password.to_string()),
         port,
         workers_tx, // sender side for workers
         workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver
@@ -107,5 +109,4 @@ async fn test_server_stops_on_ws_client_connected() {
         .expect("Server did not stop in time")
         .expect("Server task panicked")
         .expect("Server returned an error");
-
 }

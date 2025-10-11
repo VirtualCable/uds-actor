@@ -29,3 +29,6 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Defined in build.rs
 pub const BUILD: &str = env!("CARGO_PKG_BUILD");
+
+// Port used for listener of UDS Actor Service
+pub const UDS_PORT: u16 = 43910;
