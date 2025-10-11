@@ -32,6 +32,7 @@ use crate::{
         request_tracker::RequestTracker,
         types::{Close, Ping, RpcEnvelope, RpcMessage},
     },
+    tls::{CertificateInfo, certool},
 };
 
 mod routes;
@@ -46,9 +47,7 @@ pub struct ServerHandle {
 
 #[derive(Clone)]
 pub struct ServerInfo {
-    pub cert_pem: Vec<u8>,
-    pub key_pem: Vec<u8>,
-    pub key_password: Option<String>,  // Optional password for encrypted key
+    pub cert_info: CertificateInfo,
     pub port: u16,
     pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>, // workers → WS client
     pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
@@ -217,10 +216,8 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
     log::debug!("Initializing server {}", config.port);
     let state = ServerState::from(config);
 
-    let tls_config = crate::tls::certool::rustls_config_from_pem(
-        config.cert_pem.clone(),
-        config.key_pem.clone(),
-        config.key_password.clone(),
+    let tls_config = certool::rustls_config_from_pem(
+        config.cert_info.clone(),
     )?;
     log::debug!("TLS configuration loaded");
 
@@ -275,9 +272,7 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
 // Creates and starts the server, returning a handle to interact with it
 // 
 pub async fn start_server(
-    cert_pem: Vec<u8>,
-    key_pem: Vec<u8>,
-    key_password: Option<String>,
+    cert_info: CertificateInfo,
     stop: Arc<Notify>,
     secret: String,
 ) -> Result<ServerHandle> {
@@ -288,9 +283,7 @@ pub async fn start_server(
 
     // Armar ServerInfo
     let info = ServerInfo {
-        cert_pem,
-        key_pem,
-        key_password,
+        cert_info,
         port: crate::consts::UDS_PORT,
         workers_tx: workers_tx.clone(),
         workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)),

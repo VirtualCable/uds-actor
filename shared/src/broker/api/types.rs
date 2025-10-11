@@ -230,13 +230,6 @@ pub struct ClientInfo {
     pub session_id: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CertificateInfo {
-    pub key: String,
-    pub certificate: String,
-    pub password: Option<String>,
-    pub ciphers: String,
-}
 
 // Log levels, must match server ones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

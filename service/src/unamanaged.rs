@@ -24,9 +24,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
         })?;
 
     let _http_server = server::start_server(
-        cert_info.certificate.into(),
-        cert_info.key.into(),
-        cert_info.password,
+        cert_info.clone(),
         stop.clone(),
         platform.broker_api().read().await.get_secret().unwrap().to_string(),
     );

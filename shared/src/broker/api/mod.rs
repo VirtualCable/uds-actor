@@ -40,6 +40,8 @@ pub mod block;
 use anyhow::Result;
 use async_trait::async_trait;
 
+use crate::tls::CertificateInfo;
+
 /// Trait that contains the public API methods of BrokerApi (everything except `new`)
 #[async_trait]
 pub trait BrokerApi: Send + Sync {
@@ -65,19 +67,19 @@ pub trait BrokerApi: Send + Sync {
         interfaces: &[crate::operations::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError>;
 
-    async fn ready(&self, ip: &str, port: u16) -> Result<types::CertificateInfo, types::RestError>;
+    async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, types::RestError>;
 
     async fn unmanaged_ready(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         port: u16,
-    ) -> Result<types::CertificateInfo, types::RestError>;
+    ) -> Result<CertificateInfo, types::RestError>;
 
     async fn notify_new_ip(
         &self,
         ip: &str,
         port: u16,
-    ) -> Result<types::CertificateInfo, types::RestError>;
+    ) -> Result<CertificateInfo, types::RestError>;
 
     async fn login(
         &self,
@@ -308,7 +310,7 @@ impl BrokerApi for UdsBrokerApi {
         response.result()
     }
 
-    async fn ready(&self, ip: &str, port: u16) -> Result<types::CertificateInfo, types::RestError> {
+    async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, types::RestError> {
         let payload = types::ReadyRequest {
             token: &self.get_token()?,
             secret: self.get_secret()?,
@@ -316,7 +318,7 @@ impl BrokerApi for UdsBrokerApi {
             port,
         };
 
-        let response: types::ApiResponse<types::CertificateInfo> =
+        let response: types::ApiResponse<CertificateInfo> =
             self.do_post("ready", &payload).await?;
         response.result()
     }
@@ -325,7 +327,7 @@ impl BrokerApi for UdsBrokerApi {
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         port: u16,
-    ) -> Result<types::CertificateInfo, types::RestError> {
+    ) -> Result<CertificateInfo, types::RestError> {
         let payload = types::UnmanagedReadyRequest {
             id: interfaces.iter().cloned().map(Into::into).collect(),
             token: &self.get_token()?,
@@ -333,7 +335,7 @@ impl BrokerApi for UdsBrokerApi {
             port,
         };
 
-        let response: types::ApiResponse<types::CertificateInfo> =
+        let response: types::ApiResponse<CertificateInfo> =
             self.do_post("unmanaged", &payload).await?;
         response.result()
     }
@@ -342,7 +344,7 @@ impl BrokerApi for UdsBrokerApi {
         &self,
         ip: &str,
         port: u16,
-    ) -> Result<types::CertificateInfo, types::RestError> {
+    ) -> Result<CertificateInfo, types::RestError> {
         let payload = types::ReadyRequest {
             token: &self.get_token()?,
             secret: self.get_secret()?,
@@ -350,7 +352,7 @@ impl BrokerApi for UdsBrokerApi {
             port,
         };
 
-        let response: types::ApiResponse<types::CertificateInfo> =
+        let response: types::ApiResponse<CertificateInfo> =
             self.do_post("ipchange", &payload).await?;
         response.result()
     }

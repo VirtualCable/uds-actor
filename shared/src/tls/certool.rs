@@ -9,18 +9,20 @@ use pkcs8::EncryptedPrivateKeyInfo;
 use pkcs8::der::Decode;
 use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys}; // necesario para from_der()
 
+use super::CertificateInfo;
+
 pub fn rustls_config_from_pem(
-    cert_pem: Vec<u8>,
-    key_pem: Vec<u8>,
-    password: Option<String>,
+    cert_info: CertificateInfo
 ) -> Result<RustlsConfig> {
     // Extract certificate chain
+    let cert_pem: Vec<u8> = cert_info.certificate.into();
     let mut cert_reader = cert_pem.as_slice();
     let cert_chain: Vec<CertificateDer<'static>> =
         certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
 
+    let key_pem: Vec<u8> = cert_info.key.into();
     // Extract private key, (possibly decrypting it first if password is Some)
-    let private_key: PrivateKeyDer<'static> = match password {
+    let private_key: PrivateKeyDer<'static> = match cert_info.password {
         Some(ref pass) if !pass.is_empty() => {
             let pem_block = pem::parse(key_pem.as_slice())?;
             let epki = EncryptedPrivateKeyInfo::from_der(pem_block.contents())
@@ -34,7 +36,7 @@ pub fn rustls_config_from_pem(
             // doc.as_bytes() es PKCS#8 DER; aquí sí hace falta construir el tipo propietario
             PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(doc.as_bytes().to_vec()))
         }
-        _ => parse_unencrypted_key(&key_pem)?,
+        _ => parse_unencrypted_key(key_pem.as_slice())?,
     };
 
     let config = ServerConfig::builder()
@@ -72,9 +74,9 @@ mod tests {
     fn load_unencrypted_key() {
         init_tls(None);
 
-        let (cert, key) = test_certs::test_cert_and_key();
+        let cert_info = test_certs::test_certinfo();
 
-        let cfg = rustls_config_from_pem(cert.to_vec(), key.to_vec(), None);
+        let cfg = rustls_config_from_pem(cert_info);
         assert!(cfg.is_ok(), "should load unencrypted key");
     }
 
@@ -82,9 +84,9 @@ mod tests {
     fn load_encrypted_key_with_password() {
         init_tls(None);
 
-        let (cert, key, pass) = test_certs::test_cert_and_key_with_pass();
+        let cert_info = test_certs::test_certinfo_with_pass();
 
-        let cfg = rustls_config_from_pem(cert.to_vec(), key.to_vec(), Some(pass.to_string()));
+        let cfg = rustls_config_from_pem(cert_info);
         assert!(cfg.is_ok(), "should load encrypted key with password");
     }
 
@@ -92,9 +94,9 @@ mod tests {
     fn fail_with_wrong_password() {
         init_tls(None);
 
-        let (cert, key, _) = test_certs::test_cert_and_key_with_pass();
+        let cert_info = test_certs::test_certinfo_with_pass();
 
-        let cfg = rustls_config_from_pem(cert.to_vec(), key.to_vec(), Some("wrong".into()));
+        let cfg = rustls_config_from_pem(cert_info);
         assert!(cfg.is_err(), "should fail with wrong password");
     }
 }

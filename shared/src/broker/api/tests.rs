@@ -26,7 +26,10 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use super::*;
 
-use crate::log::{self, info};
+use crate::{
+    log::{self, info},
+    tls::CertificateInfo,
+};
 
 use mockito::{Matcher, Server};
 
@@ -230,11 +233,11 @@ async fn test_initialize() {
 async fn test_ready() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let result = types::ApiResponse::<types::CertificateInfo> {
-        result: types::CertificateInfo {
+    let result = types::ApiResponse::<CertificateInfo> {
+        result: CertificateInfo {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
-            password: "testpass".to_string(),
+            password: Some("testpass".to_string()),
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
         },
         error: None,
@@ -263,11 +266,11 @@ async fn test_ready() {
 async fn test_unmanaged_ready() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let result = types::ApiResponse::<types::CertificateInfo> {
-        result: types::CertificateInfo {
+    let result = types::ApiResponse::<CertificateInfo> {
+        result: CertificateInfo {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
-            password: "testpass".to_string(),
+            password: Some("testpass".to_string()),
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
         },
         error: None,
@@ -298,11 +301,11 @@ async fn test_unmanaged_ready() {
 async fn test_ready_ip_changed() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
-    let result = types::ApiResponse::<types::CertificateInfo> {
-        result: types::CertificateInfo {
+    let result = types::ApiResponse::<CertificateInfo> {
+        result: CertificateInfo {
             key: "key".to_string(),
             certificate: "certificate".to_string(),
-            password: "testpass".to_string(),
+            password: Some("testpass".to_string()),
             ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".to_string(),
         },
         error: None,

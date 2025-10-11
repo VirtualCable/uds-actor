@@ -3,6 +3,7 @@ use crate::{
     actions::Actions,
     broker::api,
     operations::{NetworkInterface, Operations},
+    tls::CertificateInfo,
 };
 use std::sync::{Arc, RwLock};
 
@@ -327,48 +328,30 @@ impl api::BrokerApi for DummyBrokerApi {
         &self,
         ip: &str,
         port: u16,
-    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+    ) -> Result<CertificateInfo, api::types::RestError> {
         self.calls
             .push(format!("broker_api::ready({}, {})", ip, port));
-        let (cert, key) = test_certs::test_cert_and_key();
-        Ok(api::types::CertificateInfo {
-            key: String::from_utf8_lossy(key).into_owned(),
-            certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: None,
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
-        })
+        Ok(test_certs::test_certinfo())
     }
     async fn unmanaged_ready(
         &self,
         interfaces: &[crate::operations::NetworkInterface],
         port: u16,
-    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+    ) -> Result<CertificateInfo, api::types::RestError> {
         self.calls.push(format!(
             "broker_api::unmanaged_ready({:?}, {})",
             interfaces, port
         ));
-        let (cert, key) = test_certs::test_cert_and_key();
-        Ok(api::types::CertificateInfo {
-            key: String::from_utf8_lossy(key).into_owned(),
-            certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: Some("".into()),
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
-        })
+        Ok(test_certs::test_certinfo())
     }
     async fn notify_new_ip(
         &self,
         ip: &str,
         port: u16,
-    ) -> Result<api::types::CertificateInfo, api::types::RestError> {
+    ) -> Result<CertificateInfo, api::types::RestError> {
         self.calls
             .push(format!("broker_api::notify_new_ip({}, {})", ip, port));
-        let (cert, key) = test_certs::test_cert_and_key();
-        Ok(api::types::CertificateInfo {
-            key: String::from_utf8_lossy(key).into_owned(),
-            certificate: String::from_utf8_lossy(cert).into_owned(),
-            password: Some("".into()),
-            ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384".into(),
-        })
+        Ok(test_certs::test_certinfo())
     }
     async fn login(
         &self,

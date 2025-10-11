@@ -4,6 +4,15 @@ pub mod ciphers;
 pub mod noverify;
 pub mod certool;
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct CertificateInfo {
+    pub key: String,
+    pub certificate: String,
+    pub password: Option<String>,
+    pub ciphers: String,
+}
+
+
 // Ensure only one initialization happens
 static INIT: std::sync::Once = std::sync::Once::new();
 
