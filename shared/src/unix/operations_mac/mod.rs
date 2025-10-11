@@ -40,12 +40,12 @@ mod renamer;
 mod session;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
-    std::sync::Arc::new(LinuxOperations::new())
+    std::sync::Arc::new(MacOperations::new())
 }
 
-pub struct LinuxOperations;
+pub struct MacOperations;
 
-impl LinuxOperations {
+impl MacOperations {
     pub fn new() -> Self {
         Self {}
     }
@@ -63,9 +63,9 @@ impl LinuxOperations {
 }
 
 // TODO: Implement remaining methods
-impl crate::operations::Operations for LinuxOperations {
+impl crate::operations::Operations for MacOperations {
     fn check_permissions(&self) -> Result<bool> {
-        log::debug!("LinuxOperations::check_permissions called");
+        log::debug!("MacOperations::check_permissions called");
         if std::env::var("UDS_DEBUG").unwrap_or_else(|_| "0".to_string()) == "1" {
             Ok(true)
         } else {
@@ -74,17 +74,17 @@ impl crate::operations::Operations for LinuxOperations {
     }
 
     fn get_computer_name(&self) -> Result<String> {
-        log::debug!("LinuxOperations::get_computer_name called");
+        log::debug!("MacOperations::get_computer_name called");
         computer::get_computer_name()
     }
 
     fn get_domain_name(&self) -> Result<Option<String>> {
-        log::debug!("LinuxOperations::get_domain_name called");
+        log::debug!("MacOperations::get_domain_name called");
         Ok(None)
     }
 
     fn rename_computer(&self, new_name: &str) -> Result<()> {
-        log::debug!("LinuxOperations::rename_computer called: {}", new_name);
+        log::debug!("MacOperations::rename_computer called: {}", new_name);
         renamer::renamer(
             new_name,
             self.get_linux_version().as_deref().unwrap_or("unknown"),
@@ -101,7 +101,7 @@ impl crate::operations::Operations for LinuxOperations {
         _old_password: &str,
         new_password: &str,
     ) -> Result<()> {
-        log::debug!("LinuxOperations::change_user_password called: user={}", user);
+        log::debug!("MacOperations::change_user_password called: user={}", user);
 
         // chpasswd expects "user:new_password" in stdin
         let input = format!("{}:{}\n", user, new_password);
@@ -131,66 +131,66 @@ impl crate::operations::Operations for LinuxOperations {
     }
 
     fn get_os_version(&self) -> Result<String> {
-        log::debug!("LinuxOperations::get_os_version called");
+        log::debug!("MacOperations::get_os_version called");
         Ok(self
             .get_linux_version()
             .unwrap_or("generic-linux".to_string()))
     }
 
     fn reboot(&self, flags: Option<u32>) -> Result<()> {
-        log::debug!("LinuxOperations::reboot called: {:?}", flags);
+        log::debug!("MacOperations::reboot called: {:?}", flags);
         Command::new("systemctl").arg("reboot").status()?;
         Ok(())
     }
 
     fn logoff(&self) -> Result<()> {
-        log::debug!("LinuxOperations::logoff called");
+        log::debug!("MacOperations::logoff called");
         session::logout()
     }
 
     fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterface>> {
-        log::debug!("LinuxOperations::get_network_info called");
+        log::debug!("MacOperations::get_network_info called");
         network::get_network_info()
     }
 
     fn init_idle_timer(&self) -> Result<()> {
-        log::debug!("LinuxOperations::init_idle_timer called");
+        log::debug!("MacOperations::init_idle_timer called");
         idle::init_idle()
     }
 
     fn get_idle_duration(&self) -> Result<std::time::Duration> {
-        log::debug!("LinuxOperations::get_idle_duration called");
+        log::debug!("MacOperations::get_idle_duration called");
         let idle = idle::get_idle();
         Ok(std::time::Duration::from_secs_f64(idle))
     }
 
     fn get_current_user(&self) -> Result<String> {
-        log::debug!("LinuxOperations::get_current_user called");
+        log::debug!("MacOperations::get_current_user called");
         Ok(whoami::username())
     }
 
     fn get_session_type(&self) -> Result<String> {
-        log::debug!("LinuxOperations::get_session_type called");
+        log::debug!("MacOperations::get_session_type called");
         Ok(std::env::var("XRDP_SESSION").unwrap_or_else(|_| {
             std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "unknown".to_string())
         }))
     }
 
     fn force_time_sync(&self) -> Result<()> {
-        log::debug!("LinuxOperations::force_time_sync called");
+        log::debug!("MacOperations::force_time_sync called");
         computer::refresh_system_time()
     }
 
     fn protect_file_for_owner_only(&self, path: &str) -> Result<()> {
         log::debug!(
-            "LinuxOperations::protect_file_for_owner_only called: {}",
+            "MacOperations::protect_file_for_owner_only called: {}",
             path
         );
         Ok(())
     }
 
     fn is_some_installation_in_progress(&self) -> Result<bool> {
-        log::debug!("LinuxOperations::is_some_installation_in_progress called");
+        log::debug!("MacOperations::is_some_installation_in_progress called");
         Ok(false)
     }
 }

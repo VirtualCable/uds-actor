@@ -80,16 +80,27 @@ pub struct JoinDomainOptions {
 }
 
 pub trait Operations: Send + Sync {
+    /// Check if the current user has the necessary permissions to perform administrative tasks.
     fn check_permissions(&self) -> anyhow::Result<bool>;
 
+    /// Get the computer name.
+    /// Returns the hostname of the computer.
     fn get_computer_name(&self) -> anyhow::Result<String>;
 
+    /// Get the domain name the computer is joined to.
+    /// Returns `Ok(None)` if the computer is not joined to any domain.
     fn get_domain_name(&self) -> anyhow::Result<Option<String>>;
 
+    /// Renames the computer to `new_name`.
+    /// This may require a reboot to take effect.
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()>;
 
+    /// Joins the computer to a domain with the given options.
+    /// The `options` struct contains all necessary information for joining the domain.
     fn join_domain(&self, options: &JoinDomainOptions) -> anyhow::Result<()>;
 
+    /// Change the password for a user.
+    /// This may require the old password, depending on the platform and user privileges.
     fn change_user_password(
         &self,
         user: &str,
@@ -104,21 +115,38 @@ pub trait Operations: Send + Sync {
     /// to the platform-specific flags type.
     fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()>;
 
+    /// Log off the current user.
     fn logoff(&self) -> anyhow::Result<()>;
 
+    // Initializes the idle timer mechanism, if required by the platform.
+    // This should be called once during startup.
     fn init_idle_timer(&self) -> anyhow::Result<()>;
 
+    /// Get information about the network interfaces on the machine.
+    /// This should return a list of all network interfaces, including their IP and MAC addresses.
     fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>>;
 
+    /// Get the duration the system has been idle (no user input) as a `Duration`.
+    /// The definition of "idle" in our case is the time since the last user interaction.
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration>;
 
+    /// Get the current user logged into the system.
     fn get_current_user(&self) -> anyhow::Result<String>;
 
+    // Get the type of session (e.g., "console", "rdp", etc.)
     fn get_session_type(&self) -> anyhow::Result<String>;
 
+    /// Force a time synchronization with the time server.
     fn force_time_sync(&self) -> anyhow::Result<()>;
 
+    /// Protect a file so that only the owner can read/write it.
+    /// This is useful for configuration files containing sensitive information.
+    /// On Unix, this typically sets permissions to 600. On Windows, it modifies the ACLs.
     fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()>;
+
+    // This specifically checks if there is any installation in progress (like Windows Update)
+    // On unix, this will always return false
+    fn is_some_installation_in_progress(&self) -> anyhow::Result<bool>;
 }
 
 // Re-export the Windows concrete implementation when building for Windows.
@@ -132,7 +160,6 @@ pub use crate::windows::operations::new_operations;
 
 #[cfg(target_family = "unix")]
 pub use crate::unix::operations_linux::new_operations;
-
 
 #[cfg(test)]
 mod tests {

@@ -1,2 +1,2 @@
-pub mod fake;
+pub mod dummy;
 pub mod test_certs;

@@ -52,6 +52,10 @@ use windows::{
         },
         Storage::FileSystem::FILE_ALL_ACCESS,
         System::{
+            Registry::{
+                HKEY, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, RegCloseKey, RegOpenKeyExW,
+                RegQueryValueExW,
+            },
             Shutdown::{EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, ExitWindowsEx, SHUTDOWN_REASON},
             SystemInformation::{
                 ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW,
@@ -62,7 +66,7 @@ use windows::{
         },
         UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
     },
-    core::{PCWSTR, PWSTR},
+    core::{PCWSTR, PWSTR, w},
 };
 
 use crate::{
@@ -184,11 +188,11 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn join_domain(
-        &self,
-        options: &crate::operations::JoinDomainOptions,
-    ) -> anyhow::Result<()> {
-        log::debug!("WindowsOperations::join_domain called: options={:?}", options);
+    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> anyhow::Result<()> {
+        log::debug!(
+            "WindowsOperations::join_domain called: options={:?}",
+            options
+        );
         unsafe {
             // Build user@domain style credentials if needed
             let domain = options.domain.to_string();
@@ -218,8 +222,8 @@ impl Operations for WindowsOperations {
             };
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
-            let lp_password =
-                U16CString::from_str(options.password.clone()).context("failed to convert password to UTF-16")?;
+            let lp_password = U16CString::from_str(options.password.clone())
+                .context("failed to convert password to UTF-16")?;
 
             // Call
             let mut res = NetJoinDomain(
@@ -528,6 +532,48 @@ impl Operations for WindowsOperations {
 
             Ok(())
         }
+    }
+
+    fn is_some_installation_in_progress(&self) -> anyhow::Result<bool> {
+        const PATH: PCWSTR = w!(r#"SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State"#);
+        let mut hkey: HKEY = HKEY::default();
+        let res =
+            unsafe { RegOpenKeyExW(HKEY_LOCAL_MACHINE, PATH, None, KEY_QUERY_VALUE, &mut hkey) };
+        if res.is_err() {
+            // If key does not exist, return false
+            return Ok(false);
+        }
+        let mut buf = [0u8; 256];
+        let mut buf_len: u32 = buf.len() as u32;
+        let res = unsafe {
+            RegQueryValueExW(
+                hkey,
+                w!("ImageState"),
+                None,
+                None,
+                Some(buf.as_mut_ptr()),
+                Some(&mut buf_len),
+            )
+        };
+        unsafe { _ = RegCloseKey(hkey) }; // Close the key, don't mind the result
+        if res.is_err() {
+            // If value does not exist, return false
+            return Ok(false);
+        }
+        let u16_slice = unsafe {
+            std::slice::from_raw_parts(
+                buf.as_ptr() as *const u16,
+                (buf_len as usize / 2) - 1, // -1 to remove null terminator
+            )
+        };
+        let value = String::from_utf16_lossy(u16_slice);
+
+        log::debug!(
+            "ImageState: {}, completed: {}",
+            value,
+            value == "IMAGE_STATE_COMPLETE"
+        );
+        Ok(value != "IMAGE_STATE_COMPLETE")
     }
 }
 

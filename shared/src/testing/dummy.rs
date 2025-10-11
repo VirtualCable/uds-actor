@@ -55,18 +55,18 @@ impl Calls {
     }
 }
 
-pub struct FakeActions {
+pub struct DummyActions {
     calls: Calls,
 }
 
-impl FakeActions {
+impl DummyActions {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
 #[async_trait::async_trait]
-impl Actions for FakeActions {
+impl Actions for DummyActions {
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
         self.calls.push("actions::screenshot()");
         const PNG_1X1_TRANSPARENT: &[u8] = &[
@@ -89,17 +89,17 @@ impl Actions for FakeActions {
     }
 }
 
-pub struct FakeOperations {
+pub struct DummyOperations {
     pub calls: Calls,
 }
 
-impl FakeOperations {
+impl DummyOperations {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
-impl Default for FakeOperations {
+impl Default for DummyOperations {
     fn default() -> Self {
         Self {
             calls: Calls::new(),
@@ -107,7 +107,7 @@ impl Default for FakeOperations {
     }
 }
 
-impl Operations for FakeOperations {
+impl Operations for DummyOperations {
     fn check_permissions(&self) -> anyhow::Result<bool> {
         self.calls.push("operations::check_permissions()");
         Ok(true)
@@ -182,11 +182,23 @@ impl Operations for FakeOperations {
 
     fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>> {
         self.calls.push("operations::get_network_info()");
-        Ok(vec![NetworkInterface {
-            name: "eth0".into(),
-            ip_addr: "192.168.1.100".into(),
-            mac: "00:1A:2B:3C:4D:5E".into(),
-        }])
+        Ok(vec![
+            NetworkInterface {
+                name: "eth0".into(),
+                ip_addr: "192.168.1.100".into(),
+                mac: "00:1A:2B:3C:4D:5E".into(),
+            },
+            NetworkInterface {
+                name: "wlan0".into(),
+                ip_addr: "192.168.1.101".into(),
+                mac: "00:1A:2B:3C:4D:5F".into(),
+            },
+            NetworkInterface {
+                name: "docker0".into(),
+                ip_addr: "169.254.0.1".into(),
+                mac: "00:1A:2B:3C:4D:5H".into(),
+            },
+        ])
     }
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
@@ -216,14 +228,19 @@ impl Operations for FakeOperations {
         ));
         Ok(())
     }
+    fn is_some_installation_in_progress(&self) -> anyhow::Result<bool> {
+        self.calls
+            .push("operations::is_some_installation_in_progress()");
+        Ok(false)
+    }
 }
 
-pub struct FakeBrokerApi {
+pub struct DummyBrokerApi {
     calls: Calls,
     secret: Option<String>,
 }
 
-impl FakeBrokerApi {
+impl DummyBrokerApi {
     pub fn new(calls: Calls) -> Self {
         Self {
             calls,
@@ -233,7 +250,7 @@ impl FakeBrokerApi {
 }
 
 #[async_trait::async_trait]
-impl api::BrokerApi for FakeBrokerApi {
+impl api::BrokerApi for DummyBrokerApi {
     fn clear_headers(&mut self) {
         self.calls.push("broker_api::clear_headers()");
     }

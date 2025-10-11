@@ -15,9 +15,9 @@ impl Platform {
         // If no config, panic, we need config
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
 
-        // TODO: Restore real operations after development
+        // TODO: Restore real operations after development. To avoid platform-specific code for now, :)
         // let operations = shared::operations::new_operations();
-        let operations = Arc::new(shared::testing::fake::FakeOperations::default());
+        let operations = Arc::new(shared::testing::dummy::DummyOperations::default());
 
         let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
 

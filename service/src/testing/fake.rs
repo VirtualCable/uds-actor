@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use shared::{
     config::{ActorConfiguration, ActorType},
-    testing::fake::{Calls, FakeBrokerApi, FakeOperations},
+    testing::dummy::{Calls, DummyBrokerApi, DummyOperations},
 };
 
 pub async fn create_fake_platform() -> Platform {
@@ -21,8 +21,8 @@ pub async fn create_fake_platform() -> Platform {
         config: None,
         data: None,
     };
-    let operations = Arc::new(FakeOperations::new(Calls::new()));
-    let broker_api = Arc::new(tokio::sync::RwLock::new(FakeBrokerApi::new(Calls::new())));
+    let operations = Arc::new(DummyOperations::new(Calls::new()));
+    let broker_api = Arc::new(tokio::sync::RwLock::new(DummyBrokerApi::new(Calls::new())));
 
     crate::platform::Platform::new_with_params(Some(config), Some(operations), Some(broker_api))
 }

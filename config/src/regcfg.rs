@@ -8,7 +8,7 @@ pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfi
     config::ActorConfiguration {
         broker_url: format!("https://{hostname}/uds/rest/"),
         verify_ssl,
-        actor_type: Some(config::ActorType::Managed),
+        actor_type: config::ActorType::Managed,
         master_token: None,
         own_token: None,
         restrict_net: None,
