@@ -23,7 +23,7 @@ pub fn bnt_save_clicked(cfg_window: &ConfigGui) {
     let final_cfg = config::ActorConfiguration {
         broker_url: format!("https://{}/uds/rest/", uds_server),
         verify_ssl: cfg_window.choice_ssl_validation.value() == 1,
-        actor_type: Some(config::ActorType::Unmanaged),
+        actor_type: config::ActorType::Unmanaged,
         master_token: Some(token),
         own_token: None,
         restrict_net: Some(net),

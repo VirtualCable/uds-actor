@@ -138,3 +138,14 @@ fn test_protect_file_for_owner_only() {
     // Clean up
     let _ = std::fs::remove_file(&file_path);
 }
+
+#[test]
+fn test_is_some_installation_in_progress() {
+    setup_logging("debug", LogType::Tests);
+    let ops = new_operations();
+    let result = ops.is_some_installation_in_progress();
+    assert!(result.is_ok());
+    let in_progress = result.unwrap();
+    info!("Is some installation in progress: {}", in_progress);
+    // We can't assert the value, just that it returned ok
+}

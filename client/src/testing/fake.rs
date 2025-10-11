@@ -5,7 +5,7 @@ use shared::{
     sync::event::{Event, EventLike},
 };
 
-use shared::testing::fake::{Calls, FakeActions, FakeOperations};
+use shared::testing::dummy::{Calls, DummyActions, DummyOperations};
 
 #[derive(Clone)]
 struct FakeSessionManager {
@@ -100,11 +100,11 @@ pub async fn create_platform(
     let manager =
         manager.unwrap_or_else(|| std::sync::Arc::new(FakeSessionManager::new(calls.clone())));
     let operations =
-        operations.unwrap_or_else(|| std::sync::Arc::new(FakeOperations::new(calls.clone())));
+        operations.unwrap_or_else(|| std::sync::Arc::new(DummyOperations::new(calls.clone())));
     let api = api.unwrap_or_else(|| {
         std::sync::Arc::new(tokio::sync::RwLock::new(FakeApi::new(calls.clone())))
     });
-    let actions = actions.unwrap_or_else(|| std::sync::Arc::new(FakeActions::new(calls.clone())));
+    let actions = actions.unwrap_or_else(|| std::sync::Arc::new(DummyActions::new(calls.clone())));
     (
         crate::platform::Platform::new_with_params(
             Some(manager),

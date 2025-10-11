@@ -41,7 +41,7 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
     let mut config = crate::config::ActorConfiguration::default();
     config.broker_url = url;
     config.master_token = Some("token".to_string());
-    config.actor_type = Some(crate::config::ActorType::Managed);
+    config.actor_type = crate::config::ActorType::Managed;
 
     info!("Setting up mock server and API client");
     let broker = UdsBrokerApi::new(config, false, None);
@@ -401,7 +401,7 @@ async fn test_log() {
 }
 
 #[tokio::test]
-async fn test_test() {
+async fn test_test_managed() {
     log::setup_logging("debug", log::LogType::Tests);
     let (mut server, api) = setup_server_and_api().await;
     let result = types::ApiResponse::<String> {
@@ -424,4 +424,30 @@ async fn test_test() {
         .await;
     let response = api.test().await;
     assert!(response.is_ok(), "Test failed: {:?}", response);
+}
+
+#[tokio::test]
+async fn test_test_unmanaged() {
+    log::setup_logging("debug", log::LogType::Tests);
+    let (mut server, api) = setup_server_and_api().await;
+    let result = types::ApiResponse::<String> {
+        result: "ok".to_string(),
+        error: None,
+    };
+    let payload = types::TestRequest {
+        actor_type: crate::config::ActorType::Unmanaged,
+        token: &api.get_token().unwrap(),
+    };
+    let payload_value: serde_json::Value = serde_json::to_value(&payload).unwrap();
+    info!("Payload for test unmanaged: {}", payload_value);
+    let _m = server
+        .mock("POST", rest_actor_path("test").as_str())
+        .match_header("content-type", "application/json")
+        .match_body(Matcher::Json(payload_value))
+        .with_body(serde_json::to_string(&result).unwrap())
+        .with_status(200)
+        .create_async()
+        .await;
+    let response = api.test().await;
+    assert!(response.is_ok(), "Test unmanaged failed: {:?}", response);
 }

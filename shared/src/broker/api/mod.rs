@@ -140,7 +140,7 @@ impl UdsBrokerApi {
                 .collect(),
         );
         let api_url = cfg.broker_url.clone();
-        let actor_type = cfg.actor_type.clone().unwrap_or_default();
+        let actor_type = cfg.actor_type.clone();
 
         Self {
             api_url,

@@ -160,7 +160,7 @@ pub fn btn_register_clicked(
             let final_cfg = config::ActorConfiguration {
                 broker_url: format!("https://{}/uds/rest/", hostname),
                 verify_ssl: cfg_window.choice_ssl_validation.value() == 1,
-                actor_type: Some(config::ActorType::Managed),
+                actor_type: config::ActorType::Managed,
                 master_token: Some(master_token),
                 own_token: None,
                 restrict_net: None,
