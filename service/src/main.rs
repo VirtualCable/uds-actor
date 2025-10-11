@@ -2,9 +2,11 @@ use anyhow::Result;
 use std::{pin::Pin, sync::Arc};
 use tokio::sync::Notify;
 
-use shared::{log, service::AsyncService};
+use shared::{log, service::AsyncService, config::{ActorType}};
 
 mod platform;
+mod managed;
+mod unamanaged;
 
 fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
@@ -40,6 +42,20 @@ fn main() {
 // Real "main" async logic of the service
 async fn async_main(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
     log::info!("Service main async logic started");
+
+    let cfg = platform.config().read().await.clone();
+    if !cfg.is_valid() {
+        log::error!("Invalid configuration, cannot start service");
+        return Err(anyhow::anyhow!("Invalid configuration, cannot start service"));
+    }
+
+    if cfg.actor_type == ActorType::Unmanaged {
+        log::info!("Starting in Unmanaged mode");
+        unamanaged::run(platform.clone(), stop.clone()).await?;
+    } else {
+        log::info!("Starting in Managed mode");
+        managed::run(platform.clone(), stop.clone()).await?;
+    }
 
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());

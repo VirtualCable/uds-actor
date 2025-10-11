@@ -37,7 +37,7 @@ pub struct ActorDataConfiguration {
 pub struct ActorConfiguration {
     pub broker_url: String,
     pub verify_ssl: bool,
-    pub actor_type: Option<ActorType>,
+    pub actor_type: ActorType,
     pub master_token: Option<String>, // Configured master token. Will be replaced by unique one if unmanaged
     pub own_token: Option<String>, // On unmanaged, master_token will be cleared and this will be used (unique provided by server)
     pub restrict_net: Option<String>,
@@ -57,6 +57,10 @@ impl ActorConfiguration {
         } else {
             self.own_token.as_deref().unwrap_or("").to_string()
         }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        !self.broker_url.is_empty() && !self.token().is_empty()
     }
 }
 
@@ -87,7 +91,7 @@ mod tests {
         ActorConfiguration {
             broker_url: "https://example.com".to_string(),
             verify_ssl: true,
-            actor_type: Some(ActorType::Managed),
+            actor_type: ActorType::default(),
             master_token: Some("master123".to_string()),
             own_token: None,
             restrict_net: Some("192.168.1.0/24".to_string()),

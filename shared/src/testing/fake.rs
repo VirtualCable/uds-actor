@@ -90,12 +90,20 @@ impl Actions for FakeActions {
 }
 
 pub struct FakeOperations {
-    calls: Calls,
+    pub calls: Calls,
 }
 
 impl FakeOperations {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
+    }
+}
+
+impl Default for FakeOperations {
+    fn default() -> Self {
+        Self {
+            calls: Calls::new(),
+        }
     }
 }
 
