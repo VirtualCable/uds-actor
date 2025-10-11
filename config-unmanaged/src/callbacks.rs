@@ -40,6 +40,40 @@ pub fn bnt_save_clicked(cfg_window: &ConfigGui) {
         fltk::dialog::alert_default(&format!("Failed to save config: {}", e));
         log::error!("Failed to save config: {}", e);
     } else {
+        fltk::dialog::message_default("Configuration saved successfully!\n");
+        let mut btn_test = cfg_window.button_test.clone();
+        btn_test.activate(); // Enable test button
         log::debug!("Config saved successfully");
+    }
+}
+
+pub fn btn_test_clicked(cfg_window: &ConfigGui) {
+    log::debug!("Test connection button clicked");
+    let cfg = config::new_config_storage().load_config();
+    if let Err(err) = cfg {
+        fltk::dialog::alert_default(&format!("Failed to load existing config: {}", err));
+        log::error!("Failed to load existing config: {}", err);
+        return;
+    }
+    // Must have uds_server & token
+    let actor_cfg = cfg.unwrap();
+    if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
+        fltk::dialog::alert_default("Register with UDS before testing connection");
+        return;
+    }
+
+    match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(800))) {
+        Ok(msg) => {
+            fltk::dialog::message_default(&format!("Connection successful:\n{}", msg));
+            log::debug!("Connection test successful: {}", msg);
+        }
+        Err(e) => {
+            fltk::dialog::alert_default(&format!("Connection failed:\n{}", e));
+            log::error!("Connection test failed: {}", e);
+            // Disable again if it fails
+            let mut btn_test = cfg_window.button_test.clone();
+            btn_test.deactivate();
+
+        }
     }
 }

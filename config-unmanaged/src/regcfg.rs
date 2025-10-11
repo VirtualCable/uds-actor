@@ -42,6 +42,13 @@ pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
             .choice_log_level
             .set_value(u8::from(log_level) as i32);
         cfg_window.choice_log_level.redraw();
+
+        // If we have a valid token, enable the test button
+        if actor_cfg.token().is_empty() {
+            cfg_window.button_test.deactivate();
+        } else {
+            cfg_window.button_test.activate();
+        }
     } else {
         log::debug!("No existing config found, using defaults");
     }

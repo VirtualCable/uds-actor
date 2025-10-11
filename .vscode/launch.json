@@ -1,0 +1,44 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug 'uds-actor-client'",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}\\target\\debug\\uds-actor-client.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "rust: cargo build",
+      "args": []
+    },
+    {
+      "name": "Debug 'config'",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\target\\debug\\config.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "rust: cargo build",
+      "args": []
+    },
+    {
+      "name": "Debug 'config unmanaged'",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\target\\debug\\config-unmanaged.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "rust: cargo build",
+      "args": []
+    },
+    {
+      "name": "Debug 'service'",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\target\\debug\\service.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "rust: cargo build",
+      "args": []
+    }
+  ]
+}

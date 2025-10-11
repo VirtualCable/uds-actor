@@ -155,14 +155,13 @@ pub fn btn_register_clicked(
 
     match shared::broker::api::block::register(actor_cfg, &reg_auth, &token) {
         Ok(master_token) => {
-            fltk::dialog::message_default("Registration successful!\n");
-            log::debug!("Registration successful, got secret: {}", master_token);
+            log::debug!("Registration successful, got token: {}", master_token);
             // Save config to file
             let final_cfg = config::ActorConfiguration {
                 broker_url: format!("https://{}/uds/rest/", hostname),
                 verify_ssl: cfg_window.choice_ssl_validation.value() == 1,
                 actor_type: Some(config::ActorType::Managed),
-                master_token: Some(token),
+                master_token: Some(master_token),
                 own_token: None,
                 restrict_net: None,
                 pre_command: reg_auth.commands.pre_command,
@@ -177,12 +176,42 @@ pub fn btn_register_clicked(
                 fltk::dialog::alert_default(&format!("Failed to save config: {}", e));
                 log::error!("Failed to save config: {}", e);
             } else {
+                fltk::dialog::message_default("Registration successful!\n");
+                let mut btn_test = cfg_window.button_test.clone();
+                btn_test.activate(); // Enable test button
                 log::debug!("Config saved successfully");
             }
         }
         Err(e) => {
             fltk::dialog::alert_default(&format!("Registration failed: {}", e));
             log::error!("Registration failed: {}", e);
+        }
+    }
+}
+
+pub fn btn_test_clicked() {
+    log::debug!("Test connection button clicked");
+    let cfg = config::new_config_storage().load_config();
+    if let Err(err) = cfg {
+        fltk::dialog::alert_default(&format!("Failed to load existing config: {}", err));
+        log::error!("Failed to load existing config: {}", err);
+        return;
+    }
+    // Must have uds_server & token
+    let actor_cfg = cfg.unwrap();
+    if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
+        fltk::dialog::alert_default("Register with UDS before testing connection");
+        return;
+    }
+
+    match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(800))) {
+        Ok(msg) => {
+            fltk::dialog::message_default(&format!("Connection successful:\n{}", msg));
+            log::debug!("Connection test successful: {}", msg);
+        }
+        Err(e) => {
+            fltk::dialog::alert_default(&format!("Connection failed:\n{}", e));
+            log::error!("Connection test failed: {}", e);
         }
     }
 }

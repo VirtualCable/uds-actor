@@ -28,6 +28,13 @@ pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
     let config = config_storage.config(false);
     if let Ok(actor_cfg) = config {
         log::debug!("Existing config found: {:?}", actor_cfg);
+        // If we have a valid token, enable the test button
+        if actor_cfg.token().is_empty() {
+            cfg_window.button_test.deactivate();
+        } else {
+            cfg_window.button_test.activate();
+        }
+
         if actor_cfg.verify_ssl {
             cfg_window.choice_ssl_validation.set_value(1);
         } else {
@@ -61,9 +68,4 @@ pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
     } else {
         log::debug!("No existing config found, using defaults");
     }
-
-    // cfg_window.choice_ssl_validation.set_value(0);
-    // cfg_window.input_uds_server.set_value("172.27.0.1:8443");
-    cfg_window.input_username.set_value("test");
-    cfg_window.input_password.set_value("test");
 }

@@ -26,6 +26,8 @@ fn main() {
     let app = fltk::app::App::default();
     let mut cfg_window = ConfigGui::new();
 
+    cfg_window.button_test.deactivate(); // Disabled until we have a valid config
+
     // Eat "escape" key presses to avoid closing the window
     cfg_window.win.set_callback({
         move |_| {
@@ -113,6 +115,12 @@ fn main() {
                 operations.clone(),
                 &interface,
             );
+        }
+    });
+
+    cfg_window.button_test.set_callback({
+        move |_| {
+            callbacks::btn_test_clicked();
         }
     });
 

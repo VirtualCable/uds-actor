@@ -113,7 +113,7 @@ fn get_key_root() -> HKEY {
 
 #[derive(Default, Debug, Clone)]
 pub struct WindowsConfig {
-    actor: Option<ActorConfiguration>,
+    actor_cfg: Option<ActorConfiguration>,
 }
 
 impl Configuration for WindowsConfig {
@@ -155,7 +155,7 @@ impl Configuration for WindowsConfig {
                 .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}"))?;
 
             // Store for future use
-            self.actor = Some(cfg.clone());
+            self.actor_cfg = Some(cfg.clone());
 
             Ok(cfg)
         }
@@ -210,7 +210,7 @@ impl Configuration for WindowsConfig {
                 return Err(anyhow::anyhow!("Failed to write registry value"));
             }
         }
-        self.actor = Some(config.clone());
+        self.actor_cfg = Some(config.clone());
         Ok(())
     }
 
@@ -233,15 +233,15 @@ impl Configuration for WindowsConfig {
                 return Err(anyhow::anyhow!("Failed to delete registry value"));
             }
         }
-        self.actor = None;
+        self.actor_cfg = None;
         Ok(())
     }
 
     fn config(&mut self, force_reload: bool) -> Result<ActorConfiguration> {
-        if force_reload || self.actor.is_none() {
+        if force_reload || self.actor_cfg.is_none() {
             self.load_config()
         } else {
-            Ok(self.actor.clone().unwrap())
+            Ok(self.actor_cfg.clone().unwrap())
         }
     }
 }
