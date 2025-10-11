@@ -119,6 +119,7 @@ impl UdsBrokerApi {
         timeout: Option<std::time::Duration>,
     ) -> Self {
         let mut builder = ClientBuilder::new()
+            .use_rustls_tls()  // Use rustls for TLS
             .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
             .connection_verbose(cfg!(debug_assertions))
             .danger_accept_invalid_certs(!cfg.verify_ssl);

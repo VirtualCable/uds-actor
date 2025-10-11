@@ -54,7 +54,7 @@ pub fn provider(ciphers: Option<&str>) -> CryptoProvider {
         rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.to_vec()
     };
 
-    log::debug!("cipher_suites: {:?}", ciphers);
+    log::debug!("valid cipher_suites: {:?}", ciphers);
 
     rustls::crypto::CryptoProvider {
         cipher_suites: ciphers,

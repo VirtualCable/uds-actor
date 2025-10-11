@@ -9,7 +9,7 @@ use crate::ws::{request_tracker::RequestTracker, types::RpcMessage};
 use crate::log;
 
 type ServerTaskResult = (
-    ServerInfo,
+    ServerStartInfo,
     tokio::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
 );
 
@@ -18,7 +18,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     crate::tls::init_tls(None);
 
     // Create the single channel for workers → WS client
-    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(100);
+    let (_, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(100);
 
     // Broadcast channel for WS client → workers
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
@@ -27,11 +27,10 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     let cert_info = crate::testing::test_certs::test_certinfo_with_pass();
     let notify = Arc::new(tokio::sync::Notify::new());
 
-    let server_info = ServerInfo {
+    let server_info = ServerStartInfo {
         cert_info,
         port,
-        workers_tx, // sender side for workers
-        workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver
+        workers_to_wsclient: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver
         wsclient_to_workers: wsclient_to_workers.clone(),
         tracker: tracker.clone(),
         stop: notify.clone(),
@@ -98,6 +97,9 @@ async fn test_server_stops_on_ws_client_connected() {
         .send(Message::Ping("ping".into()))
         .await
         .expect("Failed to send message");
+
+    // Wait a moment to ensure the server processes the message
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     server_info.stop.notify_waiters();
     // Wait with timeout to avoid hanging tests

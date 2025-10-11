@@ -28,17 +28,18 @@ use tokio::{
 
 use crate::{
     log,
+    tls::{CertificateInfo, certool},
     ws::{
         request_tracker::RequestTracker,
         types::{Close, Ping, RpcEnvelope, RpcMessage},
     },
-    tls::{CertificateInfo, certool},
 };
+
 
 mod routes;
 
 #[derive(Clone)]
-pub struct ServerHandle {
+pub struct ServerInfo {
     pub workers_to_wsclient: mpsc::Sender<RpcEnvelope<RpcMessage>>,
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
@@ -46,11 +47,10 @@ pub struct ServerHandle {
 }
 
 #[derive(Clone)]
-pub struct ServerInfo {
+struct ServerStartInfo {
     pub cert_info: CertificateInfo,
     pub port: u16,
-    pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>, // workers → WS client
-    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
+    pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>, // WS client → workers
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
@@ -59,8 +59,7 @@ pub struct ServerInfo {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub workers_tx: mpsc::Sender<RpcEnvelope<RpcMessage>>,
-    pub workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
+    pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
     pub stop: Arc<Notify>,
@@ -68,11 +67,10 @@ pub struct ServerState {
     pub is_ws_active: Arc<AtomicBool>,
 }
 
-impl From<&ServerInfo> for ServerState {
-    fn from(info: &ServerInfo) -> Self {
+impl From<&ServerStartInfo> for ServerState {
+    fn from(info: &ServerStartInfo) -> Self {
         ServerState {
-            workers_tx: info.workers_tx.clone(),
-            workers_rx: info.workers_rx.clone(),
+            workers_to_wsclient: info.workers_to_wsclient.clone(),
             wsclient_to_workers: info.wsclient_to_workers.clone(),
             tracker: info.tracker.clone(),
             stop: info.stop.clone(),
@@ -126,7 +124,7 @@ async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerStat
 
     let wsclient_to_workers = state.wsclient_to_workers.clone();
     let stop = state.stop.clone();
-    let workers_rx = state.workers_rx; // moverlo aquí si solo hay un cliente
+    let workers_rx = state.workers_to_wsclient; // moverlo aquí si solo hay un cliente
 
     ws.on_upgrade(move |socket| {
         websocket_loop(socket, workers_rx, wsclient_to_workers, stop, ws_active)
@@ -147,6 +145,7 @@ pub async fn websocket_loop(
         let wsclient_to_workers = wsclient_to_workers.clone();
         tokio::spawn(async move {
             while let Some(Ok(msg)) = ws_receiver.next().await {
+                log::debug!("WS client sent message: {:?}", msg);
                 let env = match msg {
                     Message::Text(txt) => {
                         if let Ok(env) = serde_json::from_str::<RpcEnvelope<RpcMessage>>(&txt) {
@@ -212,13 +211,11 @@ pub async fn websocket_loop(
 }
 
 /// Main server function
-pub async fn server(config: &ServerInfo) -> Result<()> {
+async fn server(config: &ServerStartInfo) -> Result<()> {
     log::debug!("Initializing server {}", config.port);
     let state = ServerState::from(config);
 
-    let tls_config = certool::rustls_config_from_pem(
-        config.cert_info.clone(),
-    )?;
+    let tls_config = certool::rustls_config_from_pem(config.cert_info.clone())?;
     log::debug!("TLS configuration loaded");
 
     let handle = axum_server::Handle::new();
@@ -227,8 +224,34 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
     let app = Router::new()
         .merge(routes::routes())
         .route("/ws", get(ws_handler))
-        .route_layer(middleware::from_fn(check_secret_middleware))
-        .layer(Extension(state));
+        .route_layer(middleware::from_fn(check_secret_middleware));
+
+    // TODO: Remove this testing code
+    #[cfg(debug_assertions)]
+    use tower_http::trace::TraceLayer;
+
+    #[cfg(debug_assertions)]
+    let app = app.layer(
+        TraceLayer::new_for_http()
+            .on_request(|req: &Request<_>, _span: &tracing::Span| {
+                log::info!("--> {} {}", req.method(), req.uri());
+            })
+            .on_response(
+                |res: &Response<_>, latency: std::time::Duration, _span: &tracing::Span| {
+                    log::info!("<-- {} (took {:?})", res.status(), latency);
+                },
+            )
+            .on_failure(
+                |err: _,
+                 latency: std::time::Duration,
+                 _span: &tracing::Span| {
+                    log::error!("!! error={:?} latency={:?}", err, latency);
+                },
+            ),
+    );
+    // TODO until here, join app also :)
+
+    let app = app.layer(Extension(state));
 
     tokio::spawn({
         let handle = handle.clone();
@@ -270,23 +293,23 @@ pub async fn server(config: &ServerInfo) -> Result<()> {
 }
 
 // Creates and starts the server, returning a handle to interact with it
-// 
+//
 pub async fn start_server(
     cert_info: CertificateInfo,
     stop: Arc<Notify>,
     secret: String,
-) -> Result<ServerHandle> {
+    port: Option<u16>,
+) -> Result<ServerInfo> {
     // Create channels
     let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
 
     // Armar ServerInfo
-    let info = ServerInfo {
+    let info = ServerStartInfo {
         cert_info,
-        port: crate::consts::UDS_PORT,
-        workers_tx: workers_tx.clone(),
-        workers_rx: Arc::new(tokio::sync::Mutex::new(workers_rx)),
+        port: port.unwrap_or(crate::consts::UDS_PORT),
+        workers_to_wsclient: Arc::new(tokio::sync::Mutex::new(workers_rx)),
         wsclient_to_workers: wsclient_to_workers.clone(),
         tracker: tracker.clone(),
         stop: stop.clone(),
@@ -300,7 +323,7 @@ pub async fn start_server(
         }
     });
 
-    Ok(ServerHandle {
+    Ok(ServerInfo {
         workers_to_wsclient: workers_tx,
         wsclient_to_workers,
         tracker,
@@ -310,3 +333,28 @@ pub async fn start_server(
 
 #[cfg(test)]
 mod tests;
+
+// +-------------------+                       +-------------------+
+// |   WebSocket       |                       |      Workers      |
+// |   Client          |                       |                   |
+// +---------+---------+                       +---------+---------+
+//           |                                           ^
+//           | WS → Workers (broadcast)                  |
+//           |                                           |
+//           v                                           |
+// +-------------------+                       +-------------------+
+// | wsclient_to_workers |  broadcast::Sender  | wsclient_to_workers |
+// | (fan-out channel)   | ------------------> |   .subscribe()      |
+// +-------------------+                       +-------------------+
+
+// +-------------------+                       +-------------------+
+// | workers_to_wsclient | mpsc::Sender        | workers_to_wsclient |
+// | (fan-in channel)    | <------------------ |   mpsc::Receiver    |
+// +-------------------+                       +-------------------+
+//           ^                                           |
+//           | Workers → WS (mpsc)                       |
+//           |                                           v
+// +---------+---------+                       +---------+---------+
+// |   WebSocket       |                       |   WebSocket       |
+// |   Client          |                       |   Loop (server)   |
+// +-------------------+                       +-------------------+

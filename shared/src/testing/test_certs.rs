@@ -1,11 +1,14 @@
+use crate::tls::CertificateInfo;
+
 // Only for tests
 const CERT_PEM: &[u8] = include_bytes!("../../../testcerts/cert.pem");
 const KEY_PEM: &[u8] = include_bytes!("../../../testcerts/key.pem");
 const KEY_PEM_WITH_PASS: &[u8] = include_bytes!("../../../testcerts/key_pass.pem");
-const KEY_PASSWORD : &str = "test_password";
-const TESTING_CIPHERS: &str = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384";
+const KEY_PASSWORD: &str = "test_password";
+const TESTING_CIPHERS: &str = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256";
 
-use crate::tls::CertificateInfo;
+// const TESTING_CIPHERS: &str = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:\
+//      ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-CHACHA20-POLY1305-SHA256";
 
 pub fn test_certinfo() -> CertificateInfo {
     CertificateInfo {

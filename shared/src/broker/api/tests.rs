@@ -29,7 +29,7 @@ use super::*;
 use crate::{
     log::{self, info},
     tls::CertificateInfo,
-    config::ActorType,
+    config::{ActorType, ActorConfiguration},
 };
 
 use mockito::{Matcher, Server};
@@ -42,10 +42,12 @@ async fn setup_server_and_api(actor_type: Option<ActorType>) -> (mockito::Server
     let server = Server::new_async().await;
     let url = server.url() + "/"; // For testing, our base URL will be the mockito server
 
-    let mut config = crate::config::ActorConfiguration::default();
-    config.broker_url = url;
-    config.master_token = Some("token".to_string());
-    config.actor_type = actor_type.unwrap_or(ActorType::Managed);
+    let config = ActorConfiguration {
+        broker_url: url,
+        master_token: Some("token".to_string()),
+        actor_type: actor_type.unwrap_or(ActorType::Managed),
+        ..Default::default()
+    };
 
     info!("Setting up mock server and API client");
     let broker = UdsBrokerApi::new(config, false, None);
