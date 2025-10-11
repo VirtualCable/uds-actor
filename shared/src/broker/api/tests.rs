@@ -29,13 +29,14 @@ use super::*;
 use crate::{
     log::{self, info},
     tls::CertificateInfo,
+    config::ActorType,
 };
 
 use mockito::{Matcher, Server};
 
 // Helper to create a ServerRestApi pointing to mockito server
 // Helper to create a mockito server and a ServerRestApi pointing to it
-async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
+async fn setup_server_and_api(actor_type: Option<ActorType>) -> (mockito::ServerGuard, UdsBrokerApi) {
     log::setup_logging("debug", log::LogType::Tests);
 
     let server = Server::new_async().await;
@@ -44,7 +45,7 @@ async fn setup_server_and_api() -> (mockito::ServerGuard, UdsBrokerApi) {
     let mut config = crate::config::ActorConfiguration::default();
     config.broker_url = url;
     config.master_token = Some("token".to_string());
-    config.actor_type = crate::config::ActorType::Managed;
+    config.actor_type = actor_type.unwrap_or(ActorType::Managed);
 
     info!("Setting up mock server and API client");
     let broker = UdsBrokerApi::new(config, false, None);
@@ -75,7 +76,7 @@ fn rest_actor_path(method: &str) -> String {
 #[tokio::test]
 async fn test_enumerate_authenticators() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = vec![
         types::Authenticator {
             id: "auth1".to_string(),
@@ -116,7 +117,7 @@ async fn test_enumerate_authenticators() {
 #[tokio::test]
 async fn test_api_login() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let login_req = types::ApiLoginRequest {
         auth: "auth1",
         username: "testuser",
@@ -148,7 +149,7 @@ async fn test_api_login() {
 #[tokio::test]
 async fn test_register() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let reg_req = types::RegisterRequest {
         version: crate::consts::VERSION,
         build: crate::consts::BUILD,
@@ -192,7 +193,7 @@ async fn test_register() {
 #[tokio::test]
 async fn test_initialize() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<types::InitializationResponse> {
         result: types::InitializationResponse {
             master_token: Some("some_master_token".to_string()),
@@ -232,7 +233,7 @@ async fn test_initialize() {
 #[tokio::test]
 async fn test_ready() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<CertificateInfo> {
         result: CertificateInfo {
             key: "key".to_string(),
@@ -265,7 +266,7 @@ async fn test_ready() {
 #[tokio::test]
 async fn test_unmanaged_ready() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(Some(ActorType::Unmanaged)).await;
     let result = types::ApiResponse::<CertificateInfo> {
         result: CertificateInfo {
             key: "key".to_string(),
@@ -300,7 +301,7 @@ async fn test_unmanaged_ready() {
 #[tokio::test]
 async fn test_ready_ip_changed() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<CertificateInfo> {
         result: CertificateInfo {
             key: "key".to_string(),
@@ -333,7 +334,7 @@ async fn test_ready_ip_changed() {
 #[tokio::test]
 async fn test_logout() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<String> {
         result: "ok".to_string(),
         error: None,
@@ -370,7 +371,7 @@ async fn test_logout() {
 #[tokio::test]
 async fn test_log() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<String> {
         result: "ok".to_string(),
         error: None,
@@ -406,7 +407,7 @@ async fn test_log() {
 #[tokio::test]
 async fn test_test_managed() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(None).await;
     let result = types::ApiResponse::<String> {
         result: "ok".to_string(),
         error: None,
@@ -432,7 +433,8 @@ async fn test_test_managed() {
 #[tokio::test]
 async fn test_test_unmanaged() {
     log::setup_logging("debug", log::LogType::Tests);
-    let (mut server, api) = setup_server_and_api().await;
+    let (mut server, api) = setup_server_and_api(Some(ActorType::Unmanaged)).await;
+
     let result = types::ApiResponse::<String> {
         result: "ok".to_string(),
         error: None,
