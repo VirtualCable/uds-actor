@@ -25,48 +25,40 @@
 // Author: Adolfo Gómez, dkmaster at dkmon dot com
 
 #![allow(dead_code)]
-use std::process::Command;
+use std::{process::Command, ptr::null_mut};
 
-use anyhow::Context;
+use anyhow::{Context, Result};
+
 use widestring::{U16CStr, U16CString};
 use windows::{
-    Win32::{
+    core::{w, PCWSTR, PWSTR}, Win32::{
         Foundation::{CloseHandle, HANDLE},
         NetworkManagement::{
             IpHelper::{
-                GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+                GetAdaptersAddresses, GET_ADAPTERS_ADDRESSES_FLAGS, IP_ADAPTER_ADDRESSES_LH
             },
             NetManagement::{
-                NETSETUP_ACCT_CREATE, NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN,
-                NETSETUP_JOIN_WITH_NEW_NAME, NetApiBufferFree, NetGetJoinInformation,
-                NetJoinDomain, NetSetupDomainName, NetSetupUnknownStatus, NetUserChangePassword,
+                NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers, NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus, NetUserChangePassword, LOCALGROUP_MEMBERS_INFO_0, LOCALGROUP_MEMBERS_INFO_1, NETSETUP_ACCT_CREATE, NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME
             },
         },
         Networking::WinSock::AF_INET,
         Security::{
-            ACL, ACL_REVISION, AddAccessAllowedAce, AdjustTokenPrivileges,
-            Authorization::{SE_FILE_OBJECT, SetNamedSecurityInfoW},
-            DACL_SECURITY_INFORMATION, InitializeAcl, LookupAccountNameW, LookupPrivilegeValueW,
-            PSID, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME, SidTypeUnknown, TOKEN_ADJUST_PRIVILEGES,
-            TOKEN_PRIVILEGES, TOKEN_QUERY,
+            AddAccessAllowedAce, AdjustTokenPrivileges, Authorization::{ConvertStringSidToSidW, SetNamedSecurityInfoW, SE_FILE_OBJECT}, EqualSid, InitializeAcl, LookupAccountNameW, LookupAccountSidW, LookupPrivilegeValueW, SidTypeUnknown, ACL, ACL_REVISION, DACL_SECURITY_INFORMATION, PSID, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME, SID_NAME_USE, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY
         },
         Storage::FileSystem::FILE_ALL_ACCESS,
         System::{
             Registry::{
-                HKEY, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, RegCloseKey, RegOpenKeyExW,
-                RegQueryValueExW,
+                RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE
             },
-            Shutdown::{EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, ExitWindowsEx, SHUTDOWN_REASON},
+            Shutdown::{ExitWindowsEx, EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, SHUTDOWN_REASON},
             SystemInformation::{
-                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW,
-                OSVERSIONINFOW, SetComputerNameExW,
+                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW, SetComputerNameExW, OSVERSIONINFOW
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
             WindowsProgramming::GetUserNameW,
         },
         UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
-    },
-    core::{PCWSTR, PWSTR, w},
+    }
 };
 
 use crate::{
@@ -74,7 +66,7 @@ use crate::{
     operations::{NetworkInterface, Operations},
 };
 
-unsafe fn utf16_ptr_to_string(ptr: *const u16) -> anyhow::Result<String> {
+unsafe fn utf16_ptr_to_string(ptr: *const u16) -> Result<String> {
     if ptr.is_null() {
         return Ok("<unknown>".to_string());
     }
@@ -95,7 +87,7 @@ impl WindowsOperations {
         Self {}
     }
 
-    fn get_windows_version(&self) -> anyhow::Result<(u32, u32, u32, u32, String)> {
+    fn get_windows_version(&self) -> Result<(u32, u32, u32, u32, String)> {
         unsafe {
             let mut info = OSVERSIONINFOW {
                 dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
@@ -118,13 +110,13 @@ impl WindowsOperations {
 }
 
 impl Operations for WindowsOperations {
-    fn check_permissions(&self) -> anyhow::Result<bool> {
+    fn check_permissions(&self) -> Result<bool> {
         // Use IsUserAnAdmin from shell32
         use windows::Win32::UI::Shell::IsUserAnAdmin;
         Ok(unsafe { IsUserAnAdmin().as_bool() })
     }
 
-    fn get_computer_name(&self) -> anyhow::Result<String> {
+    fn get_computer_name(&self) -> Result<String> {
         let mut buf = [0u16; 512];
         let mut size = buf.len() as u32;
         unsafe {
@@ -144,7 +136,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn get_domain_name(&self) -> anyhow::Result<Option<String>> {
+    fn get_domain_name(&self) -> Result<Option<String>> {
         unsafe {
             let mut buffer = PWSTR::null();
             let mut status = NetSetupUnknownStatus;
@@ -175,7 +167,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {
+    fn rename_computer(&self, new_name: &str) -> Result<()> {
         let wname = U16CString::from_str(new_name)
             .context("failed to convert new computer name to UTF-16")?;
         unsafe {
@@ -188,7 +180,7 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> anyhow::Result<()> {
+    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
         log::debug!(
             "WindowsOperations::join_domain called: options={:?}",
             options
@@ -266,7 +258,7 @@ impl Operations for WindowsOperations {
         user: &str,
         old_password: &str,
         new_password: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         unsafe {
             let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
             let old_w =
@@ -289,7 +281,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn get_os_version(&self) -> anyhow::Result<String> {
+    fn get_os_version(&self) -> Result<String> {
         let (major, minor, build, _platform, csd) = self.get_windows_version()?;
         Ok(format!(
             "Windows-{}.{} Build {} ({})",
@@ -297,7 +289,7 @@ impl Operations for WindowsOperations {
         ))
     }
 
-    fn reboot(&self, flags: Option<u32>) -> anyhow::Result<()> {
+    fn reboot(&self, flags: Option<u32>) -> Result<()> {
         log::debug!("Reboot called with flags: {:?}", flags);
         use windows::Win32::System::Shutdown::EXIT_WINDOWS_FLAGS;
         let wflags = flags.map(EXIT_WINDOWS_FLAGS);
@@ -323,7 +315,7 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn logoff(&self) -> anyhow::Result<()> {
+    fn logoff(&self) -> Result<()> {
         log::debug!("Logoff called");
         unsafe {
             let result = ExitWindowsEx(EWX_LOGOFF, SHUTDOWN_REASON(0));
@@ -335,13 +327,13 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn init_idle_timer(&self) -> anyhow::Result<()> {
+    fn init_idle_timer(&self) -> Result<()> {
         // Just a stub for compatibility with other OSes
         // On Windows, we don't need to initialize anything
         Ok(())
     }
 
-    fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
+    fn get_idle_duration(&self) -> Result<std::time::Duration> {
         unsafe {
             let mut lii = LASTINPUTINFO {
                 cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
@@ -361,7 +353,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn get_current_user(&self) -> anyhow::Result<String> {
+    fn get_current_user(&self) -> Result<String> {
         log::debug!("Get current user called");
         let mut buf = [0u16; 256];
         let mut size = buf.len() as u32;
@@ -375,7 +367,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn get_session_type(&self) -> anyhow::Result<String> {
+    fn get_session_type(&self) -> Result<String> {
         log::debug!("Get session type called");
         let env_var = std::env::var("SESSIONNAME");
         if let Ok(session_name) = env_var {
@@ -384,7 +376,7 @@ impl Operations for WindowsOperations {
         log::warn!("SESSIONNAME environment variable is not set");
         Ok("unknown".to_string())
     }
-    fn get_network_info(&self) -> anyhow::Result<Vec<NetworkInterface>> {
+    fn get_network_info(&self) -> Result<Vec<NetworkInterface>> {
         let mut buf_len: u32 = 32_768;
         let mut buf = vec![0u8; buf_len as usize];
         let mut adapters_ptr = buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
@@ -459,7 +451,7 @@ impl Operations for WindowsOperations {
         Ok(results)
     }
 
-    fn force_time_sync(&self) -> anyhow::Result<()> {
+    fn force_time_sync(&self) -> Result<()> {
         log::debug!("Force time sync called");
         let status = Command::new(r"C:\Windows\System32\w32tm.exe")
             .arg("/resync")
@@ -472,7 +464,7 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn protect_file_for_owner_only(&self, path: &str) -> anyhow::Result<()> {
+    fn protect_file_for_owner_only(&self, path: &str) -> Result<()> {
         unsafe {
             // Convert path to UTF-16
             let path_w = U16CString::from_str(path)
@@ -533,7 +525,149 @@ impl Operations for WindowsOperations {
         }
     }
 
-    fn is_some_installation_in_progress(&self) -> anyhow::Result<bool> {
+    fn ensure_user_can_rdp(&self, user: &str) -> Result<()> {
+        unsafe {
+            // Well known SID for "Remote Desktop Users" group
+            // S-1-5-32-555
+            let mut sid: PSID = PSID::default();
+            let sid_pcwstr = w!("S-1-5-32-555");
+            ConvertStringSidToSidW(sid_pcwstr, &mut sid)
+                .map_err(|e| anyhow::anyhow!("ConvertStringSidToSidW failed: {}", e))?;
+
+            // 2. Obtener el nombre del grupo a partir del SID
+            let mut name_buf = vec![0u16; 256];
+            let mut domain_buf = vec![0u16; 256];
+            let mut name_len = name_buf.len() as u32;
+            let mut domain_len = domain_buf.len() as u32;
+            let mut use_type = SID_NAME_USE::default();
+
+            LookupAccountSidW(
+                None,
+                sid,
+                Some(PWSTR(name_buf.as_mut_ptr())),
+                &mut name_len,
+                Some(PWSTR(domain_buf.as_mut_ptr())),
+                &mut domain_len,
+                &mut use_type,
+            )
+            .map_err(|e| anyhow::anyhow!("LookupAccountSidW failed: {}", e))?;
+
+            let group_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+
+            // 3. Enumerar miembros del grupo
+            let mut bufptr: *mut u8 = null_mut();
+            let mut entries_read = 0u32;
+            let mut total_entries = 0u32;
+
+            let status = NetLocalGroupGetMembers(
+                None,
+                PCWSTR::from_raw(
+                    group_name
+                        .encode_utf16()
+                        .chain([0])
+                        .collect::<Vec<u16>>()
+                        .as_ptr(),
+                ),
+                1,
+                &mut bufptr,
+                u32::MAX,
+                &mut entries_read,
+                &mut total_entries,
+                None,
+            );
+
+            let mut already_in_group = false;
+
+            if status == 0 {
+                let members = std::slice::from_raw_parts(
+                    bufptr as *const LOCALGROUP_MEMBERS_INFO_1,
+                    entries_read as usize,
+                );
+
+                // Obtener el SID del usuario
+                let user_sid: PSID = PSID::default();
+                let mut sid_size = 0u32;
+                let mut domain_buf = vec![0u16; 256];
+                let mut domain_len = domain_buf.len() as u32;
+                let mut use_type = SID_NAME_USE::default();
+                let user16 = U16CString::from_str(user)
+                    .context("failed to convert username to UTF-16")?;
+
+                // Primera llamada para obtener tamaño
+                LookupAccountNameW(
+                    None,
+                    PCWSTR(user16.as_ptr()),
+                    Some(user_sid),
+                    &mut sid_size,
+                    Some(PWSTR(domain_buf.as_mut_ptr())),
+                    &mut domain_len,
+                    &mut use_type,
+                ).map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
+
+                // Reservar buffer para SID
+                let mut sid_buf = vec![0u8; sid_size as usize];
+                let user_sid = PSID(sid_buf.as_mut_ptr() as _);
+                domain_len = domain_buf.len() as u32;
+
+                LookupAccountNameW(
+                    None,
+                    PCWSTR::from_raw(
+                        user.encode_utf16()
+                            .chain([0])
+                            .collect::<Vec<u16>>()
+                            .as_ptr(),
+                    ),
+                    Some(user_sid),
+                    &mut sid_size,
+                    Some(PWSTR(domain_buf.as_mut_ptr())),
+                    &mut domain_len,
+                    &mut use_type,
+                )
+                .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
+
+                // Comparar con los miembros existentes
+                for m in members {
+                    if EqualSid(m.lgrmi1_sid, user_sid).is_ok()
+                    {
+                        already_in_group = true;
+                        break;
+                    }
+                }
+
+                NetApiBufferFree(Some(bufptr as _));
+
+                // 4. Si no está, añadirlo
+                if !already_in_group {
+                    let info = LOCALGROUP_MEMBERS_INFO_0 {
+                        lgrmi0_sid: user_sid,
+                    };
+                    let status = NetLocalGroupAddMembers(
+                        None,
+                        PCWSTR::from_raw(
+                            group_name
+                                .encode_utf16()
+                                .chain([0])
+                                .collect::<Vec<u16>>()
+                                .as_ptr(),
+                        ),
+                        0,
+                        &info as *const _ as *const u8,
+                        1,
+                    );
+                    if status != 0 {
+                        return Err(anyhow::anyhow!(
+                            "NetLocalGroupAddMembers failed with code {}",
+                            status
+                        ));
+                    }
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    fn is_some_installation_in_progress(&self) -> Result<bool> {
         const PATH: PCWSTR = w!(r#"SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State"#);
         let mut hkey: HKEY = HKEY::default();
         let res =

@@ -30,9 +30,9 @@ pub mod service;
 pub mod config;
 
 mod event;
-mod safe;
+mod safehandle;
 mod msgwindow;
 
 pub use msgwindow::MsgWindow;
-pub use safe::SafeHandle;
+pub use safehandle::SafeHandle;
 pub use event::WindowsEvent;

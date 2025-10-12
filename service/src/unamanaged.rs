@@ -13,6 +13,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
 
     let known_interfaces = platform.operations().get_network_info()?;
 
+    // Notify the broker that we are ready and get the TLS certs
     let cert_info = broker
         .write()
         .await
@@ -23,6 +24,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
             anyhow::anyhow!("Failed to initialize with broker: {:?}", e)
         })?;
 
+    // Initialize the Webserver/Websocket server (webserver for public part, websocket for local client comms)
     let _http_server = server::start_server(
         cert_info.clone(),
         stop.clone(),

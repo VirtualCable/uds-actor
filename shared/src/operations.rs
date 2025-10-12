@@ -154,6 +154,12 @@ pub trait Operations: Send + Sync {
     /// On Unix, this typically sets permissions to 600. On Windows, it modifies the ACLs.
     fn protect_file_for_owner_only(&self, path: &str) -> Result<()>;
 
+    // Make whatever is is needed to allow the user to connect via RDP
+    // This may include enabling RDP, configuring firewall, etc.
+    // On windows, basically ensures that the user is in the "Remote Desktop Users" group
+    // Linux and macOs, does nothing right now
+    fn ensure_user_can_rdp(&self, user: &str) -> Result<()>;
+
     // This specifically checks if there is any installation in progress (like Windows Update)
     // On unix, this will always return false
     fn is_some_installation_in_progress(&self) -> Result<bool>;

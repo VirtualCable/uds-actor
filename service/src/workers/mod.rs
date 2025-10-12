@@ -2,7 +2,7 @@ use shared::{log, ws::server::ServerInfo};
 
 use crate::platform;
 
-pub mod logging;
+pub mod logger;
 pub mod login;
 pub mod logout;
 
@@ -14,7 +14,7 @@ async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
         let server_info = server_info.clone();
         let platform = platform.clone();
         async move {
-            if let Err(e) = logging::handle_log(server_info, platform).await {
+            if let Err(e) = logger::handle_log(server_info, platform).await {
                 log::error!("Log worker error: {:?}", e);
             }
         }

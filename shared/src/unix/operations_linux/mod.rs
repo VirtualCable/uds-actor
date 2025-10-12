@@ -189,6 +189,11 @@ impl crate::operations::Operations for LinuxOperations {
         Ok(())
     }
 
+    fn ensure_user_can_rdp(&self, user: &str) -> Result<()> {
+        log::debug!("LinuxOperations::ensure_user_can_rdp called: {}", user);
+        Ok(())
+    }
+
     fn is_some_installation_in_progress(&self) -> Result<bool> {
         log::debug!("LinuxOperations::is_some_installation_in_progress called");
         Ok(false)

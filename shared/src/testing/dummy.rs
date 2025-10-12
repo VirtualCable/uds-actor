@@ -229,6 +229,13 @@ impl Operations for DummyOperations {
         ));
         Ok(())
     }
+
+    fn ensure_user_can_rdp(&self, user: &str) -> anyhow::Result<()> {
+        self.calls
+            .push(format!("operations::ensure_user_can_rdp({})", user));
+        Ok(())
+    }
+    
     fn is_some_installation_in_progress(&self) -> anyhow::Result<bool> {
         self.calls
             .push("operations::is_some_installation_in_progress()");

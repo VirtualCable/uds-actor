@@ -24,7 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use crate::windows::safe::SafeHandle;
+use crate::windows::safehandle::SafeHandle;
 use std::time::Duration;
 use windows::Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::System::Threading::{
