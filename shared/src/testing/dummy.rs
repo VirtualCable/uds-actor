@@ -236,6 +236,7 @@ impl Operations for DummyOperations {
     }
 }
 
+#[derive(Clone)]
 pub struct DummyBrokerApi {
     calls: Calls,
     secret: Option<String>,

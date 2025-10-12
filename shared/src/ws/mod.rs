@@ -43,7 +43,7 @@ where
 /// Wait until receiving a `RpcEnvelope<T>` from the broadcast channel.
 /// Cancels if the `stop` is triggered.
 pub async fn wait_for_request<T>(
-    mut rx: broadcast::Receiver<RpcEnvelope<RpcMessage>>,
+    rx: &mut broadcast::Receiver<RpcEnvelope<RpcMessage>>,
     stop: Option<Arc<Notify>>,
 ) -> Option<RpcEnvelope<T>>
 where

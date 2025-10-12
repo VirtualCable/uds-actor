@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+// Shared types for WebSocket messages
+// But reexport here for consistency
+pub use crate::broker::api::types::LoginResponse;
+
 pub type RequestId = u64;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,9 +39,10 @@ pub enum RpcMessage {
     Ping(Ping),                // Used to maintain connection alive
     LogoffRequest(LogoffRequest), // From broker for client
     PreConnect(PreConnect),       // From broker for server
-    LogoutRequest(LogoutRequest), // From client ws
+    LogoutRequest(LogoutRequest), // From client ws for the broker
+    LogRequest(LogRequest),       // From client ws for the broker
     MessageRequest(MessageRequest),
-    Close(Close),                  // From client ws
+    Close(Close),                  // From client ws to server
 
     // Error response with
     Error(RpcError),
@@ -49,14 +54,7 @@ pub struct LoginRequest {
     pub session_type: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct LoginResponse {
-    pub ip: String,
-    pub hostname: String,
-    pub deadline: Option<u32>,
-    pub max_idle: Option<u32>,
-    pub session_id: String,
-}
+// Login response is same as broker API response
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ScreenshotRequest;
@@ -85,6 +83,12 @@ pub struct LogoutRequest {
     pub session_type: String,
     pub callback_url: String,
     pub session_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogRequest {
+    pub level: crate::broker::api::types::LogLevel, // Log level
+    pub message: String, // Log message
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

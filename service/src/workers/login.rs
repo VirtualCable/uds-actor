@@ -1,0 +1,46 @@
+use anyhow::Result;
+
+use shared::{
+    log,
+    ws::{
+        server::ServerInfo,
+        types::{LoginRequest, RpcEnvelope, RpcMessage},
+        wait_for_request,
+    },
+};
+
+use crate::platform;
+
+// Owned ServerInfo and Platform
+pub async fn handle_login(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+    let mut rx = server_info.wsclient_to_workers.subscribe();
+    if let Some(env) = wait_for_request::<LoginRequest>(&mut rx, None).await {
+        log::debug!("Received LoginRequest with id {:?}", env.id);
+        let broker_api = platform.broker_api();
+        // Clone api to avoid holding the lock during await
+        let interfaces = platform.operations().get_network_info()?;
+        if let Ok(response) =  broker_api.write().await.login(
+            interfaces.as_slice(),
+            env.msg.username.as_str(),
+            env.msg.session_type.as_str(),
+        ).await {
+            let response_env = RpcEnvelope {
+                id: env.id,
+                msg: RpcMessage::LoginResponse(response),
+            };
+            if let Err(e) = server_info
+                .workers_to_wsclient
+                .send(response_env)
+                .await
+            {
+                log::error!("Failed to send LoginResponse: {}", e);
+            } else {
+                log::debug!("Sent LoginResponse for id {:?}", env.id);
+            }
+        } else {
+            log::error!("Login failed for user {}", env.msg.username);
+        }
+    }
+
+    Ok(())
+}

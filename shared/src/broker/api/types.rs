@@ -232,7 +232,7 @@ pub struct ClientInfo {
 
 
 // Log levels, must match server ones
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LogLevel {
     Other = 10000,
     Debug = 20000,

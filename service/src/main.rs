@@ -7,6 +7,7 @@ use shared::{log, service::AsyncService, config::{ActorType}};
 mod platform;
 mod managed;
 mod unamanaged;
+mod workers;
 
 fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {

@@ -64,7 +64,7 @@ impl AsyncService {
     #[cfg(not(target_os = "windows"))]
     pub fn run_service(self) -> Result<()> {
         // On other, just run directly
-        // Notify is a dummy here
+        // Stop is a dummy here
         self.run(self.stop.clone());
         Ok(())
     }
