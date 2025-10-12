@@ -64,12 +64,12 @@ impl LinuxOperations {
 
 // TODO: Implement remaining methods
 impl crate::operations::Operations for LinuxOperations {
-    fn check_permissions(&self) -> Result<bool> {
+    fn check_permissions(&self) -> Result<()> {
         log::debug!("LinuxOperations::check_permissions called");
-        if std::env::var("UDS_DEBUG").unwrap_or_else(|_| "0".to_string()) == "1" {
-            Ok(true)
+        if unsafe { libc::geteuid() != 0 } {
+            Err(anyhow::anyhow!("Insufficient permissions"))
         } else {
-            Ok(unsafe { libc::geteuid() == 0 })
+            Ok(())
         }
     }
 
