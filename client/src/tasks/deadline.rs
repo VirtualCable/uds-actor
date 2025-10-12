@@ -75,7 +75,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 #[cfg(test)]
 mod tests {
     // Tests for deadline task
-    use crate::testing::fake::create_platform;
+    use crate::testing::dummy::create_platform;
 
     #[tokio::test]
     async fn test_deadline_task_deadline() {

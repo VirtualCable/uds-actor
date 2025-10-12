@@ -109,7 +109,7 @@ pub async fn task(
 #[cfg(test)]
 mod tests {
     // Tests for idle task
-    use crate::testing::fake::create_platform;
+    use crate::testing::dummy::create_platform;
 
     #[tokio::test]
     async fn test_idle_task_idle() {

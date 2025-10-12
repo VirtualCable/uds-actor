@@ -1,4 +1,4 @@
-use crate::testing::fake::create_platform;
+use crate::testing::dummy::create_platform;
 
 #[tokio::test]
 async fn test_run_no_server() {

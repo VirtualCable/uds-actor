@@ -6,7 +6,7 @@ use shared::{
     testing::dummy::{Calls, DummyBrokerApi, DummyOperations},
 };
 
-pub async fn create_fake_platform() -> Platform {
+pub async fn create_dummy_platform() -> (Platform, Calls) {
     let config = ActorConfiguration {
         broker_url: "https://localhost".to_string(),
         verify_ssl: true,
@@ -21,8 +21,10 @@ pub async fn create_fake_platform() -> Platform {
         config: None,
         data: None,
     };
-    let operations = Arc::new(DummyOperations::new(Calls::new()));
-    let broker_api = Arc::new(tokio::sync::RwLock::new(DummyBrokerApi::new(Calls::new())));
+    let calls = Calls::new();
+    let operations = Arc::new(DummyOperations::new(calls.clone()));
+    let broker_api = Arc::new(tokio::sync::RwLock::new(DummyBrokerApi::new(calls.clone())));
 
-    crate::platform::Platform::new_with_params(Some(config), Some(operations), Some(broker_api))
+    let platform = crate::platform::Platform::new_with_params(Some(config), Some(operations), Some(broker_api));
+    (platform, calls)
 }

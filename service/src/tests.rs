@@ -1,7 +1,7 @@
 #[cfg(test)]
 use super::*;
 
-use crate::testing::fake::create_fake_platform;
+use crate::testing::dummy::create_dummy_platform;
 
 #[tokio::test]
 async fn test_async_main() {
@@ -11,7 +11,7 @@ async fn test_async_main() {
          tokio::time::sleep(std::time::Duration::from_secs(1)).await;
          stop_clone.notify_one();
     });
-    let platform = create_fake_platform().await;
+    let (platform, _calls) = create_dummy_platform().await;
     let result = async_main(platform, stop).await;
     assert!(result.is_ok());
 }

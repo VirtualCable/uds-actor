@@ -1,7 +1,9 @@
-use crate::ws::types::{RpcEnvelope, RpcMessage};
 use axum::{http::StatusCode, Json};
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, Notify};
+
+use crate::{log, ws::types::{RpcEnvelope, RpcMessage}};
+
 
 pub mod client;
 pub mod server;
@@ -49,7 +51,7 @@ pub async fn wait_for_request<T>(
 where
     T: TryFrom<RpcMessage> + Clone,
 {
-    crate::log::debug!("Waiting for request...");
+    log::debug!("Waiting for request...");
     loop {
         tokio::select! {
             // External stop
@@ -72,12 +74,53 @@ where
                             });
                         }
                     }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        // Skipping messages
+                        log::warn!("Skipped {} messages", count);
+                    }
                     Err(e) => {
-                        crate::log::warn!("Broadcast receive error: {e}");
+                        log::warn!("Broadcast receive error: {e}");
                         return None;
                     }
                 }
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use super::types::{Ping};
+
+    #[tokio::test]
+    async fn wait_for_request_survives_lagged() {
+        // Small broadcast channel to force Lagged
+        let (tx, mut _rx0) = broadcast::channel::<RpcEnvelope<RpcMessage>>(2);
+
+        // New receiver for the test
+        let mut rx = tx.subscribe();
+
+        // Send more messages than can fit in the buffer
+        for _i in 0..10 {
+            let msg = RpcEnvelope {
+                id: None,
+                msg: RpcMessage::Ping(Ping(Vec::new()))
+            };
+            let _ = tx.send(msg);
+        }
+
+        // No stop signal
+        let stop: Option<Arc<Notify>> = None;
+
+        // Call wait_for_request it should skip Lagged messages
+        // and return the first Ping it can parse
+        // Note: we sent 10 messages but the buffer is only 2, so
+       // it should have skipped some
+        let env = wait_for_request::<Ping>(&mut rx, stop).await;
+
+        assert!(env.is_some());
     }
 }

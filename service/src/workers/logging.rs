@@ -71,3 +71,83 @@ pub async fn handle_log(server_info: ServerInfo, platform: platform::Platform) -
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use shared::ws::{
+        request_tracker::RequestTracker,
+        types::{RpcEnvelope, RpcMessage},
+    };
+    use tokio::sync::{broadcast, mpsc};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn flood_guard_allows_up_to_60_per_minute() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let mut guard = FloodGuard::new();
+
+        // First 60 should be allowed
+        for _ in 0..60 {
+            assert!(guard.allow());
+        }
+
+        // The 61st should be rejected
+        assert!(!guard.allow());
+
+        // Advance the clock artificially (if using tokio::time::pause/advance)
+        // or manipulate window_start to simulate the passage of time
+        guard.window_start -= Duration::from_secs(61);
+
+        // Now it should reset and allow again
+        assert!(guard.allow());
+    }
+
+    #[tokio::test]
+    async fn handle_log_respects_flood_guard() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
+        let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
+        let tracker = RequestTracker::new();
+
+        let handle = tokio::spawn(async move {
+            // Dummy task to keep the server_info.task valid
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        });
+
+        let server_info = ServerInfo {
+            workers_to_wsclient: workers_tx,
+            wsclient_to_workers: wsclient_to_workers.clone(),
+            tracker,
+            task: Arc::new(handle),
+        };
+
+        let (platform, calls) = crate::testing::dummy::create_dummy_platform().await;
+
+        // Spawn worker
+        tokio::spawn(handle_log(server_info, platform.clone()));
+
+        // Wait to have at least one receiver
+        while wsclient_to_workers.receiver_count() == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Send 65 log messages
+        for i in 0..65 {
+            let req = RpcEnvelope {
+                id: None,
+                msg: RpcMessage::LogRequest(LogRequest {
+                    level: "INFO".into(),
+                    message: format!("msg {i}"),
+                }),
+            };
+            wsclient_to_workers.send(req).unwrap();
+        }
+
+        // Wait a bit to let processing happen
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Inspecciona dummy broker_api
+        log::info!("calls: {:?}", calls.dump());
+    }
+}

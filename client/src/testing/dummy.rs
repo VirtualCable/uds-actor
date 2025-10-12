@@ -8,12 +8,12 @@ use shared::{
 use shared::testing::dummy::{Calls, DummyActions, DummyOperations};
 
 #[derive(Clone)]
-struct FakeSessionManager {
+struct DummySessionManager {
     event: Event,
     calls: Calls,
 }
 
-impl FakeSessionManager {
+impl DummySessionManager {
     fn new(calls: Calls) -> Self {
         Self {
             event: Event::new(),
@@ -23,7 +23,7 @@ impl FakeSessionManager {
 }
 
 #[async_trait::async_trait]
-impl crate::session::SessionManagement for FakeSessionManager {
+impl crate::session::SessionManagement for DummySessionManager {
     async fn wait(&self) {
         self.calls.push("session::wait()");
         self.event.wait_async().await;
@@ -49,18 +49,18 @@ impl crate::session::SessionManagement for FakeSessionManager {
     }
 }
 
-pub struct FakeApi {
+pub struct DummyApi {
     calls: Calls,
 }
 
-impl FakeApi {
+impl DummyApi {
     fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
 #[async_trait::async_trait]
-impl ClientRest for FakeApi {
+impl ClientRest for DummyApi {
     async fn register(&mut self, _callback_url: &str) -> anyhow::Result<()> {
         self.calls.push("api::register()");
         Ok(())
@@ -98,11 +98,11 @@ pub async fn create_platform(
 ) -> (crate::platform::Platform, Calls) {
     let calls: Calls = Calls::new();
     let manager =
-        manager.unwrap_or_else(|| std::sync::Arc::new(FakeSessionManager::new(calls.clone())));
+        manager.unwrap_or_else(|| std::sync::Arc::new(DummySessionManager::new(calls.clone())));
     let operations =
         operations.unwrap_or_else(|| std::sync::Arc::new(DummyOperations::new(calls.clone())));
     let api = api.unwrap_or_else(|| {
-        std::sync::Arc::new(tokio::sync::RwLock::new(FakeApi::new(calls.clone())))
+        std::sync::Arc::new(tokio::sync::RwLock::new(DummyApi::new(calls.clone())))
     });
     let actions = actions.unwrap_or_else(|| std::sync::Arc::new(DummyActions::new(calls.clone())));
     (
