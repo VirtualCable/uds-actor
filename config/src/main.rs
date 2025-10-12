@@ -15,6 +15,15 @@ fn main() {
 
     let operations = shared::operations::new_operations();
 
+    // On debug builds, skip the admin check
+    #[cfg(not(debug_assertions))]
+    {
+        if operations.check_permissions().is_err() {
+            fltk::dialog::alert_default("This program must be run with administrator privileges");
+            std::process::exit(1);
+        }
+    }
+
     // Our auths list, on Arc to share between threads
     let auths = Arc::new(Mutex::new(
         Vec::<shared::broker::api::types::Authenticator>::new(),
@@ -32,7 +41,7 @@ fn main() {
     cfg_window.win.set_callback({
         move |_| {
             log::debug!("Window callback triggered: event={:?}", fltk::app::event());
-            if fltk::app::event() == fltk::enums::Event::Shortcut 
+            if fltk::app::event() == fltk::enums::Event::Shortcut
                 && fltk::app::event_key() == fltk::enums::Key::Escape
             {
                 // Just eat the event
@@ -100,12 +109,14 @@ fn main() {
         let auths = auths.clone();
         let cfg_window = cfg_window.clone();
         // Fail if we can't get at least one network interface
-        let interface = operations.get_first_network_interface().unwrap_or_else(|e| {
-            log::error!("No network interfaces found: {}", e);
-            fltk::dialog::alert_default("No network interfaces found, cannot continue");
-            fltk::app::quit();
-            std::process::exit(1);
-        });
+        let interface = operations
+            .get_first_network_interface()
+            .unwrap_or_else(|e| {
+                log::error!("No network interfaces found: {}", e);
+                fltk::dialog::alert_default("No network interfaces found, cannot continue");
+                fltk::app::quit();
+                std::process::exit(1);
+            });
 
         move |_| {
             callbacks::btn_register_clicked(

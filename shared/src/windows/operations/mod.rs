@@ -110,10 +110,14 @@ impl WindowsOperations {
 }
 
 impl Operations for WindowsOperations {
-    fn check_permissions(&self) -> Result<bool> {
+    fn check_permissions(&self) -> Result<()> {
         // Use IsUserAnAdmin from shell32
         use windows::Win32::UI::Shell::IsUserAnAdmin;
-        Ok(unsafe { IsUserAnAdmin().as_bool() })
+        if !unsafe { IsUserAnAdmin().as_bool() } {
+            Err(anyhow::anyhow!("The current user does not have administrative privileges"))
+        } else {
+            Ok(())
+        }
     }
 
     fn get_computer_name(&self) -> Result<String> {
@@ -534,27 +538,27 @@ impl Operations for WindowsOperations {
             ConvertStringSidToSidW(sid_pcwstr, &mut sid)
                 .map_err(|e| anyhow::anyhow!("ConvertStringSidToSidW failed: {}", e))?;
 
-            // 2. Obtener el nombre del grupo a partir del SID
-            let mut name_buf = vec![0u16; 256];
+            // Get group name from SID
+            let mut group_name_buf = vec![0u16; 256];
             let mut domain_buf = vec![0u16; 256];
-            let mut name_len = name_buf.len() as u32;
+            let mut group_name_len = group_name_buf.len() as u32;
             let mut domain_len = domain_buf.len() as u32;
             let mut use_type = SID_NAME_USE::default();
 
             LookupAccountSidW(
                 None,
                 sid,
-                Some(PWSTR(name_buf.as_mut_ptr())),
-                &mut name_len,
+                Some(PWSTR(group_name_buf.as_mut_ptr())),
+                &mut group_name_len,
                 Some(PWSTR(domain_buf.as_mut_ptr())),
                 &mut domain_len,
                 &mut use_type,
             )
             .map_err(|e| anyhow::anyhow!("LookupAccountSidW failed: {}", e))?;
 
-            let group_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+            let group_name = utf16_ptr_to_string(group_name_buf.as_ptr())?;
 
-            // 3. Enumerar miembros del grupo
+            // Look for user in group members
             let mut bufptr: *mut u8 = null_mut();
             let mut entries_read = 0u32;
             let mut total_entries = 0u32;
@@ -576,15 +580,18 @@ impl Operations for WindowsOperations {
                 None,
             );
 
-            let mut already_in_group = false;
-
             if status == 0 {
-                let members = std::slice::from_raw_parts(
-                    bufptr as *const LOCALGROUP_MEMBERS_INFO_1,
-                    entries_read as usize,
-                );
+                let members = if entries_read > 0 && !bufptr.is_null() {
+                    std::slice::from_raw_parts(
+                        bufptr as *const LOCALGROUP_MEMBERS_INFO_1,
+                        entries_read as usize,
+                    )
+                } else {
+                    // No members, so user is not in group
+                    &[]
+                };
 
-                // Obtener el SID del usuario
+                // get SID of the user to add
                 let user_sid: PSID = PSID::default();
                 let mut sid_size = 0u32;
                 let mut domain_buf = vec![0u16; 256];
@@ -593,7 +600,7 @@ impl Operations for WindowsOperations {
                 let user16 = U16CString::from_str(user)
                     .context("failed to convert username to UTF-16")?;
 
-                // Primera llamada para obtener tamaño
+                // First call to get size, will fail because no buffer
                 LookupAccountNameW(
                     None,
                     PCWSTR(user16.as_ptr()),
@@ -602,21 +609,16 @@ impl Operations for WindowsOperations {
                     Some(PWSTR(domain_buf.as_mut_ptr())),
                     &mut domain_len,
                     &mut use_type,
-                ).map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
+                ).ok();
 
-                // Reservar buffer para SID
+                // Allocate buffer and call again
                 let mut sid_buf = vec![0u8; sid_size as usize];
                 let user_sid = PSID(sid_buf.as_mut_ptr() as _);
                 domain_len = domain_buf.len() as u32;
 
                 LookupAccountNameW(
                     None,
-                    PCWSTR::from_raw(
-                        user.encode_utf16()
-                            .chain([0])
-                            .collect::<Vec<u16>>()
-                            .as_ptr(),
-                    ),
+                    PCWSTR(user16.as_ptr() as _),
                     Some(user_sid),
                     &mut sid_size,
                     Some(PWSTR(domain_buf.as_mut_ptr())),
@@ -625,7 +627,8 @@ impl Operations for WindowsOperations {
                 )
                 .map_err(|e| anyhow::anyhow!("LookupAccountNameW failed: {}", e))?;
 
-                // Comparar con los miembros existentes
+                let mut already_in_group = false;
+                // Look for user SID in members
                 for m in members {
                     if EqualSid(m.lgrmi1_sid, user_sid).is_ok()
                     {
@@ -634,22 +637,20 @@ impl Operations for WindowsOperations {
                     }
                 }
 
+                // Free buffer allocated by NetLocalGroupGetMembers
                 NetApiBufferFree(Some(bufptr as _));
 
-                // 4. Si no está, añadirlo
+                let group_name_u16 = U16CString::from_str(&group_name)
+                    .context("failed to convert group name to UTF-16")?;
+
+                // if not already in group, add it
                 if !already_in_group {
                     let info = LOCALGROUP_MEMBERS_INFO_0 {
                         lgrmi0_sid: user_sid,
                     };
                     let status = NetLocalGroupAddMembers(
                         None,
-                        PCWSTR::from_raw(
-                            group_name
-                                .encode_utf16()
-                                .chain([0])
-                                .collect::<Vec<u16>>()
-                                .as_ptr(),
-                        ),
+                        PCWSTR(group_name_u16.as_ptr()),
                         0,
                         &info as *const _ as *const u8,
                         1,

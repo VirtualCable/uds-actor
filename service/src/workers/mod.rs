@@ -2,19 +2,20 @@ use shared::{log, ws::server::ServerInfo};
 
 use crate::platform;
 
-pub mod logger;
-pub mod login;
-pub mod logout;
+// Workers for WebSocket handling
+mod ws;
+// Workers for http handling
+mod http;
 
 #[allow(dead_code)]
-async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
+pub async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
     // Login worker
     let _ = tokio::spawn({
         log::info!("Log worker created");
         let server_info = server_info.clone();
         let platform = platform.clone();
         async move {
-            if let Err(e) = logger::handle_log(server_info, platform).await {
+            if let Err(e) = ws::logger::handle_log(server_info, platform).await {
                 log::error!("Log worker error: {:?}", e);
             }
         }
@@ -25,7 +26,7 @@ async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
         let server_info = server_info.clone();
         let platform = platform.clone();
         async move {
-            if let Err(e) = login::handle_login(server_info, platform).await {
+            if let Err(e) = ws::login::handle_login(server_info, platform).await {
                 log::error!("Login worker error: {:?}", e);
             }
         }
@@ -36,7 +37,7 @@ async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
         let server_info = server_info.clone();
         let platform = platform.clone();
         async move {
-            if let Err(e) = logout::handle_logout(server_info, platform).await {
+            if let Err(e) = ws::logout::handle_logout(server_info, platform).await {
                 log::error!("Logout worker error: {:?}", e);    
             }
         }

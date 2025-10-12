@@ -82,7 +82,7 @@ pub struct JoinDomainOptions {
 
 pub trait Operations: Send + Sync {
     /// Check if the current user has the necessary permissions to perform administrative tasks.
-    fn check_permissions(&self) -> Result<bool>;
+    fn check_permissions(&self) -> Result<()>;
 
     /// Get the computer name.
     /// Returns the hostname of the computer.

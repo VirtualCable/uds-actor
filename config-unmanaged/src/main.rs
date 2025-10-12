@@ -11,6 +11,16 @@ use shared::log;
 fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
+    // On debug builds, skip the admin check
+    #[cfg(not(debug_assertions))]
+    {
+        let operations = shared::operations::new_operations();
+        if operations.check_permissions().is_err() {
+            fltk::dialog::alert_default("This program must be run with administrator privileges");
+            std::process::exit(1);
+        }
+    }
+
     let app = fltk::app::App::default();
     let mut cfg_window = ConfigGui::new();
 

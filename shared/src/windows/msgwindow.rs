@@ -36,7 +36,7 @@ use windows::{
 
 use crate::log;
 
-static CLASS_NAME: &str = "rds_launcher_app";
+static CLASS_NAME: &str = "uds_acent_wnd_class";
 static CLASS_NAME_WIDE: LazyLock<widestring::U16CString> =
     LazyLock::new(|| widestring::U16CString::from_str_truncate(CLASS_NAME));
 

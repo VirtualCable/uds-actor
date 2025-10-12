@@ -109,9 +109,9 @@ impl Default for DummyOperations {
 }
 
 impl Operations for DummyOperations {
-    fn check_permissions(&self) -> anyhow::Result<bool> {
+    fn check_permissions(&self) -> anyhow::Result<()> {
         self.calls.push("operations::check_permissions()");
-        Ok(true)
+        Ok(())
     }
 
     fn get_computer_name(&self) -> anyhow::Result<String> {

@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use shared::{log, ws::server};
 
-use crate::platform;
+use crate::{platform, workers};
 
 pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
     let broker = platform.broker_api();
@@ -25,7 +25,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
         })?;
 
     // Initialize the Webserver/Websocket server (webserver for public part, websocket for local client comms)
-    let _http_server = server::start_server(
+    let server_info = server::start_server(
         cert_info.clone(),
         stop.clone(),
         platform
@@ -36,7 +36,13 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
             .unwrap()
             .to_string(),
         None,  // Default port
-    );
+    ).await?;
+
+    log::info!("Http server started");
+
+    // Create workers for requests, etc..
+    workers::create_workers(server_info.clone(), platform.clone()).await;
+
 
     let start = std::time::Instant::now();
     loop {

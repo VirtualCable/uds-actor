@@ -3,13 +3,13 @@ use super::*;
 use crate::log::{LogType, info, setup_logging};
 
 #[test]
+#[ignore = "Manual test, requires admin privileges"]
 fn test_check_permissions() {
     setup_logging("debug", LogType::Tests);
     let ops = new_operations();
     let result = ops.check_permissions();
-    assert!(result.is_ok());
     // We are not admin, should be false
-    assert!(!result.unwrap());
+    assert!(result.is_err());
 }
 
 #[test]
@@ -112,11 +112,12 @@ fn test_get_network_info() {
 
 // force_time_sync will fail unless run as admin
 #[test]
+#[ignore = "Manual test, requires non admin privileges"]
 fn test_force_time_sync() {
     setup_logging("debug", LogType::Tests);
     // Check if we are admin
     let ops = new_operations();
-    let perm = ops.check_permissions().unwrap_or(false);
+    let perm = ops.check_permissions().is_ok();
     let result = ops.force_time_sync();
     info!("force_time_sync result: {}", result.is_ok());
 
@@ -137,6 +138,19 @@ fn test_protect_file_for_owner_only() {
     assert!(result.is_ok());
     // Clean up
     let _ = std::fs::remove_file(&file_path);
+}
+
+#[test]
+#[ignore = "Manual test, requires admin privileges"]
+fn test_ensure_user_can_rdp() {
+    setup_logging("debug", LogType::Tests);
+    let ops = new_operations();
+    // Use current user for test
+    let user = std::env::var("USERNAME").unwrap();
+    let result = ops.ensure_user_can_rdp(&user);
+    // If not run as admin, will fail with access denied (error code 5)
+    info!("ensure_user_can_rdp result: {:?}", result);
+    assert!(result.is_ok());
 }
 
 #[test]
