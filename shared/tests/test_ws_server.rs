@@ -82,9 +82,9 @@ async fn test_get_screenshot() {
     // Fake WebSocket client that responds to ScreenshotRequest
     tokio::spawn({
         let tracker = tracker.clone();
-        let rx = wsclient_to_workers.subscribe();
+        let mut rx = wsclient_to_workers.subscribe();
         async move {
-            if let Some(env) = wait_for_request::<ScreenshotRequest>(rx, None).await {
+            if let Some(env) = wait_for_request::<ScreenshotRequest>(&mut rx, None).await {
                 log::debug!("Received ScreenshotRequest with id {:?}", env.id);
                 if let Some(id) = env.id {
                     tracker
@@ -126,9 +126,9 @@ async fn test_get_uuid() {
     // Fake WebSocket client that responds to UUidRequest
     tokio::spawn({
         let tracker = tracker.clone();
-        let rx = wsclient_to_workers.subscribe();
+        let mut rx = wsclient_to_workers.subscribe();
         async move {
-            if let Some(env) = wait_for_request::<UUidRequest>(rx, None).await {
+            if let Some(env) = wait_for_request::<UUidRequest>(&mut rx, None).await {
                 log::debug!("Received UUidRequest with id {:?}", env.id);
                 if let Some(id) = env.id {
                     tracker
@@ -173,7 +173,7 @@ async fn test_post_logout() {
     let (server_info, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the LogoffRequest
-    let rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.wsclient_to_workers.subscribe();
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -187,7 +187,7 @@ async fn test_post_logout() {
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        wait_for_request::<LogoffRequest>(rx, None).await;
+        wait_for_request::<LogoffRequest>(&mut rx, None).await;
     })
     .await
     .unwrap(); // Fail if timeout
@@ -200,7 +200,7 @@ pub async fn test_post_message() {
     let (server_info, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the MessageRequest
-    let rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.wsclient_to_workers.subscribe();
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -216,7 +216,7 @@ pub async fn test_post_message() {
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let res = wait_for_request::<MessageRequest>(rx, None).await.unwrap();
+        let res = wait_for_request::<MessageRequest>(&mut rx, None).await.unwrap();
         assert_eq!(res.msg.message, "test message");
     })
     .await
@@ -230,7 +230,7 @@ pub async fn test_post_script() {
     let (server_info, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the ScriptExecRequest
-    let rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.wsclient_to_workers.subscribe();
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let result = post_request(
@@ -247,7 +247,7 @@ pub async fn test_post_script() {
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let res = wait_for_request::<ScriptExecRequest>(rx, None)
+        let res = wait_for_request::<ScriptExecRequest>(&mut rx, None)
             .await
             .unwrap();
         assert_eq!(res.msg.script, "test script");
@@ -263,7 +263,7 @@ pub async fn test_post_script() {
 pub async fn test_post_pre_connect() {
     let (server_info, port) = create_test_server_task("-secret-").await;
     // Subscribe to receive the PreConnect
-    let rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.wsclient_to_workers.subscribe();
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let result = post_request(
@@ -276,7 +276,7 @@ pub async fn test_post_pre_connect() {
     assert_eq!(result, "ok");
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let res = wait_for_request::<PreConnect>(rx, None).await;
+        let res = wait_for_request::<PreConnect>(&mut rx, None).await;
         assert!(res.is_some());
     })
     .await
@@ -362,7 +362,7 @@ async fn test_ws_no_localhost_ipv6() {
 async fn test_ws_connect_insecure_tls() {
     let (server_info, port) = create_test_server_task("-secret-").await;
 
-    let rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.wsclient_to_workers.subscribe();
 
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -393,7 +393,7 @@ async fn test_ws_connect_insecure_tls() {
 
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         // let res = rx.recv().await;
-        wait_for_request::<Ping>(rx, None).await;
+        wait_for_request::<Ping>(&mut rx, None).await;
     })
     .await
     .unwrap(); // Fail if timeout
