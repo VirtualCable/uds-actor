@@ -1,14 +1,16 @@
 use std::sync::Arc;
-use tokio::sync::Notify;
 
 use anyhow::Result;
 
-use shared::{log, ws::server};
+use shared::{log, sync::OnceSignal, ws::server};
 
 use crate::{platform, workers};
 
-pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
+pub async fn run(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<()> {
     log::info!("Unmanaged service starting");
+    // Unmanaged actor does not need to wait for installations to complete
+    // as it should not be doing installations at all
+
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
@@ -45,7 +47,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
     workers::create_workers(server_info.clone(), platform.clone()).await;
 
     // Simply wait here until stop is signaled
-    stop.notified().await;
+    stop.wait().await;
     log::info!("Unmanaged service stopping");
     Ok(())
 }

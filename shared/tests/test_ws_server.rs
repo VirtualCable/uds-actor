@@ -8,16 +8,14 @@ use tokio_tungstenite::{Connector, connect_async_tls_with_config, tungstenite::M
 
 use reqwest::Client;
 use shared::{
-    log,
-    testing::test_certs,
-    ws::{
-        server::{ServerInfo, start_server},
+    log, sync::OnceSignal, testing::test_certs, ws::{
+        server::{start_server, ServerInfo},
         types::{
             LogoffRequest, MessageRequest, Ping, PreConnect, RpcEnvelope, RpcMessage,
             ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
         },
         wait_for_request, wait_response,
-    },
+    }
 };
 
 // Port counter to avoid collisions
@@ -28,7 +26,7 @@ async fn create_test_server_task(secret: &str) -> (ServerInfo, u16) {
     log::setup_logging("debug", crate::log::LogType::Tests);
     shared::tls::init_tls(None);
 
-    let stop = Arc::new(tokio::sync::Notify::new());
+    let stop = Arc::new(OnceSignal::new());
     let cert_info = test_certs::test_certinfo();
 
     let server_info = start_server(cert_info, stop.clone(), secret.into(), Some(port))

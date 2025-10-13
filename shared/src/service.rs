@@ -25,9 +25,10 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::{sync::Arc, time::Duration, pin::Pin};
-use tokio::sync::Notify;
 
 use anyhow::Result;
+
+use crate::sync::OnceSignal;
 
 // Run service is platform dependent
 // Will invoke back this "run" function,
@@ -35,25 +36,25 @@ use anyhow::Result;
 pub use crate::windows::service::run_service;
 
 pub trait AsyncServiceTrait: Send + Sync + 'static {
-    fn run(&self, stop: Arc<Notify>);
+    fn run(&self, stop: Arc<OnceSignal>);
 
-    fn get_stop_notify(&self) -> Arc<Notify>;
+    fn get_stop_notify(&self) -> Arc<OnceSignal>;
 }
 
 // Type alias for the main async function signature
-type MainAsyncFn = fn(Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+type MainAsyncFn = fn(Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
 pub struct AsyncService {
     // Add async fn to call as main_async
     main_async: MainAsyncFn,
-    stop: Arc<Notify>,
+    stop: Arc<OnceSignal>,
 }
 
 impl AsyncService {
     pub fn new(main_async: MainAsyncFn) -> Self {
         Self {
             main_async,
-            stop: Arc::new(Notify::new()),
+            stop: Arc::new(OnceSignal::new()),
         }
     }
     #[cfg(target_os = "windows")]
@@ -69,7 +70,7 @@ impl AsyncService {
         Ok(())
     }
 
-    async fn signals(stop: Arc<Notify>) {
+    async fn signals(stop: Arc<OnceSignal>) {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{SignalKind, signal};
@@ -84,7 +85,7 @@ impl AsyncService {
                 _ = sigint.recv() => {
                     crate::log::info!("Received SIGINT");
                 }
-                _ = stop.notified() => {
+                _ = stop.wait() => {
                     crate::log::info!("Stop notified");
                     return;
                 }
@@ -97,13 +98,13 @@ impl AsyncService {
         {
             // On windows, we don't have signals, just wait forever
             // The service control handler will notify us to stop
-            stop.notified().await;
+            stop.wait().await;
         }
     }
 }
 
 impl AsyncServiceTrait for AsyncService {
-    fn run(&self, stop: Arc<Notify>) {
+    fn run(&self, stop: Arc<OnceSignal>) {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all() // Enable timers, I/O, etc.
             .build()
@@ -122,11 +123,11 @@ impl AsyncServiceTrait for AsyncService {
                             crate::log::error!("Main async task failed: {}", e);
                         }
                     }
-                    stop.notify_waiters();
+                    stop.set();
                     signals_task.abort();  // This can be safely aborted
                 },
                 // Stop from SCM (on windows) or signal (on unix)
-                _ = stop.notified() => {
+                _ = stop.wait() => {
                     crate::log::debug!("Stop received (external)");
                     // Main task may need to do some cleanup, give it some time
                     let grace = Duration::from_secs(16);
@@ -141,7 +142,7 @@ impl AsyncServiceTrait for AsyncService {
         });
     }
 
-    fn get_stop_notify(&self) -> Arc<Notify> {
+    fn get_stop_notify(&self) -> Arc<OnceSignal> {
         self.stop.clone()
     }
 }
@@ -154,10 +155,10 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn async_main(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn async_main(stop: Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(async move {
             // main logic
-            stop.notified().await;
+            stop.wait().await;
             println!("Stop received");
         })
     }
@@ -180,7 +181,7 @@ mod tests {
         assert!(!stopped.load(std::sync::atomic::Ordering::SeqCst));
 
         // Notify to stop
-        stop.notify_waiters();
+        stop.set();
         // Wait for thread to join, with timeout
         let res = timeout(Duration::from_secs(5), async {
             handle.join().unwrap();

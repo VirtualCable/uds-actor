@@ -25,7 +25,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
 
     let tracker = RequestTracker::new();
     let cert_info = crate::testing::test_certs::test_certinfo_with_pass();
-    let notify = Arc::new(tokio::sync::Notify::new());
+    let stop = Arc::new(OnceSignal::new());
 
     let server_info = ServerStartInfo {
         cert_info,
@@ -33,7 +33,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
         workers_to_wsclient: Arc::new(tokio::sync::Mutex::new(workers_rx)), // unique receiver
         wsclient_to_workers: wsclient_to_workers.clone(),
         tracker: tracker.clone(),
-        stop: notify.clone(),
+        stop: stop.clone(),
         secret: secret.into(),
     };
 
@@ -59,7 +59,7 @@ async fn test_server_starts_and_stops() {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // Stop the server
-    server_info.stop.notify_waiters();
+    server_info.stop.set();
 
     // Wait with timeout to avoid hanging tests
     tokio::time::timeout(tokio::time::Duration::from_secs(5), server_task)
@@ -101,7 +101,7 @@ async fn test_server_stops_on_ws_client_connected() {
     // Wait a moment to ensure the server processes the message
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    server_info.stop.notify_waiters();
+    server_info.stop.set();
     // Wait with timeout to avoid hanging tests
     tokio::time::timeout(tokio::time::Duration::from_secs(5), server_task)
         .await

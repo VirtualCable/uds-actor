@@ -22,17 +22,15 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use socket2::{Domain, Socket, Type};
 use tokio::{
-    sync::{Notify, broadcast, mpsc},
+    sync::{broadcast, mpsc},
     try_join,
 };
 
 use crate::{
-    log,
-    tls::{CertificateInfo, certool},
-    ws::{
+    log, sync::OnceSignal, tls::{certool, CertificateInfo}, ws::{
         request_tracker::RequestTracker,
         types::{Close, Ping, RpcEnvelope, RpcMessage},
-    },
+    }
 };
 
 mod routes;
@@ -52,7 +50,7 @@ struct ServerStartInfo {
     pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>, // WS client → workers
     pub tracker: RequestTracker,
-    pub stop: Arc<Notify>,
+    pub stop: Arc<OnceSignal>,
     pub secret: String,
 }
 
@@ -61,7 +59,7 @@ pub struct ServerState {
     pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
-    pub stop: Arc<Notify>,
+    pub stop: Arc<OnceSignal>,
     pub secret: String,
     pub is_ws_active: Arc<AtomicBool>,
 }
@@ -140,7 +138,7 @@ pub async fn websocket_loop(
     socket: WebSocket,
     workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
-    stop: Arc<Notify>,
+    stop: Arc<OnceSignal>,
     ws_active: Arc<AtomicBool>,
     tracker: RequestTracker,
 ) {
@@ -212,7 +210,7 @@ pub async fn websocket_loop(
     tokio::select! {
         _ = &mut tx_task => { rx_task.abort(); }
         _ = &mut rx_task => { tx_task.abort(); }
-        _ = stop.notified() => {
+        _ = stop.wait() => {
             log::info!("Stopping WebSocket loop");
             tx_task.abort();
             rx_task.abort();
@@ -265,7 +263,7 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
     tokio::spawn({
         let handle = handle.clone();
         async move {
-            handle_stop.notified().await;
+            handle_stop.wait().await;
             log::info!("Stop signal received, shutting down server...");
             handle.graceful_shutdown(None);
         }
@@ -305,7 +303,7 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
 //
 pub async fn start_server(
     cert_info: CertificateInfo,
-    stop: Arc<Notify>,
+    stop: Arc<OnceSignal>,
     secret: String,
     port: Option<u16>,
 ) -> Result<ServerInfo> {

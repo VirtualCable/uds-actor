@@ -1,10 +1,9 @@
 use axum::{Json, http::StatusCode};
 use std::sync::Arc;
-use tokio::sync::{Notify, broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot};
 
 use crate::{
-    log,
-    ws::types::{RpcEnvelope, RpcMessage},
+    log, sync::OnceSignal, ws::types::{RpcEnvelope, RpcMessage}
 };
 
 pub mod client;
@@ -16,7 +15,7 @@ pub mod types;
 /// Wait for a response from the tracker (oneshot channel).
 pub async fn wait_response<T>(
     rx: oneshot::Receiver<RpcMessage>,
-    stop: Option<Arc<Notify>>,
+    stop: Option<Arc<OnceSignal>>,
     timeout: Option<std::time::Duration>,
 ) -> Result<Json<T>, StatusCode>
 where
@@ -26,7 +25,7 @@ where
         // External stop
         _ = async {
             if let Some(stop) = &stop {
-                stop.notified().await;
+                stop.wait().await;
             }
         }, if stop.is_some() => {
             Err(StatusCode::REQUEST_TIMEOUT)
@@ -54,7 +53,7 @@ where
 /// Cancels if the `stop` is triggered.
 pub async fn wait_for_request<T>(
     rx: &mut broadcast::Receiver<RpcEnvelope<RpcMessage>>,
-    stop: Option<Arc<Notify>>,
+    stop: Option<Arc<OnceSignal>>,
 ) -> Option<RpcEnvelope<T>>
 where
     T: TryFrom<RpcMessage> + Clone,
@@ -65,7 +64,7 @@ where
             // External stop
             _ = async {
                 if let Some(stop) = &stop {
-                    stop.notified().await;
+                    stop.wait().await;
                 }
             }, if stop.is_some() => {
                 return None;
@@ -120,7 +119,7 @@ mod tests {
         }
 
         // No stop signal
-        let stop: Option<Arc<Notify>> = None;
+        let stop: Option<Arc<OnceSignal>> = None;
 
         // Call wait_for_request it should skip Lagged messages
         // and return the first Ping it can parse

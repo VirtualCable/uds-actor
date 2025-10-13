@@ -1,8 +1,7 @@
 use anyhow::Result;
 use std::{pin::Pin, sync::Arc};
-use tokio::sync::Notify;
 
-use shared::{config::ActorType, log, service::AsyncService, tls};
+use shared::{config::ActorType, log, service::AsyncService, tls, sync::OnceSignal};
 
 mod platform;
 
@@ -11,7 +10,7 @@ mod unamanaged;
 
 mod workers;
 
-fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+fn executor(stop: Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
         let platform = platform::Platform::new(); // If no config, panic, we need config
         async_main(platform, stop).await.unwrap_or_else(|e| {
@@ -40,7 +39,7 @@ fn main() {
 }
 
 // Real "main" async logic of the service
-async fn async_main(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
+async fn async_main(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<()> {
     log::info!("Service main async logic started");
 
     // Validate config. If no config, this will error out

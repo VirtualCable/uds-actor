@@ -32,8 +32,7 @@ use windows::{
 
 use anyhow::Result;
 
-use crate::log::{debug, info};
-use crate::service::AsyncServiceTrait;
+use crate::{log::{debug, info},service::AsyncServiceTrait, sync::OnceSignal};
 
 const SERVICE_NAME: PCWSTR = w!("RustExampleService");
 
@@ -43,14 +42,14 @@ static LAUNCHER: OnceLock<Arc<dyn AsyncServiceTrait>> = OnceLock::new();
 struct ServiceContext {
     status_handle: SERVICE_STATUS_HANDLE,
     stop_event: HANDLE,
-    async_stop: std::sync::Arc<tokio::sync::Notify>,
+    async_stop: Arc<OnceSignal>,
 }
 
 unsafe impl Send for ServiceContext {}
 unsafe impl Sync for ServiceContext {}
 
 impl ServiceContext {
-    fn new(async_stop: Arc<tokio::sync::Notify>) -> Self {
+    fn new(async_stop: Arc<OnceSignal>) -> Self {
         Self {
             status_handle: SERVICE_STATUS_HANDLE(std::ptr::null_mut()),
             stop_event: unsafe { CreateEventW(None, true, false, None).unwrap() },
@@ -129,7 +128,7 @@ extern "system" fn service_handler(
         SERVICE_CONTROL_STOP => {
             // Spawn a thread that does the work and notifies progress
             let mut checkpoint = 1;
-            ctx.async_stop.notify_waiters();
+            ctx.async_stop.set();
             while ctx.wait_for_stop(100).unwrap() == WAIT_TIMEOUT {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 // Notify the SCM that we're still in STOP_PENDING
@@ -217,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_stop_signals_notify_and_event() {
-        let async_stop = Arc::new(tokio::sync::Notify::new());
+        let async_stop = Arc::new(OnceSignal::new());
         let mut ctx = ServiceContext::new(async_stop.clone());
         ctx.status_handle = SERVICE_STATUS_HANDLE::default(); // dummy
 
@@ -234,7 +233,7 @@ mod tests {
                 .unwrap();
 
             rt.block_on(async {
-                notify.notified().await;
+                notify.wait().await;
             });
             ctx_clone.stop().unwrap();
         });

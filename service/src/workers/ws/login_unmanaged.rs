@@ -63,13 +63,12 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
                     log::error!("Failed to save updated config with new master_token: {}", e);
                 }
             }
+            // Note, we do not save own data, it's volatile on unmanaged
             cfg.own_token = response.token;
             cfg.config.unique_id = response.unique_id;
             cfg.config.os = response.os;
 
-            // Note, we do not save
-
-            // Now, set back the broker_api token to the new own_token
+            // Now, set the broker_api token to the new own_token
             if let Some(own_token) = cfg.own_token.clone() {
                 broker_api.write().await.set_token(&own_token);
             }
