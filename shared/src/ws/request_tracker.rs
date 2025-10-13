@@ -65,6 +65,16 @@ impl RequestTracker {
         (rx, id)
     }
 
+    /// Deregister a request by id, removing it from pending requests.
+    pub async fn deregister(&self, id: RequestId) {
+        let mut guard = self.inner.lock().await;
+        if guard.pending.remove(&id).is_some() {
+            log::debug!("Deregistered request id {}", id);
+        } else {
+            log::warn!("Attempted to deregister unknown request id {}", id);
+        }
+    }
+
     /// Resolve a request by id with a successful payload.
     pub async fn resolve_ok(&self, id: RequestId, message: RpcMessage) {
         log::debug!("Resolving request id {} with success", id);
@@ -112,12 +122,12 @@ impl Default for RequestTracker {
 }
 
 /// Example background task that periodically calls cleanup.
-/// For now it runs in an infinite loop; later you can break it
-/// using `session_manager.is_running()`.
-pub fn spawn_cleanup_task(state: RequestTracker) {
+/// For now it runs in an infinite loop; But we will implement it elsewhere.
+/// Just an example of usage.
+pub fn spawn_cleanup_task(tracker: RequestTracker) {
     tokio::spawn(async move {
         loop {
-            state.cleanup().await;
+            tracker.cleanup().await;
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     });

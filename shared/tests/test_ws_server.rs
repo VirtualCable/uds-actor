@@ -13,10 +13,10 @@ use shared::{
     ws::{
         server::{ServerInfo, start_server},
         types::{
-            LogoffRequest, MessageRequest, Ping, PreConnect, RpcMessage, ScreenshotRequest,
-            ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
+            LogoffRequest, MessageRequest, Ping, PreConnect, RpcEnvelope, RpcMessage,
+            ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
         },
-        wait_for_request,
+        wait_for_request, wait_response,
     },
 };
 
@@ -216,7 +216,9 @@ pub async fn test_post_message() {
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let res = wait_for_request::<MessageRequest>(&mut rx, None).await.unwrap();
+        let res = wait_for_request::<MessageRequest>(&mut rx, None)
+            .await
+            .unwrap();
         assert_eq!(res.msg.message, "test message");
     })
     .await
@@ -397,6 +399,59 @@ async fn test_ws_connect_insecure_tls() {
     })
     .await
     .unwrap(); // Fail if timeout
+
+    server_info.task.abort();
+}
+
+#[tokio::test]
+#[ignore = "Requires network access"]
+async fn test_ws_msg_with_envelope_id() {
+    let (server_info, port) = create_test_server_task("-secret-").await;
+    
+    // Wait a moment for the server to start
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Build the WebSocket URL (TLS enabled, but self-signed)
+    let url = format!("wss://localhost:{}/ws", port);
+
+    // Create a connector that disables certificate verification
+    let connector = Connector::Rustls(shared::tls::noverify::client_config());
+
+    // Perform the WebSocket handshake with custom TLS config
+    let (mut ws_stream, _resp) = connect_async_tls_with_config(
+        url,
+        None, // no additional request headers
+        true, // allow insecure
+        Some(connector),
+    )
+    .await
+    .expect("WebSocket handshake failed");
+
+    let tracker = server_info.tracker.clone();
+    // Register the request
+    let (resolver_rx, id) = tracker.register().await;
+
+    let message = Message::Text(
+        serde_json::to_string(&RpcEnvelope {
+            id: Some(id),
+            msg: RpcMessage::Ping(Ping("ping".into())),
+        })
+        .unwrap()
+        .into(),
+    );
+
+    // Send a test message
+    ws_stream
+        .send(message)
+        .await
+        .expect("Failed to send message");
+
+    // do not have response, but sends on tx a ping message
+    let response =
+        wait_response::<Ping>(resolver_rx, None, Some(std::time::Duration::from_secs(5))).await;
+
+    log::debug!("Response: {:?}", response);
+    assert!(response.is_ok());
 
     server_info.task.abort();
 }

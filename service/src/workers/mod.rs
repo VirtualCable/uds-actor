@@ -2,6 +2,9 @@ use shared::{ws::server::ServerInfo};
 
 use crate::platform;
 
+// Macros
+mod macros;
+
 // Workers for WebSocket handling
 mod ws;
 // Workers for http handling

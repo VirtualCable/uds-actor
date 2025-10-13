@@ -1,20 +1,23 @@
-use axum::{http::StatusCode, Json};
+use axum::{Json, http::StatusCode};
 use std::sync::Arc;
-use tokio::sync::{broadcast, oneshot, Notify};
+use tokio::sync::{Notify, broadcast, oneshot};
 
-use crate::{log, ws::types::{RpcEnvelope, RpcMessage}};
-
+use crate::{
+    log,
+    ws::types::{RpcEnvelope, RpcMessage},
+};
 
 pub mod client;
-pub mod server;
 pub mod rcptraits;
 pub mod request_tracker;
+pub mod server;
 pub mod types;
 
 /// Wait for a response from the tracker (oneshot channel).
 pub async fn wait_response<T>(
     rx: oneshot::Receiver<RpcMessage>,
     stop: Option<Arc<Notify>>,
+    timeout: Option<std::time::Duration>,
 ) -> Result<Json<T>, StatusCode>
 where
     T: TryFrom<RpcMessage>,
@@ -26,6 +29,11 @@ where
                 stop.notified().await;
             }
         }, if stop.is_some() => {
+            Err(StatusCode::REQUEST_TIMEOUT)
+        }
+
+        // Timeout
+        _ = tokio::time::sleep(timeout.unwrap()), if timeout.is_some() => {
             Err(StatusCode::REQUEST_TIMEOUT)
         }
 
@@ -88,12 +96,11 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use super::types::{Ping};
+    use super::types::Ping;
 
     #[tokio::test]
     async fn wait_for_request_survives_lagged() {
@@ -107,7 +114,7 @@ mod tests {
         for _i in 0..10 {
             let msg = RpcEnvelope {
                 id: None,
-                msg: RpcMessage::Ping(Ping(Vec::new()))
+                msg: RpcMessage::Ping(Ping(Vec::new())),
             };
             let _ = tx.send(msg);
         }
@@ -118,7 +125,7 @@ mod tests {
         // Call wait_for_request it should skip Lagged messages
         // and return the first Ping it can parse
         // Note: we sent 10 messages but the buffer is only 2, so
-       // it should have skipped some
+        // it should have skipped some
         let env = wait_for_request::<Ping>(&mut rx, stop).await;
 
         assert!(env.is_some());

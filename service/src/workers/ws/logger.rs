@@ -40,7 +40,7 @@ impl FloodGuard {
 }
 
 // Owned ServerInfo and Platform
-pub async fn handle_log(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
     let flood_guard = Arc::new(Mutex::new(FloodGuard::new()));
 
@@ -125,7 +125,7 @@ mod tests {
         let (platform, calls) = crate::testing::dummy::create_dummy_platform().await;
 
         // Spawn worker
-        tokio::spawn(handle_log(server_info, platform.clone()));
+        tokio::spawn(worker(server_info, platform.clone()));
 
         // Wait to have at least one receiver
         while wsclient_to_workers.receiver_count() == 0 {

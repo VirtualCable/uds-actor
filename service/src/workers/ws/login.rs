@@ -12,7 +12,7 @@ use shared::{
 use crate::platform;
 
 // Owned ServerInfo and Platform
-pub async fn handle_login(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
     if let Some(env) = wait_for_request::<LoginRequest>(&mut rx, None).await {
         log::debug!("Received LoginRequest with id {:?}", env.id);

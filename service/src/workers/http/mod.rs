@@ -3,18 +3,24 @@ use shared::{log, ws::server::ServerInfo};
 use crate::platform;
 
 pub mod logoff;
+pub mod message;
+pub mod preconnect;
+pub mod screenshot;
+pub mod script;
+
+use crate::spawn_workers;
 
 #[allow(dead_code)]
 pub async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
-    // Logoff worker
-    let _ = tokio::spawn({
-        log::info!("Logoff worker created");
-        let server_info = server_info.clone();
-        let platform = platform.clone();
-        async move {
-            if let Err(e) = logoff::handle_logoff(server_info, platform).await {
-                log::error!("Logoff worker error: {:?}", e);
-            }
-        }
-    }).await;
+    spawn_workers!(
+        server_info,
+        platform,
+        [
+            ("Logoff", logoff::worker),
+            ("Message", message::worker),
+            ("Script", script::worker),
+            ("PreConnect", preconnect::worker),
+            ("Screenshot", screenshot::worker),
+        ]
+    );
 }

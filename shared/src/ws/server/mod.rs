@@ -35,7 +35,6 @@ use crate::{
     },
 };
 
-
 mod routes;
 
 #[derive(Clone)]
@@ -124,19 +123,26 @@ async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerStat
 
     let wsclient_to_workers = state.wsclient_to_workers.clone();
     let stop = state.stop.clone();
-    let workers_rx = state.workers_to_wsclient; // moverlo aquí si solo hay un cliente
 
     ws.on_upgrade(move |socket| {
-        websocket_loop(socket, workers_rx, wsclient_to_workers, stop, ws_active)
+        websocket_loop(
+            socket,
+            state.workers_to_wsclient,
+            wsclient_to_workers,
+            stop,
+            ws_active,
+            state.tracker.clone(),
+        )
     })
 }
 
 pub async fn websocket_loop(
     socket: WebSocket,
-    workers_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
+    workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     stop: Arc<Notify>,
     ws_active: Arc<AtomicBool>,
+    tracker: RequestTracker,
 ) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
@@ -170,6 +176,11 @@ pub async fn websocket_loop(
                     _ => continue,
                 };
 
+                if let Some(id) = env.id {
+                    tracker.resolve_ok(id, env.msg.clone()).await;
+                    continue;
+                }
+
                 if let Err(e) = wsclient_to_workers.send(env) {
                     log::warn!("Failed to broadcast WS->workers: {e}");
                     break;
@@ -180,7 +191,7 @@ pub async fn websocket_loop(
 
     // Task B: workers → WS client
     let mut rx_task = {
-        let workers_rx = workers_rx.clone();
+        let workers_rx = workers_to_wsclient.clone();
         tokio::spawn(async move {
             loop {
                 let msg_opt = { workers_rx.lock().await.recv().await };
@@ -242,9 +253,7 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
                 },
             )
             .on_failure(
-                |err: _,
-                 latency: std::time::Duration,
-                 _span: &tracing::Span| {
+                |err: _, latency: std::time::Duration, _span: &tracing::Span| {
                     log::error!("!! error={:?} latency={:?}", err, latency);
                 },
             ),

@@ -26,14 +26,10 @@ pub async fn get_screenshot(
     let tracker = state.tracker.clone();
     let wsclient_to_workers = state.wsclient_to_workers.clone();
 
-    // Generate a unique id
-    let id = Utc::now().timestamp_millis() as u64;
-    log::debug!("Screenshot requested via WebSocket API with id {}", id);
-
     // Register the request
     let (resolver_rx, id) = tracker.register().await;
 
-        // Build the envelope with the typed request
+    // Build the envelope with the typed request
     let envelope = RpcEnvelope {
         id: Some(id),
         msg: RpcMessage::ScreenshotRequest(ScreenshotRequest),
@@ -44,7 +40,11 @@ pub async fn get_screenshot(
         log::warn!("Failed to broadcast ScreenshotRequest to workers: {e}");
     }
 
-    wait_response::<ScreenshotResponse>(resolver_rx, None).await
+    // Wait for response, with a timeout of 5 seconds. It's more than enough for a screenshot,
+    // And more taking into account that we will communicate with the client using WebSocket that
+    // is istantaneous (almost :P)
+    wait_response::<ScreenshotResponse>(resolver_rx, None, Some(std::time::Duration::from_secs(5)))
+        .await
 }
 
 // GET /actor/{secret}/uuid
@@ -73,7 +73,10 @@ pub async fn get_uuid(
     }
 
     // Wait for response, and convert to String
-    let val = wait_response::<UUidResponse>(resolver_rx, None).await;
+    // Timeout of 2 seconds should much much much more than enough :)
+    let val =
+        wait_response::<UUidResponse>(resolver_rx, None, Some(std::time::Duration::from_secs(2)))
+            .await;
     if let Ok(uuid) = &val {
         Ok(uuid.0.0.clone())
     } else {
@@ -144,11 +147,18 @@ pub async fn post_script(
 
 pub async fn post_pre_connect(
     Extension(state): Extension<super::ServerState>,
+    Json(req): Json<PreConnect>,
 ) -> Result<&'static str, StatusCode> {
     log::info!("Pre-connect requested via WebSocket API");
     let envelope = RpcEnvelope {
         id: None,
-        msg: RpcMessage::PreConnect(PreConnect),
+        msg: RpcMessage::PreConnect(PreConnect {
+            user: req.user,
+            protocol: req.protocol,
+            ip: req.ip,
+            hostname: req.hostname,
+            udsuser: req.udsuser,
+        }),
     };
 
     if let Err(e) = state.wsclient_to_workers.send(envelope) {

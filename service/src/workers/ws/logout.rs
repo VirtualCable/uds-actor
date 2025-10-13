@@ -8,7 +8,7 @@ use shared::{
 use crate::platform;
 
 // Owned ServerInfo and Platform
-pub async fn handle_logout(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     // Note that logout is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
     if let Some(env) = wait_for_request::<LogoutRequest>(&mut rx, None).await {

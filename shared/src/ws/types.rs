@@ -103,7 +103,13 @@ pub struct UUidRequest;
 pub struct UUidResponse(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreConnect;
+pub struct PreConnect {
+    pub user: String,
+    pub protocol: String,
+    pub ip: Option<String>,
+    pub hostname: Option<String>,
+    pub udsuser: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogoffRequest;
