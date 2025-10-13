@@ -2,35 +2,46 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerInfo, types::ScreenshotRequest, wait_for_request},
+    ws::{
+        server::ServerInfo,
+        types::{UUidRequest, UUidResponse},
+        wait_for_request,
+    },
 };
 
 use crate::platform;
 
 // Owned ServerInfo and Platform
-pub async fn worker(server_info: ServerInfo, _platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    if let Some(env) = wait_for_request::<ScreenshotRequest>(&mut rx, None).await {
-        log::debug!("Received ScreenshotRequest");
-
-        // Register the request
-        let (resolver_rx, id) = tracker.register().await;
-        
-        // Send screenshot request to wsclient
-        let envelope: shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage> = shared::ws::types::RpcEnvelope {
-            id: Some(id),
-            msg: shared::ws::types::RpcMessage::ScreenshotRequest(ScreenshotRequest),
+    while let Some(env) = wait_for_request::<UUidRequest>(&mut rx, None).await {
+        log::debug!("Received UUidRequest");
+        let req_id = if let Some(id) = env.id {
+            id
+        } else {
+            log::error!("UUidRequest missing id");
+            continue;
         };
 
-        if let Err(e) = server_info.workers_to_wsclient.send(envelope).await {
-            log::error!("Failed to send ScreenshotRequest to wsclient: {}", e);
-            tracker.deregister(id).await;
-        } else {
-            log::info!("Sent ScreenshotRequest to wsclient with id {}", id);
-        }
+        let uuid = platform
+            .config()
+            .read()
+            .await
+            .own_token
+            .clone()
+            .unwrap_or_default();
+        let response = UUidResponse(uuid);
+
+        // Send response back to broker
+        tracker
+            .resolve_ok(
+                req_id,
+                shared::ws::types::RpcMessage::UUidResponse(response),
+            )
+            .await;
     }
     Ok(())
 }

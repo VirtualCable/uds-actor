@@ -7,6 +7,7 @@ pub mod message;
 pub mod preconnect;
 pub mod screenshot;
 pub mod script;
+pub mod uniqueid;
 
 use crate::spawn_workers;
 
@@ -21,6 +22,7 @@ pub async fn create_workers(server_info: ServerInfo, platform: platform::Platfor
             ("Script", script::worker),
             ("PreConnect", preconnect::worker),
             ("Screenshot", screenshot::worker),
+            ("UniqueId", uniqueid::worker),
         ]
     );
 }
