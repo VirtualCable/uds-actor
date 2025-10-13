@@ -16,7 +16,7 @@ pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfi
         runonce_command: None,
         post_command: None,
         log_level: 0,
-        config: None,
+        config: config::ActorDataConfiguration::default(),
         data: None,
     }
 }

@@ -31,7 +31,7 @@ pub fn bnt_save_clicked(cfg_window: &ConfigGui) {
         runonce_command: None,
         post_command: None,
         log_level: log_level.into(),
-        config: None,
+        config: config::ActorDataConfiguration::default(),
         data: None,
     };
 

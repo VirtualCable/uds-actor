@@ -235,7 +235,7 @@ impl Operations for DummyOperations {
             .push(format!("operations::ensure_user_can_rdp({})", user));
         Ok(())
     }
-    
+
     fn is_some_installation_in_progress(&self) -> anyhow::Result<bool> {
         self.calls
             .push("operations::is_some_installation_in_progress()");
@@ -247,6 +247,7 @@ impl Operations for DummyOperations {
 pub struct DummyBrokerApi {
     calls: Calls,
     secret: Option<String>,
+    token: Option<String>,
 }
 
 impl DummyBrokerApi {
@@ -254,6 +255,7 @@ impl DummyBrokerApi {
         Self {
             calls,
             secret: None,
+            token: None,
         }
     }
 }
@@ -275,6 +277,12 @@ impl api::BrokerApi for DummyBrokerApi {
             .as_deref()
             .ok_or_else(|| api::types::RestError::Other("No secret set".into()))
     }
+
+    fn set_token(&mut self, token: &str) {
+        self.calls.push(format!("broker_api::set_token({})", token));
+        self.token = Some(token.to_string());
+    }
+
     async fn enumerate_authenticators(
         &self,
     ) -> Result<Vec<api::types::Authenticator>, api::types::RestError> {
@@ -332,11 +340,7 @@ impl api::BrokerApi for DummyBrokerApi {
             os: None,
         })
     }
-    async fn ready(
-        &self,
-        ip: &str,
-        port: u16,
-    ) -> Result<CertificateInfo, api::types::RestError> {
+    async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, api::types::RestError> {
         self.calls
             .push(format!("broker_api::ready({}, {})", ip, port));
         Ok(test_certs::test_certinfo_with_pass())

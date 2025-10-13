@@ -1,10 +1,11 @@
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct Platform {
-    config: Arc<tokio::sync::RwLock<shared::config::ActorConfiguration>>,
+    config: Arc<RwLock<shared::config::ActorConfiguration>>,
     operations: Arc<dyn shared::operations::Operations>, // Different for Windows, Linux, Mac, ...
-    broker_api: Arc<tokio::sync::RwLock<dyn shared::broker::api::BrokerApi>>,
+    broker_api: Arc<RwLock<dyn shared::broker::api::BrokerApi>>,
 }
 
 impl Platform {
@@ -17,6 +18,8 @@ impl Platform {
 
         // TODO: Restore real operations after development. To avoid platform-specific code for now, :)
         // let operations = shared::operations::new_operations();
+        // Release compilation will fail, because testing is not allowed in release builds, so if we forget this
+        // it will be caught.
         let operations = Arc::new(shared::testing::dummy::DummyOperations::default());
 
         let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
@@ -38,6 +41,10 @@ impl Platform {
 
     pub fn config(&self) -> Arc<tokio::sync::RwLock<shared::config::ActorConfiguration>> {
         self.config.clone()
+    }
+
+    pub fn config_storage(&self) -> Box<dyn shared::config::Configuration> {
+        shared::config::new_config_storage()
     }
 
     // Only for tests

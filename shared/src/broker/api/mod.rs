@@ -50,6 +50,8 @@ pub trait BrokerApi: Send + Sync {
 
     fn get_secret(&self) -> Result<&str, types::RestError>;
 
+    fn set_token(&mut self, token: &str);
+
     async fn enumerate_authenticators(&self)
     -> Result<Vec<types::Authenticator>, types::RestError>;
 
@@ -251,6 +253,13 @@ impl BrokerApi for UdsBrokerApi {
             .as_ref()
             .map(|s| s.as_ref())
             .ok_or_else(|| types::RestError::Other("No secret set".to_string()))
+    }
+
+    // Will be overriden on first call to initialize
+    // on unmanaged, this is on every call, and managed on first call only
+    // because master_token will be replaced by own_token
+    fn set_token(&mut self, token: &str) {
+        self.token = Some(token.to_string());
     }
 
     fn clear_headers(&mut self) {

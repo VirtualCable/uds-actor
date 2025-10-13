@@ -5,6 +5,19 @@ use rustls::{
 
 use crate::log;
 
+pub const SECURE_CIPHERS: &str = concat!(
+    "TLS_AES_256_GCM_SHA384:",
+    "TLS_CHACHA20_POLY1305_SHA256:",
+    "TLS_AES_128_GCM_SHA256:",
+    "ECDHE-RSA-AES256-GCM-SHA384:",
+    "ECDHE-RSA-AES128-GCM-SHA256:",
+    "ECDHE-RSA-CHACHA20-POLY1305:",
+    "ECDHE-ECDSA-AES128-GCM-SHA256:",
+    "ECDHE-ECDSA-AES256-GCM-SHA384:",
+    "ECDHE-ECDSA-CHACHA20-POLY1305",
+);
+
+
 fn openssl_to_rustls_cipher_name(cipher: &str) -> Option<SupportedCipherSuite> {
     let rust_cipher_name = match cipher.to_uppercase().as_str() {
         // TLS 1.3 Suites
@@ -51,7 +64,8 @@ pub fn provider(ciphers: Option<&str>) -> CryptoProvider {
     let ciphers = if let Some(ciphers) = ciphers {
         filter_cipher_suites(ciphers)
     } else {
-        rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.to_vec()
+        filter_cipher_suites(SECURE_CIPHERS)
+        //rustls::crypto::aws_lc_rs::DEFAULT_CIPHER_SUITES.to_vec()
     };
 
     log::debug!("valid cipher_suites: {:?}", ciphers);

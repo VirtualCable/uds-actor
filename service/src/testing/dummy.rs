@@ -2,7 +2,7 @@ use crate::platform::Platform;
 use std::sync::Arc;
 
 use shared::{
-    config::{ActorConfiguration, ActorType},
+    config::{ActorConfiguration, ActorType, ActorDataConfiguration},
     testing::dummy::{Calls, DummyBrokerApi, DummyOperations},
 };
 
@@ -18,7 +18,7 @@ pub async fn create_dummy_platform() -> (Platform, Calls) {
         runonce_command: None,
         post_command: None,
         log_level: 0,
-        config: None,
+        config: ActorDataConfiguration::default(),
         data: None,
     };
     let calls = Calls::new();

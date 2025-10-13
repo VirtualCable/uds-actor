@@ -168,7 +168,7 @@ pub fn btn_register_clicked(
                 runonce_command: reg_auth.commands.runonce_command,
                 post_command: reg_auth.commands.post_command,
                 log_level: log_level.into(),
-                config: None,
+                config: config::ActorDataConfiguration::default(),
                 data: None,
             };
             let mut config_storage = config::new_config_storage();

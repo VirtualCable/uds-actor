@@ -1,4 +1,4 @@
-use std::process::Command;
+use tokio::process::Command;
 
 use anyhow::{Context, Result};
 
@@ -9,7 +9,7 @@ use shared::{
 
 use crate::platform;
 
-pub fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
+pub async fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
     // If empty pre_command, do nothing
     if pre_command.trim().is_empty() {
         return Ok(());
@@ -26,6 +26,7 @@ pub fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
     let status = Command::new(pre_command)
         .args(&args)
         .status()
+        .await
         .with_context(|| format!("failed to execute pre_command: {}", pre_command))?;
 
     if !status.success() {
@@ -51,7 +52,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
             }
         // If the a pre command is configured, run it
         } else if let Some(cmd) = platform.config().read().await.pre_command.clone() {
-            if let Err(e) = run_preconnect(&cmd, &msg) {
+            if let Err(e) = run_preconnect(&cmd, &msg).await {
                 log::error!("Failed to run pre-command for user {}: {}", msg.user, e);
             } else {
                 log::info!("Ran pre-command for user {}", msg.user);

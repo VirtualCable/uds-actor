@@ -23,6 +23,8 @@ pub async fn create_workers(server_info: ServerInfo, platform: platform::Platfor
             ("PreConnect", preconnect::worker),
             ("Screenshot", screenshot::worker),
             ("UniqueId", uniqueid::worker),
-        ]
+        ],
+        [],
+        []
     );
 }

@@ -14,10 +14,10 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    if let Some(env) = wait_for_request::<LoginRequest>(&mut rx, None).await {
+    while let Some(env) = wait_for_request::<LoginRequest>(&mut rx, None).await {
         log::debug!("Received LoginRequest with id {:?}", env.id);
         let broker_api = platform.broker_api();
-        // Clone api to avoid holding the lock during await
+
         let interfaces = platform.operations().get_network_info()?;
         if let Ok(response) =  broker_api.write().await.login(
             interfaces.as_slice(),

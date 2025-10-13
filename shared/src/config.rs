@@ -10,6 +10,12 @@ pub enum ActorType {
     Unmanaged,
 }
 
+impl ActorType {
+    pub fn is_managed(&self) -> bool {
+        *self == ActorType::Managed
+    }
+}
+
 impl From<&str> for ActorType {
     fn from(value: &str) -> Self {
         match value.to_lowercase().as_str() {
@@ -46,16 +52,17 @@ pub struct ActorConfiguration {
     pub post_command: Option<String>,
     pub log_level: u32,
     // Additional configuration data from server
-    pub config: Option<ActorDataConfiguration>,
+    pub config: ActorDataConfiguration,
     pub data: Option<serde_json::Value>,
 }
 
 impl ActorConfiguration {
     pub fn token(&self) -> String {
-        if let Some(token) = self.master_token.clone() {
+        // Own token has precedence over master token
+        if let Some(token) = self.own_token.clone() {
             token
         } else {
-            self.own_token.as_deref().unwrap_or("").to_string()
+            self.master_token.as_deref().unwrap_or("").to_string()
         }
     }
 
@@ -64,7 +71,7 @@ impl ActorConfiguration {
     }
 }
 
-pub trait Configuration {
+pub trait Configuration: Send + Sync + 'static {
     fn load_config(&mut self) -> Result<ActorConfiguration>;
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()>;
     fn clear_config(&mut self) -> Result<()>; // Remove saved config
@@ -99,30 +106,21 @@ mod tests {
             runonce_command: None,
             post_command: None,
             log_level: 3,
-            config: None,
+            config: ActorDataConfiguration::default(),
             data: None,
         }
     }
 
     fn compare_configs(a: &ActorConfiguration, b: &ActorConfiguration) -> bool {
         // Compare a.config to b.config (Option<ActorDataConfiguration>)
-        if a.config.is_none() != b.config.is_none() {
+
+        if a.config.unique_id != b.config.unique_id {
             return false;
         }
-        if let (Some(a_cfg), Some(b_cfg)) = (&a.config, &b.config) {
-            if a_cfg.unique_id != b_cfg.unique_id {
-                return false;
-            }
-            if a_cfg.os.is_none() != b_cfg.os.is_none() {
-                return false;
-            }
-            if let (Some(a_os), Some(b_os)) = (&a_cfg.os, &b_cfg.os)
-                && (a_os.action != b_os.action
-                    || a_os.name != b_os.name
-                    || a_os.custom != b_os.custom)
-            {
-                return false;
-            }
+        if let (Some(a_os), Some(b_os)) = (&a.config.os, &b.config.os)
+            && (a_os.action != b_os.action || a_os.name != b_os.name || a_os.custom != b_os.custom)
+        {
+            return false;
         }
 
         a.broker_url == b.broker_url

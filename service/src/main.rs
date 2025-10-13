@@ -5,7 +5,6 @@ use tokio::sync::Notify;
 use shared::{config::ActorType, log, service::AsyncService, tls};
 
 mod platform;
-mod utils;
 
 mod managed;
 mod unamanaged;

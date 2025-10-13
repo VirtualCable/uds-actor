@@ -3,7 +3,8 @@ use shared::{log, ws::server::ServerInfo};
 use crate::platform;
 
 mod logger;
-mod login;
+mod login_managed;
+mod login_unmanaged;
 mod logout;
 
 use crate::spawn_workers;
@@ -13,10 +14,10 @@ pub async fn create_workers(server_info: ServerInfo, platform: platform::Platfor
     spawn_workers!(
         server_info,
         platform,
-        [
-            ("Log", logger::worker),
-            ("Login", login::worker),
-            ("Logout", logout::worker),
-        ]
+        [("Log", logger::worker), ("Logout", logout::worker),],
+        // Managed only workers
+        [("Login", login_managed::worker),],
+        // Unmanaged only workers
+        [("Login", login_unmanaged::worker),]
     );
 }
