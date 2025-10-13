@@ -339,7 +339,7 @@ impl api::BrokerApi for DummyBrokerApi {
     ) -> Result<CertificateInfo, api::types::RestError> {
         self.calls
             .push(format!("broker_api::ready({}, {})", ip, port));
-        Ok(test_certs::test_certinfo())
+        Ok(test_certs::test_certinfo_with_pass())
     }
     async fn unmanaged_ready(
         &self,
@@ -350,7 +350,7 @@ impl api::BrokerApi for DummyBrokerApi {
             "broker_api::unmanaged_ready({:?}, {})",
             interfaces, port
         ));
-        Ok(test_certs::test_certinfo())
+        Ok(test_certs::test_certinfo_with_pass())
     }
     async fn notify_new_ip(
         &self,

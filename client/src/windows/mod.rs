@@ -58,10 +58,10 @@ mod tests {
         let _fake_closer = tokio::spawn(async move {
             session_close.wait().await;
         });
-        // Esperamos un poco para simular la espera
+        // wait a bit to simulate work
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         event.signal();
-        // Esperamos un poco para asegurarnos de que el evento se ha manejado
+        // Wait a bit to ensure the event has been handled
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }

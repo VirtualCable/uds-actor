@@ -8,6 +8,7 @@ use shared::{log, ws::server};
 use crate::{platform, workers};
 
 pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
+    log::info!("Unmanaged service starting");
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
@@ -40,23 +41,11 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
 
     log::info!("Http server started");
 
-    // Create workers for requests, etc..
+    // Create workers for requests, wsclient communication, etc.
     workers::create_workers(server_info.clone(), platform.clone()).await;
 
-
-    let start = std::time::Instant::now();
-    loop {
-        tokio::select! {
-            _ = stop.notified() => {
-                log::info!("Stop received in async_main; exiting");
-                break;
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
-                log::info!("Service is running... {}", start.elapsed().as_millis());
-            }
-
-        }
-    }
-    log::info!("Service main async logic exiting");
+    // Simply wait here until stop is signaled
+    stop.notified().await;
+    log::info!("Unmanaged service stopping");
     Ok(())
 }

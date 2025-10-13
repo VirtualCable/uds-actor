@@ -49,7 +49,7 @@ pub(super) fn get_computer_name() -> Result<String> {
     let cstr = unsafe { CStr::from_ptr(buf.as_ptr() as *const i8) };
     let hostname = cstr.to_string_lossy().into_owned();
 
-    // Cortar por el primer '.'
+    // Cut by the first '.'
     let short = hostname.split('.').next().unwrap_or(&hostname);
     Ok(short.to_string())
 }
@@ -111,7 +111,7 @@ pub(super) fn join_domain(options: &crate::operations::JoinDomainOptions) -> Res
 
     log::debug!("Joining domain {} with command: {:?}", domain, cmd);
 
-    // Pasar la contraseña por stdin
+    // use a child process to run the command, and pass the password via stdin
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

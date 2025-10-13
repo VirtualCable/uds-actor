@@ -11,6 +11,11 @@ pub async fn run(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> 
     let broker = platform.broker_api();
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
+    // force time sync on managed startup
+    if let Err(e) = platform.operations().force_time_sync() {
+        log::warn!("Failed to force time sync on startup: {}", e);
+    }
+
     let known_interfaces = platform.operations().get_network_info()?;
     broker
         .write()

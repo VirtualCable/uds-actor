@@ -35,6 +35,7 @@ pub mod actions;
 pub mod service;
 pub mod operations;
 pub mod consts;
+pub mod utils;
 
 #[cfg(target_os = "windows")]
 pub mod windows;

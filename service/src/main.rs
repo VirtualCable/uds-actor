@@ -2,11 +2,14 @@ use anyhow::Result;
 use std::{pin::Pin, sync::Arc};
 use tokio::sync::Notify;
 
-use shared::{log, service::AsyncService, config::{ActorType}};
+use shared::{config::ActorType, log, service::AsyncService, tls};
 
 mod platform;
+mod utils;
+
 mod managed;
 mod unamanaged;
+
 mod workers;
 
 fn executor(stop: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -22,19 +25,16 @@ fn main() {
     // Setup logging
     log::setup_logging("info", log::LogType::Service);
 
-    // Install default ring provider for rustls
-    if rustls::crypto::ring::default_provider()
-        .install_default()
-        .is_err()
-    {
-        log::error!("Failed to install default ring provider for rustls");
-        return;
-    }
+    tls::init_tls(None); // TODO: allow config of cert path
 
     // Create the async launcher with our main async function
     let launcher = AsyncService::new(executor);
 
     // Run the service (on Windows) or directly (on other OS)
+    // Note that run_service will block until service stops
+    // On linux, it a systemd service
+    // On macOS, it is a launchd service
+    // On Windows, it is a Windows service
     if let Err(e) = launcher.run_service() {
         log::error!("Service failed to run: {}", e);
     }
@@ -44,10 +44,13 @@ fn main() {
 async fn async_main(platform: platform::Platform, stop: Arc<Notify>) -> Result<()> {
     log::info!("Service main async logic started");
 
+    // Validate config. If no config, this will error out
     let cfg = platform.config().read().await.clone();
     if !cfg.is_valid() {
         log::error!("Invalid configuration, cannot start service");
-        return Err(anyhow::anyhow!("Invalid configuration, cannot start service"));
+        return Err(anyhow::anyhow!(
+            "Invalid configuration, cannot start service"
+        ));
     }
 
     if cfg.actor_type == ActorType::Unmanaged {
@@ -58,33 +61,6 @@ async fn async_main(platform: platform::Platform, stop: Arc<Notify>) -> Result<(
         managed::run(platform.clone(), stop.clone()).await?;
     }
 
-    let broker = platform.broker_api();
-    log::debug!("Platform initialized with config: {:?}", platform.config());
-
-    let interfaces = platform.operations().get_network_info()?;
-    broker
-        .write()
-        .await
-        .initialize(interfaces.as_slice())
-        .await
-        .map_err(|e| {
-            log::error!("Failed to initialize with broker: {:?}", e);
-            anyhow::anyhow!("Failed to initialize with broker: {:?}", e)
-        })?;
-
-    let start = std::time::Instant::now();
-    loop {
-        tokio::select! {
-            _ = stop.notified() => {
-                log::info!("Stop received in async_main; exiting");
-                break;
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
-                log::info!("Service is running... {}", start.elapsed().as_millis());
-            }
-
-        }
-    }
     log::info!("Service main async logic exiting");
     Ok(())
 }

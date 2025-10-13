@@ -32,7 +32,7 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
                     e
                 )
             })?;
-            // doc.as_bytes() es PKCS#8 DER; aquí sí hace falta construir el tipo propietario
+            // doc.as_bytes() is PKCS#8 DER; convert to PrivatePkcs8KeyDer
             PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(doc.as_bytes().to_vec()))
         }
         _ => parse_unencrypted_key(key_pem.as_slice())?,
@@ -49,17 +49,15 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
 }
 
 fn parse_unencrypted_key(key_pem: &[u8]) -> Result<PrivateKeyDer<'static>> {
-    // PKCS#8 primero
+    // PKCS#8 unencrypted
     let mut reader = key_pem;
     if let Some(k) = pkcs8_private_keys(&mut reader).next().transpose()? {
-        // k ya es PrivatePkcs8KeyDer<'static>; no uses ::from(k)
         return Ok(PrivateKeyDer::Pkcs8(k));
     }
 
     // RSA PKCS#1
     let mut reader = key_pem;
     if let Some(k) = rsa_private_keys(&mut reader).next().transpose()? {
-        // k ya es PrivatePkcs1KeyDer<'static>; no uses ::from(k)
         return Ok(PrivateKeyDer::Pkcs1(k));
     }
 
