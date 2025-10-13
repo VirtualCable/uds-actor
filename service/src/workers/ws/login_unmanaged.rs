@@ -47,9 +47,11 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
                 );
                 continue;
             }
-            let cfg = platform.config();
+
+            let cfg = platform.config();  // Avoid drop while writing
             let mut cfg = cfg.write().await;
-            // If master token is present on response, and is different, update it
+
+            // If master token is present on response, and is different of current, update it
             if let Some(master_token) = response.master_token
                 && cfg.master_token.as_ref() != Some(&master_token)
             {
