@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use fltk::{enums::CallbackTrigger, prelude::*};
+use fltk::{dialog::NativeFileChooser, enums::CallbackTrigger, prelude::*};
 
 use crate::config_fltk::ConfigGui;
 
@@ -139,6 +139,48 @@ fn main() {
         move |_| {
             log::debug!("Close button clicked, quitting");
             fltk::app::quit();
+        }
+    });
+
+    // Setup buttons for browsing files, postconfig_cmd
+    cfg_window.browse_postconfig_cmd.set_callback({
+        let mut input = cfg_window.input_postconfig_cmd.clone();
+        move |_| {
+            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
+            dlg.show();
+            if let Some(path) = dlg.filename().to_str()
+                && !path.is_empty()
+            {
+                input.set_value(path);
+            }
+        }
+    });
+
+    // preconnect_cmd
+    cfg_window.browse_preconnect_cmd.set_callback({
+        let mut input = cfg_window.input_preconnect_cmd.clone();
+        move |_| {
+            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
+            dlg.show();
+            if let Some(path) = dlg.filename().to_str()
+                && !path.is_empty()
+            {
+                input.set_value(path);
+            }
+        }
+    });
+
+    // runonce_cmd
+    cfg_window.browse_runonce_cmd.set_callback({
+        let mut input = cfg_window.input_runonce_cmd.clone();
+        move |_| {
+            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
+            dlg.show();
+            if let Some(path) = dlg.filename().to_str()
+                && !path.is_empty()
+            {
+                input.set_value(path);
+            }
         }
     });
 
