@@ -4,8 +4,8 @@ use shared::{
     log,
     ws::{
         server::ServerInfo,
-        types::{ScreenshotRequest, ScreenshotResponse},
-        wait_for_request, wait_response,
+        types::{UUidRequest, UUidResponse},
+        wait_for_request,
     },
 };
 
@@ -17,48 +17,98 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<ScreenshotRequest>(&mut rx, Some(platform.get_stop())).await {
-        log::debug!("Received ScreenshotRequest");
+    while let Some(env) = wait_for_request::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
+    {
+        log::debug!("Received UUidRequest");
         let req_id = if let Some(id) = env.id {
             id
         } else {
-            log::error!("ScreenshotRequest missing id");
+            log::error!("UUidRequest missing id");
             continue;
         };
 
-        // Register the request
-        let (resolver_rx, id) = tracker.register().await;
+        // Unique id is own_token from config
+        let uuid = platform
+            .config()
+            .read()
+            .await
+            .own_token
+            .clone()
+            .unwrap_or_default();
+        let response = UUidResponse(uuid);
 
-        // Send screenshot request to wsclient
-        let envelope: shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage> =
-            shared::ws::types::RpcEnvelope {
-                id: Some(id),
-                msg: shared::ws::types::RpcMessage::ScreenshotRequest(ScreenshotRequest),
-            };
-
-        if let Err(e) = server_info.workers_to_wsclient.send(envelope).await {
-            log::error!("Failed to send ScreenshotRequest to wsclient: {}", e);
-            tracker.deregister(id).await;
-        } else {
-            log::info!("Sent ScreenshotRequest to wsclient with id {}", id);
-        }
-
-        // Wait for response
-        let response = wait_response::<ScreenshotResponse>(
-            resolver_rx,
-            None,
-            Some(std::time::Duration::from_secs(3)),
-        )
-        .await;
-        if let Ok(screenshot_response) = response {
-            // Send response back to broker
-            tracker
-                .resolve_ok(
-                    req_id,
-                    shared::ws::types::RpcMessage::ScreenshotResponse(screenshot_response.0),
-                )
-                .await;
-        }
+        // Send response back to broker
+        tracker
+            .resolve_ok(
+                req_id,
+                shared::ws::types::RpcMessage::UUidResponse(response),
+            )
+            .await;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::dummy;
+    use std::{time::Duration};
+
+    use shared::ws::types::{RpcEnvelope, RpcMessage};
+
+    #[tokio::test]
+    async fn test_uniqueid_worker() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let server_info = dummy::create_dummy_server_info().await;
+        let (platform, calls) = dummy::create_dummy_platform().await;
+        platform.config().write().await.master_token = Some("mastertoken".into());
+        platform.config().write().await.own_token = Some("own_token".into());
+
+        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let tracker = server_info.tracker.clone();
+
+        let _handle = tokio::spawn(async move {
+            worker(server_info, platform).await.unwrap();
+        });
+
+        // Wait to have at least one receiver
+        while wsclient_to_workers.receiver_count() == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        log::info!("wsclient_to_workers has receiver");
+
+        // Send 3 uniqueid requests
+        let mut receivers: Vec<_> = vec![];
+        for _i in 0..3 {
+            // Register in tracker first
+            let (recv, id) = tracker.register().await;
+            receivers.push(recv);
+            log::info!("Registered request id: {}", id);
+            let req = RpcEnvelope {
+                id: Some(id),
+                msg: RpcMessage::UUidRequest(UUidRequest),
+            };
+            if let Err(e) = wsclient_to_workers.send(req) {
+                log::error!("Failed to send MessageRequest: {}", e);
+            }
+        }
+        // Wait a bit to let processing happen
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // No calls here, only redirects messages to wsclient
+        log::info!("calls: {:?}", calls.dump());
+
+        // Messages should be in receivers
+        for recv in receivers {
+            if let Ok(env) = tokio::time::timeout(Duration::from_millis(500), recv).await {
+                let msg = env.unwrap();
+                log::info!("Received response: {:?}", msg);
+                if let RpcMessage::UUidResponse(resp) = msg {
+                    assert_eq!(resp.0, "own_token");
+                } else {
+                    panic!("Unexpected message type");  
+                }
+            }
+        }
+    }
 }

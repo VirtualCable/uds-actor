@@ -50,3 +50,19 @@ pub async fn create_dummy_server_info() -> ServerInfo {
         tracker,
     }
 }
+
+pub async fn create_dummy_server_info_with_worker_rx() -> (ServerInfo, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
+    let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
+    let (wsclient_to_workers, wsclient_to_workers_rx) =
+        broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
+    let tracker = RequestTracker::new();
+
+    (
+        ServerInfo {
+            workers_to_wsclient: workers_tx,
+            wsclient_to_workers: wsclient_to_workers.clone(),
+            tracker,
+        },
+        wsclient_to_workers_rx,
+    )
+}

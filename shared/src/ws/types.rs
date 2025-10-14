@@ -13,6 +13,7 @@ pub struct RpcEnvelope<T> {
     pub msg: T,
 }
 
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RpcError {
     pub code: u32,
@@ -81,7 +82,6 @@ pub struct ScriptExecResponse {
 pub struct LogoutRequest {
     pub username: String,
     pub session_type: String,
-    pub callback_url: String,
     pub session_id: String,
 }
 
