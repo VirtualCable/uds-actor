@@ -21,6 +21,8 @@ async fn test_run_and_stop() {
 
     let session_manager = platform.session_manager();
 
+    assert!(session_manager.is_running().await);
+
     // Run on a separate task to be able to stop it, but use a timeout to avoid hanging forever
     let run_handle = tokio::spawn(async move {
         let res =

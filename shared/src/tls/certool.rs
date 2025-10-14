@@ -94,7 +94,8 @@ mod tests {
     fn fail_with_wrong_password() {
         init_tls(None);
 
-        let cert_info = test_certs::test_certinfo_with_pass();
+        let mut cert_info = test_certs::test_certinfo_with_pass();
+        cert_info.password = Some("wrong_password".into());
 
         let cfg = rustls_config_from_pem(cert_info);
         assert!(cfg.is_err(), "should fail with wrong password");

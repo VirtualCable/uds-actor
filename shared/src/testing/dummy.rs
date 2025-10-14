@@ -216,7 +216,7 @@ impl Operations for DummyOperations {
 
     fn get_idle_duration(&self) -> anyhow::Result<std::time::Duration> {
         self.calls.push("operations::get_idle_duration()");
-        Ok(std::time::Duration::from_secs(600))
+        Ok(std::time::Duration::from_secs(300))
     }
 
     fn get_current_user(&self) -> anyhow::Result<String> {
@@ -266,8 +266,8 @@ impl DummyBrokerApi {
     pub fn new(calls: Calls) -> Self {
         Self {
             calls,
-            secret: None,
-            token: None,
+            secret: Some("dummy_secret".into()),
+            token: Some("dummy_token".into()),
         }
     }
 }

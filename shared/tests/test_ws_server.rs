@@ -268,7 +268,13 @@ pub async fn test_post_pre_connect() {
 
     let result = post_request(
         &format!("https://localhost:{}/actor/-secret-/preconnect", port),
-        &(),
+        &PreConnect {
+            user: "testuser".into(),
+            protocol: "rdp".into(),
+            ip: Some("127.0.0.1".into()),
+            hostname: Some("localhost".into()),
+            udsuser: Some("udsuser".into()),
+        },
     )
     .await
     .unwrap();

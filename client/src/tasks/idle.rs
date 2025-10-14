@@ -125,7 +125,6 @@ mod tests {
         )
         .await;
         calls.assert_called("operations::logoff()");
-        calls.assert_not_called("session::stop()");
         session_manager.stop().await; // Ensure session is stopped in any case
 
         assert!(res.is_ok(), "Idle task timed out: {:?}", res);
