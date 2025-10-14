@@ -45,6 +45,15 @@ impl Calls {
         );
     }
 
+    pub fn count_calls(&self, prefix: &str) -> usize {
+        self.inner
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|c| c.starts_with(prefix))
+            .count()
+    }
+
     pub fn assert_not_called(&self, prefix: &str) {
         crate::log::info!("Asserting NOT called with prefix: {}", prefix);
         assert!(

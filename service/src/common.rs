@@ -49,24 +49,14 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 
     let mut cfg_guard = cfg_guard.write().await;
 
-    let broker_api = platform.broker_api();
+    let broker_api = platform.broker_api(); // Avoid drop borrow
+    let mut broker_api_guard = broker_api.write().await;
     let interfaces = platform.operations().get_network_info()?;
     // Initialize
-    let master_token = platform
-        .config()
-        .read()
-        .await
-        .master_token
-        .clone()
-        .unwrap_or_default();
-    broker_api.write().await.set_token(&master_token);
+    let master_token = cfg_guard.master_token.clone().unwrap_or_default();
+    broker_api_guard.set_token(&master_token);
     log::info!("Unmanaged actor not initialized, initializing with broker");
-    if let Ok(response) = broker_api
-        .write()
-        .await
-        .initialize(interfaces.as_slice())
-        .await
-    {
+    if let Ok(response) = broker_api_guard.initialize(interfaces.as_slice()).await {
         // If token on response is none, this is not a managed host,continue until next request
         if response.token.is_none() {
             log::error!(
@@ -100,7 +90,7 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 
         // Now, set the broker_api token to the new own_token
         if let Some(own_token) = cfg_guard.own_token.clone() {
-            broker_api.write().await.set_token(&own_token);
+            broker_api_guard.set_token(&own_token);
         }
     }
     Ok(())
@@ -120,15 +110,6 @@ pub async fn interfaces_watch_task(
 
     let stop = platform.get_stop();
     loop {
-        // Wait for 10 seconds or stop signal
-        // wait_timeout returns Ok if signaled, Err if timeout elapsed
-        if stop
-            .wait_timeout(std::time::Duration::from_secs(10))
-            .await
-            .is_ok()
-        {
-            break;
-        }
         if let Ok(interfaces) = network_interfaces_changed(
             platform.operations(),
             known_interfaces.as_slice(),
@@ -137,9 +118,22 @@ pub async fn interfaces_watch_task(
         .await
             && !interfaces.is_empty()
         {
-            platform.get_restart_flag().store(true, std::sync::atomic::Ordering::Relaxed);
-            log::warn!("Network interfaces changed (IP change, new interface, etc), stopping service to allow restart");
+            platform
+                .get_restart_flag()
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            log::warn!(
+                "Network interfaces changed (IP change, new interface, etc), stopping service to allow restart"
+            );
             stop.set(); // Signal stop
+            break;
+        }
+        // Wait for 10 seconds or stop signal
+        // wait_timeout returns Ok if signaled, Err if timeout elapsed
+        if stop
+            .wait_timeout(std::time::Duration::from_secs(10))
+            .await
+            .is_ok()
+        {
             break;
         }
     }
@@ -170,4 +164,64 @@ pub async fn run_command(info_name: &str, command: &str, args: &[&str]) -> Resul
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::dummy;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_initialize() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let (platform, calls) = dummy::create_dummy_platform().await;
+        platform.config().write().await.master_token = Some("mastertoken".into());
+        let result = initialize(&platform).await;
+        assert!(result.is_ok());
+        // Inspect dummy broker_api
+        log::info!("calls: {:?}", calls.dump());
+    }
+
+    #[tokio::test]
+    async fn test_interfaces_watch() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let (platform, calls) = dummy::create_dummy_platform().await;
+        let subnet = platform.config().read().await.restrict_net.clone();
+        let stop = platform.get_stop();
+        let handle = tokio::spawn(async move {
+            let result = interfaces_watch_task(&platform, subnet).await;
+            assert!(result.is_ok());
+        });
+
+        // Wait a bit and then signal stop
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        // Stop should not be set yet
+        assert!(!stop.is_set());
+
+        stop.set();
+        let _ = handle.await;
+
+        log::info!("calls: {:?}", calls.dump());
+        // Should have called operations::get_network_info at least twice
+        assert!(calls.count_calls("operations::get_network_info()") >= 2);
+    }
+
+    #[tokio::test]
+    #[cfg(target_family = "unix")]
+    async fn test_run_command_unix() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        // Simple command
+        let result = run_command("test ls", "ls", &["-la"]).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    #[cfg(target_family = "windows")]
+    async fn test_run_command_windows() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        // Simple command
+        let result = run_command("test dir", "cmd.exe", &["/C", "dir"]).await;
+        assert!(result.is_ok());
+    }
 }

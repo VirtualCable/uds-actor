@@ -136,7 +136,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worker() {
+    async fn test_log_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = dummy::create_dummy_server_info().await;
         let (platform, calls) = dummy::create_dummy_platform().await;
