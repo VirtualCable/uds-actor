@@ -30,7 +30,7 @@ pub async fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
 pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    if let Some(env) = wait_for_request::<PreConnect>(&mut rx, None).await {
+    if let Some(env) = wait_for_request::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received PreConnect: {:?}", env.msg);
         // Process the Preconnect. If protocol is rdp, use operations::
         let msg = env.msg;

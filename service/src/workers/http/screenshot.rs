@@ -17,7 +17,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<UUidRequest>(&mut rx, None).await {
+    while let Some(env) = wait_for_request::<UUidRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received UUidRequest");
         let req_id = if let Some(id) = env.id {
             id

@@ -44,7 +44,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
     let mut rx = server_info.wsclient_to_workers.subscribe();
     let flood_guard = Arc::new(Mutex::new(FloodGuard::new()));
 
-    while let Some(env) = wait_for_request::<LogRequest>(&mut rx, None).await {
+    while let Some(env) = wait_for_request::<LogRequest>(&mut rx, Some(platform.get_stop())).await {
         let mut guard = flood_guard.lock().await;
         if guard.allow() {
             log::debug!(
