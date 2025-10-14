@@ -1,39 +1,29 @@
-use tokio::process::Command;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use shared::{
     log,
     ws::{server::ServerInfo, types::PreConnect, wait_for_request},
 };
 
-use crate::platform;
+use crate::{common, platform};
 
 pub async fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
     // If empty pre_command, do nothing
     if pre_command.trim().is_empty() {
         return Ok(());
     }
-    // Construimos directamente el vector de argumentos
-    let args = vec![
-        pre.user.clone(),
-        pre.protocol.clone(),
-        pre.ip.clone().unwrap_or_default(),
-        pre.hostname.clone().unwrap_or_default(),
-        pre.udsuser.clone().unwrap_or_default(),
-    ];
-
-    let status = Command::new(pre_command)
-        .args(&args)
-        .status()
-        .await
-        .with_context(|| format!("failed to execute pre_command: {}", pre_command))?;
-
-    if !status.success() {
-        anyhow::bail!("pre_command exited with status: {:?}", status.code());
-    }
-
-    Ok(())
+    common::run_command(
+        "pre_command",
+        pre_command,
+        &[
+            &pre.user,
+            &pre.protocol,
+            pre.ip.as_deref().unwrap_or_default(),
+            pre.hostname.as_deref().unwrap_or_default(),
+            pre.udsuser.as_deref().unwrap_or_default(),
+        ],
+    )
+    .await
 }
 
 // Owned ServerInfo and Platform

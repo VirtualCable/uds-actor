@@ -26,11 +26,25 @@ impl From<&str> for ActorType {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum ActorOsAction {
+    #[default]
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "rename")]
+    Rename,
+    #[serde(rename = "rename_ad")]
+    JoinDomain,
+}
+
+// To keep compat with older versions, we accept empty json as our default
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorOsConfiguration {
-    pub action: String,
-    pub name: String,
-    pub custom: Option<serde_json::Value>,
+    #[serde(default)]
+    pub action: ActorOsAction,  // Default is None
+    #[serde(default)]
+    pub name: String,           // Default is empty
+    pub custom: Option<serde_json::Value>,  // custom data depends on action
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -69,15 +83,22 @@ impl ActorConfiguration {
     pub fn is_valid(&self) -> bool {
         !self.broker_url.is_empty() && !self.token().is_empty()
     }
+
+    pub fn already_initialized(&self) -> bool {
+        self.own_token.is_some()
+    }
 }
 
 pub trait Configuration: Send + Sync + 'static {
     fn load_config(&mut self) -> Result<ActorConfiguration>;
+
+    // Save config must ensure that, even if it cannot save the config, the in-memory
+    // representation is updated
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()>;
     fn clear_config(&mut self) -> Result<()>; // Remove saved config
 
-    // Convenience method to get configuration
-    // We could cache config on most cases, to not reload it every time
+    // Obtain the current config, optionally forcing a reload from storage
+    // If no config already loaded, it will load it
     fn config(&mut self, _force_reload: bool) -> Result<ActorConfiguration> {
         self.load_config()
     }

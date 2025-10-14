@@ -27,10 +27,13 @@ use tokio::{
 };
 
 use crate::{
-    log, sync::OnceSignal, tls::{certool, CertificateInfo}, ws::{
+    log,
+    sync::OnceSignal,
+    tls::{CertificateInfo, certool},
+    ws::{
         request_tracker::RequestTracker,
         types::{Close, Ping, RpcEnvelope, RpcMessage},
-    }
+    },
 };
 
 mod routes;

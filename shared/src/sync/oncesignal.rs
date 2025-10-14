@@ -1,6 +1,8 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Notify;
+
+use anyhow::Result;
 
 /// A one-shot signal that can be awaited by multiple tasks.
 /// Once fired, all current and future waiters will be released immediately.
@@ -40,6 +42,16 @@ impl OnceSignal {
         }
         self.notify.notified().await;
     }
+
+    /// Wait with timeout
+    /// Returns Ok(()) if the signal was fired, false if the timeout elapsed.
+    pub async fn wait_timeout(&self, duration: std::time::Duration) -> Result<()> {
+        tokio::time::timeout(duration, self.wait())
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout waiting for signal"))?;
+
+        Ok(())
+    }
 }
 
 impl Default for OnceSignal {
@@ -51,7 +63,7 @@ impl Default for OnceSignal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_once_signal_wakes_all() {

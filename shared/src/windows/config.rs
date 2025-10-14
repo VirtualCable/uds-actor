@@ -165,6 +165,8 @@ impl Configuration for WindowsConfig {
     // So the installer must create them or use a PATH that is sure to exist (e.g. SOFTWARE)
     // The final key (UDSActor) will be created if not existing
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()> {
+        self.actor_cfg = Some(config.clone());
+
         log::debug!("Saving configuration to registry: {:?}", config);
         // Serialize config to JSON and encode as base64
         let json = serde_json::to_vec(config)?;
@@ -210,11 +212,11 @@ impl Configuration for WindowsConfig {
                 return Err(anyhow::anyhow!("Failed to write registry value"));
             }
         }
-        self.actor_cfg = Some(config.clone());
         Ok(())
     }
 
     fn clear_config(&mut self) -> Result<()> {
+        self.actor_cfg = None;
         unsafe {
             // Try to open the registry key
             let mut hkey: HKEY = HKEY::default();
@@ -233,7 +235,6 @@ impl Configuration for WindowsConfig {
                 return Err(anyhow::anyhow!("Failed to delete registry value"));
             }
         }
-        self.actor_cfg = None;
         Ok(())
     }
 

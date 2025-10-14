@@ -77,8 +77,9 @@ pub trait BrokerApi: Send + Sync {
         port: u16,
     ) -> Result<CertificateInfo, types::RestError>;
 
-    // Note that when we notify a new IP, the certificate will be regenerated
-    // because it is bound to the IP
+    // Note: This is not used anymore
+    // It's cleaner to stop the service and let the system (systemd, launchd, Windows service manager)
+    // restart it, so the new IP is picked up cleanly and notified via ready/unmanaged_ready
     async fn notify_new_ip(
         &self,
         ip: &str,

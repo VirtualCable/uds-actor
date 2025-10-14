@@ -29,11 +29,12 @@ impl Configuration for UnixConfig {
     // So the installer must create them or use a PATH that is sure to exist (e.g. SOFTWARE)
     // The final key (UDSActor) will be created if not existing
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()> {
+        self.actor = Some(config.clone());
+
         let toml_str = toml::to_string(config)?;
         // Ensure folder exists or create it
         std::fs::create_dir_all(std::path::Path::new(CONFIG_PATH).parent().unwrap())?;
         std::fs::write(CONFIG_PATH, toml_str)?;
-        self.actor = Some(config.clone());
 
         log::info!("Configuration saved to {}", CONFIG_PATH);
         Ok(())

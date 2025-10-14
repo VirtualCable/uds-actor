@@ -51,6 +51,11 @@ impl NetworkInterface {
             return true;
         };
 
+        // If empty, also always valid
+        if subnet_str.trim().is_empty() {
+            return true;
+        }
+
         // Try to parse subnet
         let Ok(net) = subnet_str.parse::<ipnetwork::IpNetwork>() else {
             return true; // if subnet invalid, treat as "no filter"

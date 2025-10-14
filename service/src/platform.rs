@@ -11,7 +11,7 @@ pub struct Platform {
 impl Platform {
     pub fn new() -> Self {
         let mut cfg = shared::config::new_config_storage();
-        let cfg = cfg.config(true).unwrap();
+        let cfg = cfg.config(true).unwrap();  // Forced load
 
         // If no config, panic, we need config
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));

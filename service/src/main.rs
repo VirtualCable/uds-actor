@@ -4,6 +4,7 @@ use std::{pin::Pin, sync::Arc};
 use shared::{config::ActorType, log, service::AsyncService, tls, sync::OnceSignal};
 
 mod platform;
+mod common;
 
 mod managed;
 mod unamanaged;

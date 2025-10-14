@@ -27,16 +27,18 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use super::*;
 
 use crate::{
+    config::{ActorConfiguration, ActorOsAction, ActorOsConfiguration, ActorType},
     log::{self, info},
     tls::CertificateInfo,
-    config::{ActorType, ActorConfiguration},
 };
 
 use mockito::{Matcher, Server};
 
 // Helper to create a ServerRestApi pointing to mockito server
 // Helper to create a mockito server and a ServerRestApi pointing to it
-async fn setup_server_and_api(actor_type: Option<ActorType>) -> (mockito::ServerGuard, UdsBrokerApi) {
+async fn setup_server_and_api(
+    actor_type: Option<ActorType>,
+) -> (mockito::ServerGuard, UdsBrokerApi) {
     log::setup_logging("debug", log::LogType::Tests);
 
     let server = Server::new_async().await;
@@ -201,8 +203,8 @@ async fn test_initialize() {
             master_token: Some("some_master_token".to_string()),
             token: Some("anothertoken".to_string()),
             unique_id: Some("unique_id_123".to_string()),
-            os: Some(crate::config::ActorOsConfiguration {
-                action: "do_nothing".to_string(),
+            os: Some(ActorOsConfiguration {
+                action: ActorOsAction::None,
                 name: "linux".to_string(),
                 custom: None,
             }),
@@ -210,7 +212,7 @@ async fn test_initialize() {
         error: None,
     };
     let payload = types::InitializationRequest {
-        actor_type: crate::config::ActorType::Managed,
+        actor_type: ActorType::Managed,
         token: &api.get_token().unwrap(),
         version: crate::consts::VERSION,
         build: crate::consts::BUILD,
