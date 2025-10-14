@@ -21,7 +21,7 @@ use shared::{
 // Port counter to avoid collisions
 static NEXT_PORT: AtomicU16 = AtomicU16::new(32420);
 
-async fn create_test_server_task(secret: &str) -> (ServerInfo, u16) {
+async fn create_test_server_task(secret: &str) -> (ServerInfo, tokio::task::JoinHandle<()>, u16) {
     let port = NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     log::setup_logging("debug", crate::log::LogType::Tests);
     shared::tls::init_tls(None);
@@ -29,12 +29,12 @@ async fn create_test_server_task(secret: &str) -> (ServerInfo, u16) {
     let stop = Arc::new(OnceSignal::new());
     let cert_info = test_certs::test_certinfo();
 
-    let server_info = start_server(cert_info, stop.clone(), secret.into(), Some(port))
+    let (server_info, handle) = start_server(cert_info, stop.clone(), secret.into(), Some(port))
         .await
         .unwrap();
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-    (server_info, port)
+    (server_info, handle, port)
 }
 
 async fn get_request(url: &str) -> Result<String> {
@@ -72,7 +72,7 @@ async fn post_request<U: serde::Serialize>(url: &str, json: &U) -> Result<String
 
 #[tokio::test]
 async fn test_get_screenshot() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     let tracker = server_info.tracker.clone();
     let wsclient_to_workers = server_info.wsclient_to_workers.clone();
@@ -112,12 +112,12 @@ async fn test_get_screenshot() {
 
     assert_eq!(result.result, "fake_base64_image");
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 async fn test_get_uuid() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     let tracker = server_info.tracker.clone();
     let wsclient_to_workers = server_info.wsclient_to_workers.clone();
@@ -148,12 +148,12 @@ async fn test_get_uuid() {
 
     assert_eq!(result, "fake-uuid-1234");
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 async fn test_information() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (_server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -163,12 +163,12 @@ async fn test_information() {
 
     assert!(result.contains("UDS Actor"));
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 async fn test_post_logout() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the LogoffRequest
     let mut rx = server_info.wsclient_to_workers.subscribe();
@@ -190,12 +190,12 @@ async fn test_post_logout() {
     .await
     .unwrap(); // Fail if timeout
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 pub async fn test_post_message() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the MessageRequest
     let mut rx = server_info.wsclient_to_workers.subscribe();
@@ -222,12 +222,12 @@ pub async fn test_post_message() {
     .await
     .unwrap(); // Fail if timeout
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 pub async fn test_post_script() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the ScriptExecRequest
     let mut rx = server_info.wsclient_to_workers.subscribe();
@@ -256,12 +256,12 @@ pub async fn test_post_script() {
     .await
     .unwrap(); // Fail if timeout
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 pub async fn test_post_pre_connect() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
     // Subscribe to receive the PreConnect
     let mut rx = server_info.wsclient_to_workers.subscribe();
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -282,12 +282,12 @@ pub async fn test_post_pre_connect() {
     .await
     .unwrap(); // Fail if timeout
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 async fn test_secret_invalid() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (_server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -306,13 +306,13 @@ async fn test_secret_invalid() {
 
     assert_eq!(resp.status(), reqwest::StatusCode::FORBIDDEN);
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 #[ignore = "Requires network access"]
 async fn test_ws_no_localhost_ipv4() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (_server_info, server_task, port) = create_test_server_task("-secret-").await;
     let local_ip = local_ip().unwrap();
     log::debug!("Local IP address: {}:{}", local_ip, port);
 
@@ -330,13 +330,13 @@ async fn test_ws_no_localhost_ipv4() {
     log::debug!("Response: {:?}", resp);
     let resp = resp.unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 #[ignore = "Requires network access"]
 async fn test_ws_no_localhost_ipv6() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (_server_info, server_task, port) = create_test_server_task("-secret-").await;
     let local_ip = local_ipv6().unwrap();
     log::debug!("Local IP address: {}", local_ip);
 
@@ -353,14 +353,14 @@ async fn test_ws_no_localhost_ipv6() {
         .await
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
-    server_info.task.abort();
+    server_task.abort();
 }
 
 // Ensure ws works
 #[tokio::test]
 #[ignore = "Requires network access"]
 async fn test_ws_connect_insecure_tls() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     let mut rx = server_info.wsclient_to_workers.subscribe();
 
@@ -398,13 +398,13 @@ async fn test_ws_connect_insecure_tls() {
     .await
     .unwrap(); // Fail if timeout
 
-    server_info.task.abort();
+    server_task.abort();
 }
 
 #[tokio::test]
 #[ignore = "Requires network access"]
 async fn test_ws_msg_with_envelope_id() {
-    let (server_info, port) = create_test_server_task("-secret-").await;
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
     
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -451,5 +451,5 @@ async fn test_ws_msg_with_envelope_id() {
     log::debug!("Response: {:?}", response);
     assert!(response.is_ok());
 
-    server_info.task.abort();
+    server_task.abort();
 }

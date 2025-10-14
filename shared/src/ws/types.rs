@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // Shared types for WebSocket messages
 // But reexport here for consistency
-pub use crate::broker::api::types::LoginResponse;
+pub use crate::broker::api::types::{LoginResponse, LogLevel};
 
 pub type RequestId = u64;
 
@@ -87,7 +87,7 @@ pub struct LogoutRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogRequest {
-    pub level: crate::broker::api::types::LogLevel, // Log level
+    pub level: LogLevel, // Log level
     pub message: String, // Log message
 }
 

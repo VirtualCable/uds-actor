@@ -30,7 +30,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         })?;
 
     // Initialize the Webserver/Websocket server (webserver for public part, websocket for local client comms)
-    let server_info = server::start_server(
+    let (server_info, _server_task) = server::start_server(
         cert_info.clone(),
         platform.get_stop(),
         platform

@@ -2,6 +2,7 @@
 use crate::{
     actions::Actions,
     broker::api,
+    log,
     operations::{NetworkInterface, Operations},
     tls::CertificateInfo,
 };
@@ -22,7 +23,9 @@ impl Calls {
     }
 
     pub fn push<S: Into<String>>(&self, call: S) {
-        self.inner.write().unwrap().push(call.into());
+        let s = call.into();
+        log::info!("Recording call: {:?}", s);
+        self.inner.write().unwrap().push(s);
     }
 
     pub fn contains_prefix(&self, prefix: &str) -> bool {

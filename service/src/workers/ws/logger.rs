@@ -8,7 +8,7 @@ use shared::{
     ws::{server::ServerInfo, types::LogRequest, wait_for_request},
 };
 
-use crate::platform;
+use crate::{platform};
 
 /// FloodGuard: simple rate limiter (60 logs / 60s)
 pub struct FloodGuard {
@@ -74,13 +74,10 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 
 #[cfg(test)]
 mod tests {
-    use shared::ws::{
-        request_tracker::RequestTracker,
-        types::{RpcEnvelope, RpcMessage},
-    };
-    use tokio::sync::{broadcast, mpsc};
-
     use super::*;
+
+    use shared::{ws::types::{RpcEnvelope, RpcMessage, LogLevel}};
+    use crate::testing::dummy;
 
     #[tokio::test]
     async fn flood_guard_allows_up_to_60_per_minute() {
@@ -106,23 +103,10 @@ mod tests {
     #[tokio::test]
     async fn handle_log_respects_flood_guard() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
-        let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
-        let tracker = RequestTracker::new();
+        let server_info = dummy::create_dummy_server_info().await;
+        let (platform, calls) = dummy::create_dummy_platform().await;
 
-        let handle = tokio::spawn(async move {
-            // Dummy task to keep the server_info.task valid
-            tokio::time::sleep(Duration::from_secs(10)).await;
-        });
-
-        let server_info = ServerInfo {
-            workers_to_wsclient: workers_tx,
-            wsclient_to_workers: wsclient_to_workers.clone(),
-            tracker,
-            task: Arc::new(handle),
-        };
-
-        let (platform, calls) = crate::testing::dummy::create_dummy_platform().await;
+        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
 
         // Spawn worker
         tokio::spawn(worker(server_info, platform.clone()));
@@ -137,7 +121,7 @@ mod tests {
             let req = RpcEnvelope {
                 id: None,
                 msg: RpcMessage::LogRequest(LogRequest {
-                    level: "INFO".into(),
+                    level: LogLevel::Info,
                     message: format!("msg {i}"),
                 }),
             };
@@ -147,7 +131,45 @@ mod tests {
         // Wait a bit to let processing happen
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Inspecciona dummy broker_api
+        // Inspect dummy broker_api
         log::info!("calls: {:?}", calls.dump());
+    }
+
+    #[tokio::test]
+    async fn test_worker() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let server_info = dummy::create_dummy_server_info().await;
+        let (platform, calls) = dummy::create_dummy_platform().await;
+
+        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+
+        // Spawn worker
+        tokio::spawn(worker(server_info, platform.clone()));
+
+        // Wait to have at least one receiver
+        while wsclient_to_workers.receiver_count() == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Send a log message
+        for level in [LogLevel::Info, LogLevel::Warn, LogLevel::Error] {
+            let req = RpcEnvelope {
+                id: None,
+                msg: RpcMessage::LogRequest(LogRequest {
+                    level,
+                    message: "Test log message".into(),
+                }),
+            };
+            wsclient_to_workers.send(req).unwrap();
+        }
+
+        // Wait a bit to let processing happen
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        log::info!("calls: {:?}", calls.dump());
+
+        calls.assert_called("broker_api::log(Info, Test log message)");
+        calls.assert_called("broker_api::log(Warn, Test log message)");
+        calls.assert_called("broker_api::log(Error, Test log message)");
+
     }
 }

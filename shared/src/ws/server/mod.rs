@@ -43,7 +43,6 @@ pub struct ServerInfo {
     pub workers_to_wsclient: mpsc::Sender<RpcEnvelope<RpcMessage>>,
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
-    pub task: Arc<tokio::task::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -309,7 +308,7 @@ pub async fn start_server(
     stop: Arc<OnceSignal>,
     secret: String,
     port: Option<u16>,
-) -> Result<ServerInfo> {
+) -> Result<(ServerInfo, tokio::task::JoinHandle<()>)> {
     // Create channels
     let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
@@ -333,12 +332,14 @@ pub async fn start_server(
         }
     });
 
-    Ok(ServerInfo {
-        workers_to_wsclient: workers_tx,
-        wsclient_to_workers,
-        tracker,
-        task: Arc::new(handle),
-    })
+    Ok((
+        ServerInfo {
+            workers_to_wsclient: workers_tx,
+            wsclient_to_workers,
+            tracker,
+        },
+        handle,
+    ))
 }
 
 #[cfg(test)]
