@@ -24,7 +24,14 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{sync::Arc, time::Duration, pin::Pin};
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::Result;
 
@@ -39,15 +46,20 @@ pub trait AsyncServiceTrait: Send + Sync + 'static {
     fn run(&self, stop: Arc<OnceSignal>);
 
     fn get_stop_notify(&self) -> Arc<OnceSignal>;
+
+    fn get_restart_flag(&self) -> Arc<AtomicBool>;
+
+    fn should_restart(&self) -> bool;
 }
 
 // Type alias for the main async function signature
-type MainAsyncFn = fn(Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+type MainAsyncFn = fn(Arc<OnceSignal>, Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 pub struct AsyncService {
     // Add async fn to call as main_async
     main_async: MainAsyncFn,
     stop: Arc<OnceSignal>,
+    restart_flag: Arc<AtomicBool>,
 }
 
 impl AsyncService {
@@ -55,6 +67,7 @@ impl AsyncService {
         Self {
             main_async,
             stop: Arc::new(OnceSignal::new()),
+            restart_flag: Arc::new(AtomicBool::new(false)),
         }
     }
     #[cfg(target_os = "windows")]
@@ -65,9 +78,7 @@ impl AsyncService {
     #[cfg(not(target_os = "windows"))]
     pub fn run_service(self) -> Result<()> {
         // On other, just run directly
-        // Stop is a dummy here
-        self.run(self.stop.clone());
-        Ok(())
+        self.run()
     }
 
     async fn signals(stop: Arc<OnceSignal>) {
@@ -111,13 +122,16 @@ impl AsyncServiceTrait for AsyncService {
             .unwrap();
 
         rt.block_on(async move {
-            let mut main_task = tokio::spawn((self.main_async)(stop.clone()));
+            let mut main_task = tokio::spawn((self.main_async)(self.stop.clone(), self.restart_flag.clone()));
             let signals_task = tokio::spawn(AsyncService::signals(stop.clone()));
             tokio::select! {
                 res = &mut main_task => {
                     match res {
-                        Ok(_) => {
+                        Ok(task_res) => {
                             crate::log::info!("Main async task completed");
+                            if let Err(e) = task_res {
+                                crate::log::error!("Main async task error: {}", e);
+                            }
                         },
                         Err(e) => {
                             crate::log::error!("Main async task failed: {}", e);
@@ -145,6 +159,14 @@ impl AsyncServiceTrait for AsyncService {
     fn get_stop_notify(&self) -> Arc<OnceSignal> {
         self.stop.clone()
     }
+
+    fn get_restart_flag(&self) -> Arc<AtomicBool> {
+        self.restart_flag.clone()
+    }
+
+    fn should_restart(&self) -> bool {
+        self.restart_flag.load(Ordering::Relaxed)
+    }
 }
 
 #[cfg(test)]
@@ -155,30 +177,43 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn async_main(stop: Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn async_main(stop: Arc<OnceSignal>, _restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(async move {
             // main logic
             stop.wait().await;
             println!("Stop received");
+            Ok(())
+        })
+    }
+
+    fn async_main_restart(stop: Arc<OnceSignal>, restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+        Box::pin(async move {
+            // main logic
+            restart_flag.store(true, Ordering::Relaxed);
+            stop.wait().await;
+            Err(anyhow::anyhow!("Simulated error"))
         })
     }
 
     #[tokio::test]
     async fn test_run_stops_on_notify() {
         let stopped = Arc::new(AtomicBool::new(false));
-        let stopped_clone = stopped.clone();
-
         let service = AsyncService::new(async_main);
+        let restart_flag = service.get_restart_flag();
+
         let stop = service.get_stop_notify();
-        let stop_clone = stop.clone();
-        let handle = std::thread::spawn(move || {
-            service.run(stop_clone);
-            stopped_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        let handle = std::thread::spawn({
+            let stop = stop.clone();
+            let stopped = stopped.clone();
+            move || {
+                service.run(stop);
+                stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
         });
 
         // Let it run a bit
         tokio::time::sleep(Duration::from_secs(1)).await;
-        assert!(!stopped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(!stopped.load(std::sync::atomic::Ordering::Relaxed));
 
         // Notify to stop
         stop.set();
@@ -188,6 +223,42 @@ mod tests {
         })
         .await;
         assert!(res.is_ok(), "Thread did not stop in time");
-        assert!(stopped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(stopped.load(std::sync::atomic::Ordering::Relaxed));
+        // restart_flag should be false, as default
+        assert!(!restart_flag.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    // Test that restart_flag is set if requested
+    #[tokio::test]
+    async fn test_run_sets_restart_on_error() {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let service = AsyncService::new(async_main_restart);
+        let restart_flag = service.get_restart_flag();
+
+        let stop = service.get_stop_notify();
+        let handle = std::thread::spawn({
+            let stop = stop.clone();
+            let stopped = stopped.clone();
+            move || {
+                service.run(stop);
+                stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+
+        // Let it run a bit
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(!stopped.load(std::sync::atomic::Ordering::Relaxed));
+
+        // Notify to stop
+        stop.set();
+        // Wait for thread to join, with timeout
+        let res = timeout(Duration::from_secs(5), async {
+            handle.join().unwrap();
+        })
+        .await;
+        assert!(res.is_ok(), "Thread did not stop in time");
+        assert!(stopped.load(std::sync::atomic::Ordering::Relaxed));
+        // restart_flag should be true, as requested
+        assert!(restart_flag.load(std::sync::atomic::Ordering::Relaxed));
     }
 }

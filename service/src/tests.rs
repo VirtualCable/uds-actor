@@ -13,6 +13,6 @@ async fn test_async_main() {
          stop_clone.set();
     });
     let (platform, _calls) = create_dummy_platform().await;
-    let result = async_main(platform, stop).await;
+    let result = async_main(platform).await;
     assert!(result.is_ok());
 }

@@ -1,17 +1,22 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicBool};
 use tokio::sync::RwLock;
+
+use shared::sync::OnceSignal;
 
 #[derive(Clone)]
 pub struct Platform {
     config: Arc<RwLock<shared::config::ActorConfiguration>>,
     operations: Arc<dyn shared::operations::Operations>, // Different for Windows, Linux, Mac, ...
     broker_api: Arc<RwLock<dyn shared::broker::api::BrokerApi>>,
+
+    stop: Arc<OnceSignal>,
+    restart_flag: Arc<AtomicBool>,
 }
 
 impl Platform {
-    pub fn new() -> Self {
+    pub fn new(stop: Arc<OnceSignal>, restart_flag: Arc<AtomicBool>) -> Self {
         let mut cfg = shared::config::new_config_storage();
-        let cfg = cfg.config(true).unwrap();  // Forced load
+        let cfg = cfg.config(true).unwrap(); // Forced load
 
         // If no config, panic, we need config
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
@@ -28,6 +33,8 @@ impl Platform {
             config,
             operations,
             broker_api: Arc::new(tokio::sync::RwLock::new(broker_api)),
+            stop,
+            restart_flag,
         }
     }
 
@@ -45,6 +52,14 @@ impl Platform {
 
     pub fn config_storage(&self) -> Box<dyn shared::config::Configuration> {
         shared::config::new_config_storage()
+    }
+
+    pub fn get_stop(&self) -> Arc<OnceSignal> {
+        self.stop.clone()
+    }
+
+    pub fn get_restart_flag(&self) -> Arc<AtomicBool> {
+        self.restart_flag.clone()
     }
 
     // Only for tests
@@ -73,12 +88,8 @@ impl Platform {
             operations,
             broker_api,
             config,
+            stop: Arc::new(OnceSignal::new()),
+            restart_flag: Arc::new(AtomicBool::new(false)),
         }
-    }
-}
-
-impl Default for Platform {
-    fn default() -> Self {
-        Self::new()
     }
 }

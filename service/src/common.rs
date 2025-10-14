@@ -1,23 +1,18 @@
-use std::sync::Arc;
-
-use tokio::{process::Command};
+use tokio::process::Command;
 
 use anyhow::{Context, Result};
 
 use shared::{
     log,
-    sync::OnceSignal,
     utils::network::{network_interfaces_changed, network_interfaces_in_subnet},
 };
 
 use crate::platform;
 
-pub async fn wait_for_readyness(
-    platform: &platform::Platform,
-    stop: Arc<OnceSignal>,
-) -> Result<()> {
+pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
     // We need some network interface to be up and have an IP address in the configured subnet (if any)
     let subnet = platform.config().read().await.restrict_net.clone();
+    let stop = platform.get_stop();
     loop {
         if !network_interfaces_in_subnet(platform.operations(), subnet.as_deref())
             .await?
@@ -117,13 +112,13 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 // It's cleaner and simpler than trying to restart the webserver in place
 pub async fn interfaces_watch_task(
     platform: &platform::Platform,
-    stop: Arc<OnceSignal>,
     subnet: Option<String>,
 ) -> Result<()> {
     // Store existing network interface, to watch for changes
     let known_interfaces =
         network_interfaces_in_subnet(platform.operations(), subnet.as_deref()).await?;
 
+    let stop = platform.get_stop();
     loop {
         // Wait for 10 seconds or stop signal
         // wait_timeout returns Ok if signaled, Err if timeout elapsed
@@ -142,7 +137,10 @@ pub async fn interfaces_watch_task(
         .await
             && !interfaces.is_empty()
         {
-            stop.set();
+            platform.get_restart_flag().store(true, std::sync::atomic::Ordering::Relaxed);
+            log::warn!("Network interfaces changed (IP change, new interface, etc), stopping service to allow restart");
+            stop.set(); // Signal stop
+            break;
         }
     }
     Ok(())

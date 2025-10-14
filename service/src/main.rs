@@ -1,22 +1,35 @@
 use anyhow::Result;
-use std::{pin::Pin, sync::Arc};
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use shared::{config::ActorType, log, service::AsyncService, tls, sync::OnceSignal};
+use shared::{
+    config::ActorType,
+    log,
+    service::{AsyncService, AsyncServiceTrait},
+    sync::OnceSignal,
+    tls,
+};
 
-mod platform;
 mod common;
+mod platform;
 
 mod managed;
 mod unamanaged;
 
 mod workers;
 
-fn executor(stop: Arc<OnceSignal>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+fn executor(
+    stop: Arc<OnceSignal>,
+    restart_flag: Arc<AtomicBool>,
+) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
     Box::pin(async move {
-        let platform = platform::Platform::new(); // If no config, panic, we need config
-        async_main(platform, stop).await.unwrap_or_else(|e| {
-            log::error!("Error in async_main: {}", e);
-        });
+        let platform = platform::Platform::new(stop, restart_flag); // If no config, panic, we need config
+        async_main(platform).await
     })
 }
 
@@ -28,6 +41,7 @@ fn main() {
 
     // Create the async launcher with our main async function
     let launcher = AsyncService::new(executor);
+    let restart_flag = launcher.get_restart_flag();
 
     // Run the service (on Windows) or directly (on other OS)
     // Note that run_service will block until service stops
@@ -37,10 +51,17 @@ fn main() {
     if let Err(e) = launcher.run_service() {
         log::error!("Service failed to run: {}", e);
     }
+
+    if restart_flag.load(Ordering::Relaxed) {
+        log::info!("Service requested restart, exiting with specific code");
+        std::process::exit(1); // Exit with code 1 to indicate restart
+    } else {
+        log::info!("Service exited normally");
+    }
 }
 
 // Real "main" async logic of the service
-async fn async_main(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<()> {
+async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
 
     // Validate config. If no config, this will error out
@@ -54,12 +75,11 @@ async fn async_main(platform: platform::Platform, stop: Arc<OnceSignal>) -> Resu
 
     if cfg.actor_type == ActorType::Unmanaged {
         log::info!("Starting in Unmanaged mode");
-        unamanaged::run(platform.clone(), stop.clone()).await?;
+        unamanaged::run(platform.clone()).await?;
     } else {
         log::info!("Starting in Managed mode");
-        managed::run(platform.clone(), stop.clone()).await?;
+        managed::run(platform.clone()).await?;
     }
-
     log::info!("Service main async logic exiting");
     Ok(())
 }

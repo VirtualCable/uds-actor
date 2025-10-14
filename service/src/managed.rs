@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 
-use shared::{log, sync::OnceSignal, ws::server};
+use shared::{log, ws::server};
 
 use crate::{common, platform, workers};
 
-pub async fn run(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<()> {
+pub async fn run(platform: platform::Platform) -> Result<()> {
     log::info!("Unmanaged service starting");
 
     // Ensure we have all requisites to start
-    common::wait_for_readyness(&platform, stop.clone()).await?;
+    common::wait_for_readyness(&platform).await?;
 
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
@@ -80,7 +78,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<
     // Initialize the Webserver/Websocket server (webserver for public part, websocket for local client comms)
     let server_info = server::start_server(
         cert_info.clone(),
-        stop.clone(),
+        platform.get_stop(),
         platform
             .broker_api()
             .read()
@@ -97,9 +95,8 @@ pub async fn run(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<
     // Allowing the system to restart it cleanly
     tokio::spawn({
         let platform = platform.clone();
-        let stop = stop.clone();
         async move {
-            if let Err(e) = common::interfaces_watch_task(&platform, stop, None).await {
+            if let Err(e) = common::interfaces_watch_task(&platform, None).await {
                 log::error!("Error in interfaces watch task: {}", e);
             }
         }
@@ -109,7 +106,7 @@ pub async fn run(platform: platform::Platform, stop: Arc<OnceSignal>) -> Result<
     workers::create_workers(server_info.clone(), platform.clone()).await;
 
     // Simply wait here until stop is signaled
-    stop.wait().await;
+    platform.get_stop().wait().await;
     log::info!("Unmanaged service stopping");
     Ok(())
 }

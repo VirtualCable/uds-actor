@@ -43,6 +43,7 @@ struct ServiceContext {
     status_handle: SERVICE_STATUS_HANDLE,
     stop_event: HANDLE,
     async_stop: Arc<OnceSignal>,
+    exit_code: u32,
 }
 
 unsafe impl Send for ServiceContext {}
@@ -54,6 +55,7 @@ impl ServiceContext {
             status_handle: SERVICE_STATUS_HANDLE(std::ptr::null_mut()),
             stop_event: unsafe { CreateEventW(None, true, false, None).unwrap() },
             async_stop,
+            exit_code: NO_ERROR.0,
         }
     }
 
@@ -76,7 +78,7 @@ impl ServiceContext {
                     SERVICE_STOP_PENDING => SERVICE_ACCEPT_STOP,
                     _ => 0,
                 },
-                dwWin32ExitCode: NO_ERROR.0,
+                dwWin32ExitCode: self.exit_code,
                 dwServiceSpecificExitCode: 0,
                 dwCheckPoint: checkpoint,
                 dwWaitHint: wait_hint_ms,
@@ -180,6 +182,13 @@ extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
 
         // Wait until the stop event is signaled
         let _ = ctx.wait_for_stop(INFINITE);
+
+        // If restart is requested, set exit_code to ERROR_SERVICE_SPECIFIC_ERROR
+        if launcher.should_restart() {
+            ctx.exit_code = ERROR_SERVICE_SPECIFIC_ERROR.0;
+        } else {
+            ctx.exit_code = NO_ERROR.0;
+        }
 
         let _ = ctx.report_status(SERVICE_STOPPED, 0, 0);
         let _ = ctx.close();
