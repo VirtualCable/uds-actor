@@ -3,13 +3,10 @@ name = "uds-actor-client"
 version = "5.0.0"
 edition = "2024"
 
-[dependencies.macros]
-path = "../macros"
-
 [dependencies]
 shared = { path = "../shared" }
 
-tokio = { version = "1.47.1", features = [
+tokio = { version = "1.48.0", features = [
     "macros",
     "rt",
     "time",

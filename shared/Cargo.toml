@@ -45,10 +45,6 @@ toml = "0.9.7"
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.177"
 
-
-[dependencies.macros]
-path = "../macros"
-
 [dependencies]
 # Logging
 tracing = "0.1.41"

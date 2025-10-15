@@ -6,7 +6,6 @@ members = [
     "client", 
     "config",
     "config-unmanaged",
-    "macros", 
     "service",
     "shared"
 ]
