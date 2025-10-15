@@ -1,4 +1,6 @@
 name: Build UDSActor exe installers
+permissions:
+  contents: read
 on:
   push:
     branches: [ master, v4.0 ]
