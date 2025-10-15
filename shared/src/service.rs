@@ -78,7 +78,8 @@ impl AsyncService {
     #[cfg(not(target_os = "windows"))]
     pub fn run_service(self) -> Result<()> {
         // On other, just run directly
-        self.run()
+        self.run(self.stop.clone());
+        Ok(())
     }
 
     async fn signals(stop: Arc<OnceSignal>) {
@@ -102,7 +103,7 @@ impl AsyncService {
                 }
             }
             // Notify to stop
-            stop.notify_waiters();
+            stop.set();
         }
 
         #[cfg(windows)]
