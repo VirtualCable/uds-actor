@@ -5,26 +5,7 @@ use shared::{
     ws::{server::ServerInfo, types::PreConnect, wait_for_request},
 };
 
-use crate::{common, platform};
-
-pub async fn run_preconnect(pre_command: &str, pre: &PreConnect) -> Result<()> {
-    // If empty pre_command, do nothing
-    if pre_command.trim().is_empty() {
-        return Ok(());
-    }
-    common::run_command(
-        "pre_command",
-        pre_command,
-        &[
-            &pre.user,
-            &pre.protocol,
-            pre.ip.as_deref().unwrap_or_default(),
-            pre.hostname.as_deref().unwrap_or_default(),
-            pre.udsuser.as_deref().unwrap_or_default(),
-        ],
-    )
-    .await
-}
+use crate::{actions, platform};
 
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
@@ -32,7 +13,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
     let mut rx = server_info.wsclient_to_workers.subscribe();
     while let Some(env) = wait_for_request::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received PreConnect: {:?}", env.msg);
-        // Process the Preconnect. If protocol is rdp, use operations::
+        // Process the Preconnect. If protocol is rdp, ensure the user can rdp
         let msg = env.msg;
         if msg.protocol.to_lowercase() == "rdp" {
             if let Err(e) = platform.operations().ensure_user_can_rdp(&msg.user) {
@@ -40,16 +21,9 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
             } else {
                 log::info!("Ensured user can RDP: {}", msg.user);
             }
-        // If the a pre command is configured, run it
-        } else if let Some(cmd) = platform.config().read().await.pre_command.clone() {
-            if let Err(e) = run_preconnect(&cmd, &msg).await {
-                log::error!("Failed to run pre-command for user {}: {}", msg.user, e);
-            } else {
-                log::info!("Ran pre-command for user {}", msg.user);
-            }
-        } else {
-            log::info!("No action for protocol: {}", msg.protocol);
         }
+        // If the a pre command is configured, run it
+        actions::process_command(&platform, actions::CommandType::PreConnect).await;
     }
     Ok(())
 }
@@ -58,7 +32,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 mod tests {
     use super::*;
     use crate::testing::dummy;
-    use std::{time::Duration};
+    use std::time::Duration;
 
     use shared::ws::types::{RpcEnvelope, RpcMessage};
 

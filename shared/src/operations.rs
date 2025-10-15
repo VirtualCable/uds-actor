@@ -75,7 +75,6 @@ pub struct JoinDomainOptions {
     pub account: String,
     pub password: String,
     pub ou: Option<String>,
-    pub execute_in_one_step: Option<bool>,
     // Additional options from custom data
     // These are optional and can be set to None if not provided
     pub client_software: Option<String>,

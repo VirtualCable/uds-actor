@@ -31,34 +31,45 @@ use anyhow::{Context, Result};
 
 use widestring::{U16CStr, U16CString};
 use windows::{
-    core::{w, PCWSTR, PWSTR}, Win32::{
+    Win32::{
         Foundation::{CloseHandle, HANDLE},
         NetworkManagement::{
             IpHelper::{
-                GetAdaptersAddresses, GET_ADAPTERS_ADDRESSES_FLAGS, IP_ADAPTER_ADDRESSES_LH
+                GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
             },
             NetManagement::{
-                NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers, NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus, NetUserChangePassword, LOCALGROUP_MEMBERS_INFO_0, LOCALGROUP_MEMBERS_INFO_1, NETSETUP_ACCT_CREATE, NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME
+                LOCALGROUP_MEMBERS_INFO_0, LOCALGROUP_MEMBERS_INFO_1, NETSETUP_ACCT_CREATE,
+                NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME,
+                NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers,
+                NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus,
+                NetUserChangePassword,
             },
         },
         Networking::WinSock::AF_INET,
         Security::{
-            AddAccessAllowedAce, AdjustTokenPrivileges, Authorization::{ConvertStringSidToSidW, SetNamedSecurityInfoW, SE_FILE_OBJECT}, EqualSid, InitializeAcl, LookupAccountNameW, LookupAccountSidW, LookupPrivilegeValueW, SidTypeUnknown, ACL, ACL_REVISION, DACL_SECURITY_INFORMATION, PSID, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME, SID_NAME_USE, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY
+            ACL, ACL_REVISION, AddAccessAllowedAce, AdjustTokenPrivileges,
+            Authorization::{ConvertStringSidToSidW, SE_FILE_OBJECT, SetNamedSecurityInfoW},
+            DACL_SECURITY_INFORMATION, EqualSid, InitializeAcl, LookupAccountNameW,
+            LookupAccountSidW, LookupPrivilegeValueW, PSID, SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME,
+            SID_NAME_USE, SidTypeUnknown, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
         },
         Storage::FileSystem::FILE_ALL_ACCESS,
         System::{
             Registry::{
-                RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE
+                HKEY, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, RegCloseKey, RegOpenKeyExW,
+                RegQueryValueExW,
             },
-            Shutdown::{ExitWindowsEx, EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, SHUTDOWN_REASON},
+            Shutdown::{EWX_FORCEIFHUNG, EWX_LOGOFF, EWX_REBOOT, ExitWindowsEx, SHUTDOWN_REASON},
             SystemInformation::{
-                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW, SetComputerNameExW, OSVERSIONINFOW
+                ComputerNamePhysicalDnsHostname, GetComputerNameExW, GetTickCount, GetVersionExW,
+                OSVERSIONINFOW, SetComputerNameExW,
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
             WindowsProgramming::GetUserNameW,
         },
         UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
-    }
+    },
+    core::{PCWSTR, PWSTR, w},
 };
 
 use crate::{
@@ -114,7 +125,9 @@ impl Operations for WindowsOperations {
         // Use IsUserAnAdmin from shell32
         use windows::Win32::UI::Shell::IsUserAnAdmin;
         if !unsafe { IsUserAnAdmin().as_bool() } {
-            Err(anyhow::anyhow!("The current user does not have administrative privileges"))
+            Err(anyhow::anyhow!(
+                "The current user does not have administrative privileges"
+            ))
         } else {
             Ok(())
         }
@@ -203,11 +216,10 @@ impl Operations for WindowsOperations {
             }
 
             // Flags
-            let mut flags =
-                NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
-            if options.execute_in_one_step.unwrap_or(true) {
-                flags |= NETSETUP_JOIN_WITH_NEW_NAME;
-            }
+            let flags = NETSETUP_ACCT_CREATE
+                | NETSETUP_DOMAIN_JOIN_IF_JOINED
+                | NETSETUP_JOIN_DOMAIN
+                | NETSETUP_JOIN_WITH_NEW_NAME;
 
             // Convert to utf16
             let lp_domain =
@@ -597,8 +609,8 @@ impl Operations for WindowsOperations {
                 let mut domain_buf = vec![0u16; 256];
                 let mut domain_len = domain_buf.len() as u32;
                 let mut use_type = SID_NAME_USE::default();
-                let user16 = U16CString::from_str(user)
-                    .context("failed to convert username to UTF-16")?;
+                let user16 =
+                    U16CString::from_str(user).context("failed to convert username to UTF-16")?;
 
                 // First call to get size, will fail because no buffer
                 LookupAccountNameW(
@@ -609,7 +621,8 @@ impl Operations for WindowsOperations {
                     Some(PWSTR(domain_buf.as_mut_ptr())),
                     &mut domain_len,
                     &mut use_type,
-                ).ok();
+                )
+                .ok();
 
                 // Allocate buffer and call again
                 let mut sid_buf = vec![0u8; sid_size as usize];
@@ -630,8 +643,7 @@ impl Operations for WindowsOperations {
                 let mut already_in_group = false;
                 // Look for user SID in members
                 for m in members {
-                    if EqualSid(m.lgrmi1_sid, user_sid).is_ok()
-                    {
+                    if EqualSid(m.lgrmi1_sid, user_sid).is_ok() {
                         already_in_group = true;
                         break;
                     }

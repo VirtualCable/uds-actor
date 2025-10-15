@@ -177,6 +177,8 @@ pub fn setup_logging(level: &str, log_type: LogType) {
                 .with_target(true)
                 .with_level(true)
                 .with_thread_ids(true)
+                .with_file(true)
+                .with_line_number(true)
                 .with_filter(env_filter),
         );
 

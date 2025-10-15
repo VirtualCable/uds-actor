@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use shared::{log, ws::server};
+use shared::{config::ActorOsAction, log, ws::server};
 
 use crate::{common, platform, workers};
 
@@ -28,31 +28,47 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    // Here, we have to ensure the requested state (on os data) is the actual state of the machine
-    // 1.- If runonce is pending, run it, clear on config AND EXIT (the script must reboot by)
-    // 2.- execute corresponding action for os data
-
-    let cfg = platform.config().read().await.clone();
-    if let Some(run_once) = cfg.runonce_command.clone() {
-        log::info!("Runonce script pending, executing: {}", run_once);
-        if let Err(e) = common::run_command("run_once", run_once.as_str(), &[]).await {
-            log::error!("Failed to execute runonce script {}: {}", run_once, e);
-        } else {
-            log::info!("Runonce script {} executed successfully", run_once);
-            // Clear run_once on config
-            let cfg = platform.config(); // Avoid drop while writing
-            let mut cfg = cfg.write().await;
-            cfg.runonce_command = None;
-            let mut saver = platform.config_storage();
-            if let Err(e) = saver.save_config(&cfg) {
-                log::error!("Failed to save config after clearing run_once: {}", e);
-            }
-        }
+    if crate::actions::process_command(&platform, crate::actions::CommandType::RunOnce).await {
+        // If runonce was executed, exit
         log::info!("Exiting after runonce execution as requested");
         return Ok(());
     }
 
-    // TODO: handle os data actions here
+    if let Some(os_data) = platform.config().read().await.config.os.clone() {
+        match os_data.action {
+            ActorOsAction::None => {
+                log::debug!("No OS action requested");
+            }
+            ActorOsAction::Rename => {
+                log::info!("OS action requested: Rename to '{}'", os_data.name);
+                if crate::actions::rename_computer(&platform, os_data.name.as_str()).await? {
+                    // Reboot to apply changes
+                    log::info!("Rebooting system to apply rename");
+                    platform.operations().reboot(None)?;
+                    return Ok(()); // We can exit here, system is rebooting
+                }
+                // Already has the correct name, skips reboot
+            }
+            ActorOsAction::JoinDomain => {
+                log::info!(
+                    "OS action requested: Join domain with name '{}'",
+                    os_data.name
+                );
+                if crate::actions::join_domain(&platform, os_data.name.as_str(), os_data.custom.clone()).await? {
+                    // Reboot to apply changes
+                    log::info!("Rebooting system to apply domain join");
+                    platform.operations().reboot(None)?;
+                    return Ok(()); // We can exit here, system is rebooting
+                }
+                // Already has the correct name and domain, skips reboot
+            }
+        }
+    } else {
+        log::debug!("No OS data action requested");
+    }
+
+    // Post-config command will run, but no reboot will be done after it
+    crate::actions::process_command(&platform, crate::actions::CommandType::PostConfig).await;
 
     // Notify ready to broker, will return TLS certs
     let broker = platform.broker_api();

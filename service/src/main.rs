@@ -17,6 +17,7 @@ use shared::{
 
 mod common;
 mod platform;
+mod actions;
 
 mod managed;
 mod unamanaged;
@@ -37,7 +38,7 @@ fn main() {
     // Setup logging
     log::setup_logging("info", log::LogType::Service);
 
-    tls::init_tls(None); // TODO: allow config of cert path
+    tls::init_tls(None);
 
     // Create the async launcher with our main async function
     let launcher = AsyncService::new(executor);

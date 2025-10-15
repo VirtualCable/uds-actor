@@ -1,5 +1,8 @@
-use anyhow::Result;
+use std::ops::Deref;
+
 use serde::{Deserialize, Serialize};
+use anyhow::Result;
+
 
 /// Actor types
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -45,6 +48,14 @@ pub struct ActorOsConfiguration {
     #[serde(default)]
     pub name: String,           // Default is empty
     pub custom: Option<serde_json::Value>,  // custom data depends on action
+}
+
+impl Deref for ActorOsConfiguration {
+    type Target = Self;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
