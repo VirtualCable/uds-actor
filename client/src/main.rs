@@ -136,7 +136,7 @@ async fn run(platform: platform::Platform) {
     // Ensure GUI is shutdown. If not done, and any window is open, process will hang until window is closed
 }
 
-// Faking modules for tests
+// Dummy modules for tests
 #[cfg(test)]
 pub mod testing;
 
