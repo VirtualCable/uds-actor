@@ -27,7 +27,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use rand::prelude::*;
-use reqwest::{Client, ClientBuilder};
+use reqwest::{Client, ClientBuilder, retry};
 use serde::{Deserialize, Serialize};
 
 use crate::log;
@@ -116,15 +116,17 @@ pub struct UdsBrokerApi {
     custom_headers: reqwest::header::HeaderMap,
 }
 
-#[allow(dead_code)]
 impl UdsBrokerApi {
     pub fn new(
         cfg: crate::config::ActorConfiguration,
         skip_proxy: bool,
         timeout: Option<std::time::Duration>,
     ) -> Self {
+        let policy = retry::for_host(cfg.broker_url.clone()).max_retries_per_request(5);
+
         let mut builder = ClientBuilder::new()
             .use_rustls_tls()  // Use rustls for TLS
+            .retry(policy)
             .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
             .connection_verbose(cfg!(debug_assertions))
             .danger_accept_invalid_certs(!cfg.verify_ssl);
@@ -184,7 +186,7 @@ impl UdsBrokerApi {
         }
     }
 
-    fn secret(&self) -> Option<String> {
+    pub fn secret(&self) -> Option<String> {
         self.secret.clone()
     }
 
