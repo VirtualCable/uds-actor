@@ -80,11 +80,8 @@ pub trait BrokerApi: Send + Sync {
     // Note: This is not used anymore
     // It's cleaner to stop the service and let the system (systemd, launchd, Windows service manager)
     // restart it, so the new IP is picked up cleanly and notified via ready/unmanaged_ready
-    async fn notify_new_ip(
-        &self,
-        ip: &str,
-        port: u16,
-    ) -> Result<CertificateInfo, types::RestError>;
+    async fn notify_new_ip(&self, ip: &str, port: u16)
+    -> Result<CertificateInfo, types::RestError>;
 
     async fn login(
         &self,
@@ -125,7 +122,7 @@ impl UdsBrokerApi {
         let policy = retry::for_host(cfg.broker_url.clone()).max_retries_per_request(5);
 
         let mut builder = ClientBuilder::new()
-            .use_rustls_tls()  // Use rustls for TLS
+            .use_rustls_tls() // Use rustls for TLS
             .retry(policy)
             .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
             .connection_verbose(cfg!(debug_assertions))
@@ -196,47 +193,88 @@ impl UdsBrokerApi {
         payload: &P,
     ) -> Result<T, types::RestError> {
         log::debug!("POST to {}", self.api_url(method));
-        let resp = self
-            .client
-            .post(self.api_url(method))
-            .headers(self.headers())
-            .json(payload)
-            .send()
-            .await
-            .map_err(|e| types::RestError::Connection(e.to_string()))?;
 
-        if resp.status().is_success() {
-            let json = resp
-                .json::<T>()
-                .await
-                .map_err(|e| types::RestError::Other(e.to_string()))?;
-            Ok(json)
-        } else {
-            let txt = resp.text().await.unwrap_or_default();
-            Err(types::RestError::Other(txt))
+        let mut backoff = std::time::Duration::from_millis(500);
+        let max_retries = 5;
+
+        for attempt in 0..=max_retries {
+            let resp = self
+                .client
+                .post(self.api_url(method))
+                .headers(self.headers())
+                .json(payload)
+                .send()
+                .await;
+
+            match resp {
+                Ok(resp) if resp.status().is_success() => {
+                    let json = resp
+                        .json::<T>()
+                        .await
+                        .map_err(|e| types::RestError::Other(e.to_string()))?;
+                    return Ok(json);
+                }
+                Ok(resp) => {
+                    let txt = resp.text().await.unwrap_or_default();
+                    return Err(types::RestError::Other(txt));
+                }
+                Err(e) if e.is_timeout() || e.is_connect() => {
+                    if attempt < max_retries {
+                        log::warn!("POST failed ({}), retrying in {:?}...", e, backoff);
+                        tokio::time::sleep(backoff).await;
+                        backoff = std::cmp::min(backoff * 2, std::time::Duration::from_secs(8));
+                        continue;
+                    } else {
+                        return Err(types::RestError::Connection(e.to_string()));
+                    }
+                }
+                Err(e) => return Err(types::RestError::Connection(e.to_string())),
+            }
         }
+        unreachable!()
     }
 
     async fn do_get<T: for<'de> Deserialize<'de>>(&self, url: &str) -> Result<T, types::RestError> {
         log::debug!("GET to {}", url);
-        let resp = self
-            .client
-            .get(self.api_url(url))
-            .headers(self.headers())
-            .send()
-            .await
-            .map_err(|e| types::RestError::Connection(e.to_string()))?;
 
-        if resp.status().is_success() {
-            let json = resp
-                .json::<T>()
-                .await
-                .map_err(|e| types::RestError::Other(e.to_string()))?;
-            Ok(json)
-        } else {
-            let txt = resp.text().await.unwrap_or_default();
-            Err(types::RestError::Other(txt))
+        let mut backoff = std::time::Duration::from_millis(500);
+        let max_retries = 5;
+
+        for attempt in 0..=max_retries {
+            let resp = self
+                .client
+                .get(self.api_url(url))
+                .headers(self.headers())
+                .send()
+                .await;
+
+            match resp {
+                Ok(resp) if resp.status().is_success() => {
+                    let json = resp
+                        .json::<T>()
+                        .await
+                        .map_err(|e| types::RestError::Other(e.to_string()))?;
+                    return Ok(json);
+                }
+                Ok(resp) => {
+                    let txt = resp.text().await.unwrap_or_default();
+                    return Err(types::RestError::Other(txt));
+                }
+                Err(e) if e.is_timeout() || e.is_connect() => {
+                    if attempt < max_retries {
+                        log::warn!("GET failed ({}), retrying in {:?}...", e, backoff);
+                        tokio::time::sleep(backoff).await;
+                        backoff = std::cmp::min(backoff * 2, std::time::Duration::from_secs(8));
+                        continue;
+                    } else {
+                        return Err(types::RestError::Connection(e.to_string()));
+                    }
+                }
+                Err(e) => return Err(types::RestError::Connection(e.to_string())),
+            }
         }
+
+        unreachable!()
     }
 
     pub fn get_token(&self) -> Result<String, types::RestError> {
@@ -333,8 +371,7 @@ impl BrokerApi for UdsBrokerApi {
             port,
         };
 
-        let response: types::ApiResponse<CertificateInfo> =
-            self.do_post("ready", &payload).await?;
+        let response: types::ApiResponse<CertificateInfo> = self.do_post("ready", &payload).await?;
         response.result()
     }
 
