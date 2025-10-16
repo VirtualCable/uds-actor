@@ -2,12 +2,12 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerInfo, types::LogoffRequest, wait_for_request},
+    ws::{server::ServerContext, types::LogoffRequest, wait_for_request},
 };
 
 use crate::platform;
 
-pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
     while let Some(_env) =
@@ -32,7 +32,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::dummy;
+    use crate::testing::mock;
     use std::{sync::Arc, time::Duration};
 
     use shared::ws::types::{RpcEnvelope, RpcMessage};
@@ -42,8 +42,8 @@ mod tests {
     async fn test_logoff_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let (server_info, mut wsclient_to_workers_rx) =
-            dummy::create_dummy_server_info_with_worker_rx().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+            mock::mock_server_info_with_worker_rx().await;
+        let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.wsclient_to_workers.clone();

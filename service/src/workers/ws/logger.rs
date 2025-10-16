@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use shared::{
     log,
-    ws::{server::ServerInfo, types::LogRequest, wait_for_request},
+    ws::{server::ServerContext, types::LogRequest, wait_for_request},
 };
 
 use crate::{platform};
@@ -40,7 +40,7 @@ impl FloodGuard {
 }
 
 // Owned ServerInfo and Platform
-pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
     let flood_guard = Arc::new(Mutex::new(FloodGuard::new()));
 
@@ -77,7 +77,7 @@ mod tests {
     use super::*;
 
     use shared::{ws::types::{RpcEnvelope, RpcMessage, LogLevel}};
-    use crate::testing::dummy;
+    use crate::testing::mock;
 
     #[tokio::test]
     async fn flood_guard_allows_up_to_60_per_minute() {
@@ -103,8 +103,8 @@ mod tests {
     #[tokio::test]
     async fn handle_log_respects_flood_guard() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let server_info = dummy::create_dummy_server_info().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let server_info = mock::mock_server_info().await;
+        let (platform, calls) = mock::mock_platform().await;
 
         let wsclient_to_workers = server_info.wsclient_to_workers.clone();
 
@@ -138,8 +138,8 @@ mod tests {
     #[tokio::test]
     async fn test_log_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let server_info = dummy::create_dummy_server_info().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let server_info = mock::mock_server_info().await;
+        let (platform, calls) = mock::mock_platform().await;
 
         let wsclient_to_workers = server_info.wsclient_to_workers.clone();
 

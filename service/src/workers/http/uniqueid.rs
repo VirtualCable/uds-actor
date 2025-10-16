@@ -3,7 +3,7 @@ use anyhow::Result;
 use shared::{
     log,
     ws::{
-        server::ServerInfo,
+        server::ServerContext,
         types::{UUidRequest, UUidResponse},
         wait_for_request,
     },
@@ -12,7 +12,7 @@ use shared::{
 use crate::platform;
 
 // Owned ServerInfo and Platform
-pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
@@ -51,7 +51,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::dummy;
+    use crate::testing::mock;
     use std::{time::Duration};
 
     use shared::ws::types::{RpcEnvelope, RpcMessage};
@@ -59,8 +59,8 @@ mod tests {
     #[tokio::test]
     async fn test_uniqueid_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let server_info = dummy::create_dummy_server_info().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let server_info = mock::mock_server_info().await;
+        let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
         platform.config().write().await.own_token = Some("own_token".into());
 

@@ -1,4 +1,4 @@
-use shared::{log, ws::server::ServerInfo};
+use shared::{log, ws::server::ServerContext};
 
 use crate::platform;
 
@@ -12,7 +12,7 @@ pub mod screenshot;
 use crate::spawn_workers;
 
 #[allow(dead_code)]
-pub async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
+pub async fn create_workers(server_info: ServerContext, platform: platform::Platform) {
     spawn_workers!(
         server_info,
         platform,

@@ -5,7 +5,7 @@ use shared::{
     sync::event::{Event, EventLike},
 };
 
-use shared::testing::dummy::{Calls, DummyActions, DummyOperations};
+use shared::testing::mock::{Calls, ActionsMock, OperationsMock};
 
 #[derive(Clone)]
 struct DummySessionManager {
@@ -100,11 +100,11 @@ pub async fn create_platform(
     let manager =
         manager.unwrap_or_else(|| std::sync::Arc::new(DummySessionManager::new(calls.clone())));
     let operations =
-        operations.unwrap_or_else(|| std::sync::Arc::new(DummyOperations::new(calls.clone())));
+        operations.unwrap_or_else(|| std::sync::Arc::new(OperationsMock::new(calls.clone())));
     let api = api.unwrap_or_else(|| {
         std::sync::Arc::new(tokio::sync::RwLock::new(DummyApi::new(calls.clone())))
     });
-    let actions = actions.unwrap_or_else(|| std::sync::Arc::new(DummyActions::new(calls.clone())));
+    let actions = actions.unwrap_or_else(|| std::sync::Arc::new(ActionsMock::new(calls.clone())));
     (
         crate::platform::Platform::new_with_params(
             Some(manager),

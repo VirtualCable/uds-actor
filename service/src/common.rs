@@ -22,7 +22,7 @@ pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
         }
 
         // wait_timeout returns Err if timeout elapsed
-        if let Ok(()) = stop.wait_timeout(std::time::Duration::from_secs(3)).await {
+        if let Ok(()) = stop.wait_timeout(std::time::Duration::from_secs(2)).await {
             log::info!("Stop signal received, exiting wait");
             return Ok(());
         }
@@ -168,14 +168,14 @@ pub async fn run_command(info_name: &str, command: &str, args: &[&str]) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::dummy;
+    use crate::testing::mock;
 
     use super::*;
 
     #[tokio::test]
     async fn test_initialize() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
         let result = initialize(&platform).await;
         assert!(result.is_ok());
@@ -186,7 +186,7 @@ mod tests {
     #[tokio::test]
     async fn test_interfaces_watch() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let (platform, calls) = mock::mock_platform().await;
         let subnet = platform.config().read().await.restrict_net.clone();
         let stop = platform.get_stop();
         let handle = tokio::spawn(async move {

@@ -3,7 +3,7 @@ use anyhow::Result;
 use shared::{
     log,
     ws::{
-        server::ServerInfo,
+        server::ServerContext,
         types::{ScreenshotRequest, ScreenshotResponse},
         wait_for_request, wait_response,
     },
@@ -12,7 +12,7 @@ use shared::{
 use crate::platform;
 
 // Owned ServerInfo and Platform
-pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
@@ -68,7 +68,7 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::dummy;
+    use crate::testing::mock;
     use std::{sync::Arc, time::Duration};
 
     use shared::ws::types::{RpcEnvelope, RpcMessage};
@@ -78,8 +78,8 @@ mod tests {
     async fn test_screenshot_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let (server_info, mut wsclient_to_workers_rx) =
-            dummy::create_dummy_server_info_with_worker_rx().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+            mock::mock_server_info_with_worker_rx().await;
+        let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.wsclient_to_workers.clone();

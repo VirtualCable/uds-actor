@@ -68,18 +68,18 @@ impl Calls {
     }
 }
 
-pub struct DummyActions {
+pub struct ActionsMock {
     calls: Calls,
 }
 
-impl DummyActions {
+impl ActionsMock {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
 #[async_trait::async_trait]
-impl Actions for DummyActions {
+impl Actions for ActionsMock {
     async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
         self.calls.push("actions::screenshot()");
         const PNG_1X1_TRANSPARENT: &[u8] = &[
@@ -102,17 +102,17 @@ impl Actions for DummyActions {
     }
 }
 
-pub struct DummyOperations {
+pub struct OperationsMock {
     pub calls: Calls,
 }
 
-impl DummyOperations {
+impl OperationsMock {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
-impl Default for DummyOperations {
+impl Default for OperationsMock {
     fn default() -> Self {
         Self {
             calls: Calls::new(),
@@ -120,7 +120,7 @@ impl Default for DummyOperations {
     }
 }
 
-impl Operations for DummyOperations {
+impl Operations for OperationsMock {
     fn check_permissions(&self) -> anyhow::Result<()> {
         self.calls.push("operations::check_permissions()");
         Ok(())
@@ -256,13 +256,13 @@ impl Operations for DummyOperations {
 }
 
 #[derive(Clone)]
-pub struct DummyBrokerApi {
+pub struct BrokerApiMock {
     calls: Calls,
     secret: Option<String>,
     token: Option<String>,
 }
 
-impl DummyBrokerApi {
+impl BrokerApiMock {
     pub fn new(calls: Calls) -> Self {
         Self {
             calls,
@@ -273,7 +273,7 @@ impl DummyBrokerApi {
 }
 
 #[async_trait::async_trait]
-impl api::BrokerApi for DummyBrokerApi {
+impl api::BrokerApi for BrokerApiMock {
     fn clear_headers(&mut self) {
         self.calls.push("broker_api::clear_headers()");
     }

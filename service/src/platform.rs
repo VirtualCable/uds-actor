@@ -25,7 +25,7 @@ impl Platform {
         // let operations = shared::operations::new_operations();
         // Release compilation will fail, because testing is not allowed in release builds, so if we forget this
         // it will be caught.
-        let operations = Arc::new(shared::testing::dummy::DummyOperations::default());
+        let operations = Arc::new(shared::testing::mock::OperationsMock::default());
 
         let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
 

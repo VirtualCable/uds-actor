@@ -9,7 +9,7 @@ use tokio_tungstenite::{Connector, connect_async_tls_with_config, tungstenite::M
 use reqwest::Client;
 use shared::{
     log, sync::OnceSignal, testing::test_certs, ws::{
-        server::{start_server, ServerInfo},
+        server::{start_server, ServerContext},
         types::{
             LogoffRequest, MessageRequest, Ping, PreConnect, RpcEnvelope, RpcMessage,
             ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
@@ -21,7 +21,7 @@ use shared::{
 // Port counter to avoid collisions
 static NEXT_PORT: AtomicU16 = AtomicU16::new(32420);
 
-async fn create_test_server_task(secret: &str) -> (ServerInfo, tokio::task::JoinHandle<()>, u16) {
+async fn create_test_server_task(secret: &str) -> (ServerContext, tokio::task::JoinHandle<()>, u16) {
     let port = NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     log::setup_logging("debug", crate::log::LogType::Tests);
     shared::tls::init_tls(None);

@@ -58,7 +58,7 @@ pub async fn wait_for_request<T>(
 where
     T: TryFrom<RpcMessage> + Clone,
 {
-    log::debug!("Waiting for request...");
+    log::debug!("Waiting for request of type {}", std::any::type_name::<T>());
     loop {
         tokio::select! {
             // External stop

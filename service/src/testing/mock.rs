@@ -4,15 +4,15 @@ use tokio::sync::{broadcast, mpsc};
 
 use shared::{
     config::{ActorConfiguration, ActorDataConfiguration, ActorType},
-    testing::dummy::{Calls, DummyBrokerApi, DummyOperations},
+    testing::mock::{Calls, BrokerApiMock, OperationsMock},
     ws::{
         request_tracker::RequestTracker,
-        server::ServerInfo,
+        server::ServerContext,
         types::{RpcEnvelope, RpcMessage},
     },
 };
 
-pub async fn create_dummy_platform() -> (Platform, Calls) {
+pub async fn mock_platform() -> (Platform, Calls) {
     let config = ActorConfiguration {
         broker_url: "https://localhost".to_string(),
         verify_ssl: true,
@@ -28,8 +28,8 @@ pub async fn create_dummy_platform() -> (Platform, Calls) {
         data: None,
     };
     let calls = Calls::new();
-    let operations = Arc::new(DummyOperations::new(calls.clone()));
-    let broker_api = Arc::new(tokio::sync::RwLock::new(DummyBrokerApi::new(calls.clone())));
+    let operations = Arc::new(OperationsMock::new(calls.clone()));
+    let broker_api = Arc::new(tokio::sync::RwLock::new(BrokerApiMock::new(calls.clone())));
 
     let platform = crate::platform::Platform::new_with_params(
         Some(config),
@@ -39,26 +39,26 @@ pub async fn create_dummy_platform() -> (Platform, Calls) {
     (platform, calls)
 }
 
-pub async fn create_dummy_server_info() -> ServerInfo {
+pub async fn mock_server_info() -> ServerContext {
     let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
 
-    ServerInfo {
+    ServerContext {
         workers_to_wsclient: workers_tx,
         wsclient_to_workers: wsclient_to_workers.clone(),
         tracker,
     }
 }
 
-pub async fn create_dummy_server_info_with_worker_rx() -> (ServerInfo, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
+pub async fn mock_server_info_with_worker_rx() -> (ServerContext, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
     let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (wsclient_to_workers, wsclient_to_workers_rx) =
         broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
 
     (
-        ServerInfo {
+        ServerContext {
             workers_to_wsclient: workers_tx,
             wsclient_to_workers: wsclient_to_workers.clone(),
             tracker,

@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     broker::api::BrokerApi, log, ws::{
-        server::ServerInfo,
+        server::ServerContext,
         types::{LoginRequest, RpcEnvelope, RpcMessage},
         wait_for_request,
     }
@@ -15,7 +15,7 @@ use crate::{common, platform};
 // So, we just wait for a LoginRequest from the wsclient, and then notify correctly to the broker.
 // So we need to call "initialize" prior to login, to get the machine attached to the userservice.
 // Also, we will no "save" the token, store it on memoy only, as unmanaged actors are not supposed to be long-lived.
-pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Result<()> {
+pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
     while let Some(env) = wait_for_request::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
     {
@@ -60,14 +60,14 @@ pub async fn worker(server_info: ServerInfo, platform: platform::Platform) -> Re
 mod tests {
     use super::*;
 
-    use crate::testing::dummy;
+    use crate::testing::mock;
     use std::time::Duration;
 
     #[tokio::test]
     async fn test_login_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let server_info = dummy::create_dummy_server_info().await;
-        let (platform, calls) = dummy::create_dummy_platform().await;
+        let server_info = mock::mock_server_info().await;
+        let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.wsclient_to_workers.clone();

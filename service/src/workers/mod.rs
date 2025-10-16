@@ -1,4 +1,4 @@
-use shared::{ws::server::ServerInfo};
+use shared::{ws::server::ServerContext};
 
 use crate::platform;
 
@@ -11,7 +11,7 @@ mod ws;
 mod http;
 
 #[allow(dead_code)]
-pub async fn create_workers(server_info: ServerInfo, platform: platform::Platform) {
+pub async fn create_workers(server_info: ServerContext, platform: platform::Platform) {
     ws::create_workers(server_info.clone(), platform.clone()).await;
     http::create_workers(server_info, platform).await;
 }
