@@ -75,12 +75,12 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 #[cfg(test)]
 mod tests {
     // Tests for deadline task
-    use crate::testing::dummy::create_platform;
+    use crate::testing::mock::mock_platform;
 
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -102,7 +102,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {

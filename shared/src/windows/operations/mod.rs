@@ -343,7 +343,7 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn init_idle_timer(&self) -> Result<()> {
+    fn init_idle_timer(&self, _min_required: u32) -> Result<()> {
         // Just a stub for compatibility with other OSes
         // On Windows, we don't need to initialize anything
         Ok(())

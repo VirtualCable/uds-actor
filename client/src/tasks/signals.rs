@@ -63,3 +63,35 @@ pub async fn task(platform: platform::Platform) -> anyhow::Result<Option<String>
     }
     Ok(None)
 }
+
+#[cfg(test)]
+mod tests {
+
+    use shared::log;
+
+    // Test on unix that works the signal handler
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_signal_handler() {
+        log::setup_logging("debug", log::LogType::Tests);
+        let (platform, calls) = crate::testing::mock::mock_platform(None, None, None, None).await;
+        tokio::spawn(async move {
+            let res = super::task(platform).await;
+            assert!(res.is_ok());
+            assert!(res.unwrap().is_none());
+        });
+
+        // Wait a bit to ensure the signal handler is running
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Send SIGTERM to ourselves
+        let pid = std::process::id();
+        unsafe {
+            libc::kill(pid as i32, libc::SIGTERM);
+        }
+        // Wait a bit to ensure the signal is handled
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        
+        log::info!("Calls: {:?}", calls.dump());
+    }
+}

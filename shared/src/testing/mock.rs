@@ -188,8 +188,8 @@ impl Operations for OperationsMock {
         Ok(())
     }
 
-    fn init_idle_timer(&self) -> anyhow::Result<()> {
-        self.calls.push("operations::init_idle_timer()");
+    fn init_idle_timer(&self, min_required: u64) -> anyhow::Result<()> {
+        self.calls.push(format!("operations::init_idle_timer({})", min_required));
         Ok(())
     }
 
