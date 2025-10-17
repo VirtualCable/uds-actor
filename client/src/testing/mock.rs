@@ -8,12 +8,12 @@ use shared::{
 use shared::testing::mock::{Calls, ActionsMock, OperationsMock};
 
 #[derive(Clone)]
-struct DummySessionManager {
+struct SessionManagerMock {
     event: Event,
     calls: Calls,
 }
 
-impl DummySessionManager {
+impl SessionManagerMock {
     fn new(calls: Calls) -> Self {
         Self {
             event: Event::new(),
@@ -23,7 +23,7 @@ impl DummySessionManager {
 }
 
 #[async_trait::async_trait]
-impl crate::session::SessionManagement for DummySessionManager {
+impl crate::session::SessionManagement for SessionManagerMock {
     async fn wait(&self) {
         self.calls.push("session::wait()");
         self.event.wait_async().await;
@@ -49,18 +49,18 @@ impl crate::session::SessionManagement for DummySessionManager {
     }
 }
 
-pub struct DummyApi {
+pub struct ApiMock {
     calls: Calls,
 }
 
-impl DummyApi {
+impl ApiMock {
     fn new(calls: Calls) -> Self {
         Self { calls }
     }
 }
 
 #[async_trait::async_trait]
-impl ClientRest for DummyApi {
+impl ClientRest for ApiMock {
     async fn register(&mut self, _callback_url: &str) -> anyhow::Result<()> {
         self.calls.push("api::register()");
         Ok(())
@@ -90,7 +90,7 @@ impl ClientRest for DummyApi {
     }
 }
 
-pub async fn create_platform(
+pub async fn mock_platform(
     manager: Option<std::sync::Arc<dyn crate::session::SessionManagement>>,
     operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
     api: Option<std::sync::Arc<tokio::sync::RwLock<dyn ClientRest>>>,
@@ -98,11 +98,11 @@ pub async fn create_platform(
 ) -> (crate::platform::Platform, Calls) {
     let calls: Calls = Calls::new();
     let manager =
-        manager.unwrap_or_else(|| std::sync::Arc::new(DummySessionManager::new(calls.clone())));
+        manager.unwrap_or_else(|| std::sync::Arc::new(SessionManagerMock::new(calls.clone())));
     let operations =
         operations.unwrap_or_else(|| std::sync::Arc::new(OperationsMock::new(calls.clone())));
     let api = api.unwrap_or_else(|| {
-        std::sync::Arc::new(tokio::sync::RwLock::new(DummyApi::new(calls.clone())))
+        std::sync::Arc::new(tokio::sync::RwLock::new(ApiMock::new(calls.clone())))
     });
     let actions = actions.unwrap_or_else(|| std::sync::Arc::new(ActionsMock::new(calls.clone())));
     (

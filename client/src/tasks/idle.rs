@@ -41,7 +41,7 @@ pub async fn task(
     let operations = platform.operations();
     let session_manager = platform.session_manager();
     // Initialize idle timer if platform supports it
-    operations.init_idle_timer()?;
+    operations.init_idle_timer(max_idle.as_secs() + 1)?;
 
     let mut notified = false;
 
@@ -109,13 +109,13 @@ pub async fn task(
 #[cfg(test)]
 mod tests {
     // Tests for idle task
-    use crate::testing::dummy::create_platform;
+    use crate::testing::mock::mock_platform;
 
     #[tokio::test]
     async fn test_idle_task_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -138,7 +138,7 @@ mod tests {
     async fn test_idle_task_no_idle_exceeded() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (5 seconds)
@@ -160,7 +160,7 @@ mod tests {
     async fn test_idle_task_no_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = create_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle

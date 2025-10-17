@@ -125,7 +125,7 @@ pub trait Operations: Send + Sync {
 
     // Initializes the idle timer mechanism, if required by the platform.
     // This should be called once during startup.
-    fn init_idle_timer(&self) -> Result<()>;
+    fn init_idle_timer(&self, min_required: u64) -> Result<()>;
 
     /// Get information about the network interfaces on the machine.
     /// This should return a list of all network interfaces, including their IP and MAC addresses.

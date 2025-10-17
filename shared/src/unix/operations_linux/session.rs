@@ -24,10 +24,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use anyhow::Result;
 use std::{env, io, process::Command};
+
+use anyhow::Result;
 use zbus::blocking::{Connection, Proxy};
-use zbus::zvariant::OwnedObjectPath;
+
+use crate::log;
 
 /// Try to terminate the current session via D-Bus (sync).
 fn try_dbus_logout(session_id: &str) -> Result<bool> {
@@ -80,32 +82,17 @@ pub fn current_session_id() -> io::Result<String> {
         }
     }
 
-    if let Ok(connection) = Connection::system() {
-        if let Ok(proxy) = Proxy::new(
-            &connection,
-            "org.freedesktop.login1",
-            "/org/freedesktop/login1",
-            "org.freedesktop.login1.Manager",
-        ) {
-            let pid = std::process::id();
-            let (path,): (OwnedObjectPath,) =
-                proxy.call("GetSessionByPID", &(pid,)).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("D-Bus GetSessionByPID failed: {:?}", e),
-                    )
-                })?;
-            if let Some(id) = path.to_string().rsplit('/').next() {
-                return Ok(id.trim_start_matches('_').to_string());
-            }
-        }
-    }
-
     let output = Command::new("loginctl")
         .arg("show-user")
         .arg(whoami::username())
         .arg("--property=Display")
         .output()?;
+
+    log::debug!(
+        "loginctl output: stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     if let Some(id) = stdout.split('=').nth(1) {
@@ -127,6 +114,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "This test requires a graphical session to run"]
     fn test_current_session_id() {
         crate::log::setup_logging("debug", crate::log::LogType::Tests);
         let id = current_session_id().unwrap();

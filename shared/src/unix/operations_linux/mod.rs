@@ -153,9 +153,9 @@ impl crate::operations::Operations for LinuxOperations {
         network::get_network_info()
     }
 
-    fn init_idle_timer(&self) -> Result<()> {
+    fn init_idle_timer(&self, min_required: u64) -> Result<()> {
         log::debug!("LinuxOperations::init_idle_timer called");
-        idle::init_idle()
+        idle::init_idle(min_required)
     }
 
     fn get_idle_duration(&self) -> Result<std::time::Duration> {
