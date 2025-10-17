@@ -100,7 +100,7 @@ pub async fn task(
         // Wait inside the session_manager for a while (1 second or until signaled)
         session_manager
             .wait_timeout(std::time::Duration::from_secs(1))
-            .await;
+            .await.ok();
     }
 
     Ok(None)

@@ -1,19 +1,20 @@
+use anyhow::Result;
+
 use crate::session::SessionManagement;
 use shared::{
     log,
-    sync::event::{Event, EventLike},
-    windows::MsgWindow,
+    windows::{MsgWindow, WindowsEvent},
 };
 
 #[allow(dead_code)]
 pub struct WindowsSessionManager {
-    stop_event: Event,
+    stop_event: WindowsEvent,
 }
 
 impl WindowsSessionManager {
     pub fn new() -> Self {
         // Create the event to signal the window to stop
-        let stop_event = Event::new();
+        let stop_event = WindowsEvent::new();
         // Launch the window task in a dedicated thread
         let mut msg_window = MsgWindow::new(stop_event.clone());
         std::thread::spawn(move || {
@@ -37,7 +38,7 @@ impl SessionManagement for WindowsSessionManager {
         self.stop_event.signal();
         log::debug!("Windows session close event signaled");
     }
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
         let ev = self.stop_event.clone();
         ev.wait_timeout_async(timeout).await
     }

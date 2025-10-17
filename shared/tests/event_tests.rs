@@ -27,11 +27,12 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::thread;
 use std::time::Duration;
 
-use shared::sync::event::{Event, EventLike};
+use shared::windows::WindowsEvent;
 
+#[cfg(windows)]
 #[test]
 fn event_signal_and_wait() {
-    let ev = Event::new();
+    let ev = WindowsEvent::new();
     assert!(!ev.is_set());
 
     let ev2 = ev.clone();
@@ -49,9 +50,10 @@ fn event_signal_and_wait() {
     assert!(ev.is_set());
 }
 
+#[cfg(windows)]
 #[test]
 fn event_wait_timeout() {
-    let ev = Event::new();
+    let ev = WindowsEvent::new();
 
     // Not signaled, should timeout
     let signaled = ev.wait_timeout(Duration::from_millis(100));
@@ -63,9 +65,10 @@ fn event_wait_timeout() {
     assert!(signaled);
 }
 
+#[cfg(windows)]
 #[test]
 fn event_reset() {
-    let ev = Event::new();
+    let ev = WindowsEvent::new();
     ev.signal();
     assert!(ev.is_set());
 
@@ -73,9 +76,10 @@ fn event_reset() {
     assert!(!ev.is_set());
 }
 
+#[cfg(windows)]
 #[tokio::test]
 async fn event_signal_and_wait_async() {
-    let ev = Event::new();
+    let ev = WindowsEvent::new();
     assert!(!ev.is_set());
 
     let ev2 = ev.clone();
@@ -93,9 +97,10 @@ async fn event_signal_and_wait_async() {
     assert!(ev.is_set());
 }
 
+#[cfg(windows)]
 #[tokio::test]
 async fn event_wait_timeout_async() {
-    let ev = Event::new();
+    let ev = WindowsEvent::new();
 
     // Not signaled, should timeout
     let signaled = ev.wait_timeout_async(Duration::from_millis(100)).await;

@@ -24,9 +24,6 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub mod event;
-pub mod traits;
 pub mod oncesignal;
 
-pub use event::Event;
 pub use oncesignal::OnceSignal;

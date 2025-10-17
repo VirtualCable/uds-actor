@@ -1,22 +1,23 @@
-// Fake api to test run function
+use anyhow::Result;
+
 use crate::rest::{api::ClientRest, types::LoginResponse};
 use shared::{
     actions::Actions,
-    sync::event::{Event, EventLike},
+    sync::OnceSignal,
 };
 
 use shared::testing::mock::{Calls, ActionsMock, OperationsMock};
 
 #[derive(Clone)]
 struct SessionManagerMock {
-    event: Event,
+    event: OnceSignal,
     calls: Calls,
 }
 
 impl SessionManagerMock {
     fn new(calls: Calls) -> Self {
         Self {
-            event: Event::new(),
+            event: OnceSignal::new(),
             calls,
         }
     }
@@ -26,7 +27,7 @@ impl SessionManagerMock {
 impl crate::session::SessionManagement for SessionManagerMock {
     async fn wait(&self) {
         self.calls.push("session::wait()");
-        self.event.wait_async().await;
+        self.event.wait().await;
     }
 
     async fn is_running(&self) -> bool {
@@ -36,16 +37,14 @@ impl crate::session::SessionManagement for SessionManagerMock {
 
     async fn stop(&self) {
         self.calls.push("session::stop()");
-        self.event.signal();
+        self.event.set();
     }
 
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
         self.calls
             .push(format!("session::wait_timeout({:?})", timeout));
         let ev = self.event.clone();
-        tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
-            .await
-            .unwrap()
+        ev.wait_timeout(timeout).await
     }
 }
 

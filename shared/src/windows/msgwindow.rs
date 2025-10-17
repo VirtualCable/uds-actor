@@ -24,7 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use crate::sync::event::{Event, EventLike};
+use crate::windows::WindowsEvent;
 use std::sync::{
     Arc, LazyLock,
     atomic::{AtomicIsize, Ordering},
@@ -46,16 +46,16 @@ fn get_class_name() -> PCWSTR {
 
 #[allow(dead_code)]
 pub struct MsgWindow {
-    pub stop_notify: Event,
+    pub stop_notify: WindowsEvent,
 }
 
 #[allow(dead_code)]
 impl MsgWindow {
-    pub fn new(stop_notify: Event) -> Self {
+    pub fn new(stop_notify: WindowsEvent) -> Self {
         Self { stop_notify }
     }
 
-    fn create_invisible_window(event: Event) -> HWND {
+    fn create_invisible_window(event: WindowsEvent) -> HWND {
         let h_instance = unsafe {
             GetModuleHandleW(None)
                 .unwrap_or_else(|e| panic!("Failed to get module handle: {:?}", e))
@@ -193,7 +193,7 @@ extern "system" fn launcher_window_proc(
 ) -> LRESULT {
     let event = unsafe {
         let event_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-        Event::from_raw(event_ptr as _)
+        WindowsEvent::from_raw(event_ptr as _)
     };
 
     unsafe {
@@ -263,7 +263,7 @@ mod tests {
     fn test_msg_window_creation() {
         log::setup_logging("debug", log::LogType::Tests);
 
-        let stop_notify = Event::new();
+        let stop_notify = WindowsEvent::new();
         let msg_window = MsgWindow::new(stop_notify);
         assert!(!msg_window.stop_notify.is_set());
     }
@@ -272,7 +272,7 @@ mod tests {
     fn test_msg_create_invisible_window() {
         log::setup_logging("debug", log::LogType::Tests);
 
-        let hwnd = MsgWindow::create_invisible_window(Event::new());
+        let hwnd = MsgWindow::create_invisible_window(WindowsEvent::new());
         assert!(
             !hwnd.0.is_null(),
             "Invisible window should be created successfully"
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn test_msg_window_proc() {
         log::setup_logging("debug", log::LogType::Tests);
-        let event = Event::new();
+        let event = WindowsEvent::new();
 
         let hwnd = MsgWindow::create_invisible_window(event.clone());
         let msg = WM_CLOSE;
@@ -300,7 +300,7 @@ mod tests {
         log::setup_logging("debug", log::LogType::Tests);
 
         run_with_timeout(Duration::from_secs(4), move || {
-            let hwnd = MsgWindow::create_invisible_window(Event::new());
+            let hwnd = MsgWindow::create_invisible_window(WindowsEvent::new());
             unsafe {
                 PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)).unwrap_or_else(|e| {
                     panic!("Failed to post message: {:?}", e);
@@ -317,7 +317,7 @@ mod tests {
         log::setup_logging("debug", log::LogType::Tests);
 
         run_with_timeout(Duration::from_secs(4), move || {
-            let hwnd = MsgWindow::create_invisible_window(Event::new());
+            let hwnd = MsgWindow::create_invisible_window(WindowsEvent::new());
             unsafe {
                 PostMessageW(Some(hwnd), WM_ENDSESSION, WPARAM(0), LPARAM(0)).unwrap_or_else(|e| {
                     panic!("Failed to post message: {:?}", e);
@@ -334,7 +334,7 @@ mod tests {
         run_with_timeout(Duration::from_secs(5), move || {
             log::setup_logging("debug", log::LogType::Tests);
 
-            let stop_notify = Event::new();
+            let stop_notify = WindowsEvent::new();
             let mut msg_window = MsgWindow::new(stop_notify.clone());
 
             // Start the message window task

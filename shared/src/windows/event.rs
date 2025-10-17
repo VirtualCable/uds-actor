@@ -24,6 +24,8 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+use anyhow::Result;
+
 use crate::windows::safehandle::SafeHandle;
 use std::time::Duration;
 use windows::Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -71,11 +73,9 @@ impl WindowsEvent {
         // Returns a clone of the SafeHandle
         self.handle.clone()
     }
-}
 
-impl crate::sync::traits::EventLike for WindowsEvent {
     /// Blocks until the event is signaled
-    fn wait(&self) {
+    pub fn wait(&self) {
         unsafe {
             let res = WaitForSingleObject(self.handle.get(), INFINITE);
             assert!(res == WAIT_OBJECT_0, "WaitForSingleObject failed");
@@ -84,20 +84,20 @@ impl crate::sync::traits::EventLike for WindowsEvent {
 
     /// Blocks until the event is signaled or the timeout expires
     /// Returns true if the event was signaled, false if the timeout expired
-    fn wait_timeout(&self, timeout: Duration) -> bool {
+    pub fn wait_timeout(&self, timeout: Duration) -> Result<()> {
         unsafe {
             let ms = timeout.as_millis().min(u32::MAX as u128) as u32;
             let res = WaitForSingleObject(self.handle.get(), ms);
             match res {
-                x if x == WAIT_OBJECT_0 => true,
-                x if x == WAIT_TIMEOUT => false,
+                x if x == WAIT_OBJECT_0 => Ok(()),
+                x if x == WAIT_TIMEOUT => Err(anyhow::anyhow!("Wait timeout")),
                 _ => panic!("WaitForSingleObject failed: {res:?}"),
             }
         }
     }
 
     /// Signals the event (wakes up all waiters)
-    fn signal(&self) {
+    pub fn signal(&self) {
         unsafe {
             let ok = SetEvent(self.handle.get()).is_ok();
             debug_assert!(ok, "SetEvent failed");
@@ -105,7 +105,7 @@ impl crate::sync::traits::EventLike for WindowsEvent {
     }
 
     /// Resets the event to non-signaled state (optional)
-    fn reset(&self) {
+    pub fn reset(&self) {
         unsafe {
             let ok = ResetEvent(self.handle.get()).is_ok();
             debug_assert!(ok, "ResetEvent failed");
@@ -113,11 +113,27 @@ impl crate::sync::traits::EventLike for WindowsEvent {
     }
 
     /// If is set to true, the event is in a signaled state
-    fn is_set(&self) -> bool {
+    pub fn is_set(&self) -> bool {
         unsafe {
             let res = WaitForSingleObject(self.handle.get(), 0);
             res == WAIT_OBJECT_0
         }
+    }
+
+    pub async fn wait_async(&self)
+    {
+        let ev = self.clone();
+        tokio::task::spawn_blocking(move || ev.wait())
+            .await
+            .expect("Join error in wait_async()");
+    }
+
+    pub async fn wait_timeout_async(&self, timeout: Duration) -> Result<()>
+    {
+        let ev = self.clone();
+        tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
+            .await
+            .expect("Join error in wait_timeout_async()")
     }
 }
 
@@ -130,7 +146,6 @@ impl Default for WindowsEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::traits::EventLike;
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -204,13 +219,13 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Should return false and wait for less than 100ms
-        assert!(!result);
+        assert!(result.is_err(), "Expected timeout error");
         assert!(elapsed < Duration::from_millis(200));
 
         // Now signal the event and check that it returns true
         event.signal();
         let result = event.wait_timeout(Duration::from_millis(100));
-        assert!(result);
+        assert!(result.is_ok());
     }
 
     #[test]

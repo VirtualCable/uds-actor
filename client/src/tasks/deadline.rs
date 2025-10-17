@@ -47,7 +47,7 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 
     // Deadline timer, simply wait until deadline is reached inside the session_manager
     // But leave a 5 mins to notify before deadline
-    if !platform.session_manager().wait_timeout(deadline).await {
+    if platform.session_manager().wait_timeout(deadline).await.is_ok() {
         log::info!("Deadline notification reached, notifying user");
 
         platform
