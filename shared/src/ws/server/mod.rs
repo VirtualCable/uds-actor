@@ -325,10 +325,12 @@ pub async fn start_server(
         secret,
     };
 
-    // Lanzar el servidor en background
+    // Launch the server task
     let handle = tokio::spawn(async move {
         if let Err(e) = server(&info).await {
             log::error!("Server failed: {e}");
+            // Signal stop to main task, because we cannot continue without the server
+            stop.set();
         }
     });
 

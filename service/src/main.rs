@@ -19,8 +19,7 @@ mod common;
 mod platform;
 mod actions;
 
-mod managed;
-mod unamanaged;
+mod actors;
 
 mod workers;
 
@@ -76,10 +75,10 @@ async fn async_main(platform: platform::Platform) -> Result<()> {
 
     if cfg.actor_type == ActorType::Unmanaged {
         log::info!("Starting in Unmanaged mode");
-        unamanaged::run(platform.clone()).await?;
+        actors::unmanaged::run(platform.clone()).await?;
     } else {
         log::info!("Starting in Managed mode");
-        managed::run(platform.clone()).await?;
+        actors::managed::run(platform.clone()).await?;
     }
     log::info!("Service main async logic exiting");
     Ok(())

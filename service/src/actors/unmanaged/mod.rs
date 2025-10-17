@@ -6,9 +6,7 @@ use crate::{platform, workers, common};
 
 pub async fn run(platform: platform::Platform) -> Result<()> {
     log::info!("Unmanaged service starting");
-    // Unmanaged actor does not need to wait for installations to complete
-    // as it should not be doing installations at all
-
+    
     // Ensure we have all requisites to start
     common::wait_for_readyness(&platform).await?;
 
@@ -65,3 +63,6 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     log::info!("Unmanaged service stopping");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
