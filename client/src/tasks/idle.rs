@@ -45,7 +45,7 @@ pub async fn task(
 
     let mut notified = false;
 
-    while session_manager.is_running().await {
+    while session_manager.wait_timeout(std::time::Duration::from_secs(1)).await.is_err() {
         // Get current idle time
         let idle = match operations.get_idle_duration() {
             Ok(idle) => idle,
@@ -97,10 +97,6 @@ pub async fn task(
 
             return Ok(Some(message)); // Message to include on logout reason
         }
-        // Wait inside the session_manager for a while (1 second or until signaled)
-        session_manager
-            .wait_timeout(std::time::Duration::from_secs(1))
-            .await.ok();
     }
 
     Ok(None)
@@ -128,8 +124,8 @@ mod tests {
         session_manager.stop().await; // Ensure session is stopped in any case
 
         assert!(res.is_ok(), "Idle task timed out: {:?}", res);
-        calls.assert_called("operations::init_idle_timer()");
-        calls.assert_called("operations::get_idle_duration()");
+        calls.assert_called("operations::init_idle_timer(");
+        calls.assert_called("operations::get_idle_duration(");
         calls.assert_called("actions::notify_user(\"");
     }
 
@@ -151,8 +147,8 @@ mod tests {
         assert!(res.is_err(), "Idle task should have timed out: {:?}", res);
         assert!(session_manager.is_running().await);
         calls.assert_not_called("session::stop()");
-        calls.assert_called("operations::init_idle_timer()");
-        calls.assert_called("operations::get_idle_duration()");
+        calls.assert_called("operations::init_idle_timer(");
+        calls.assert_called("operations::get_idle_duration(");
         calls.assert_not_called("actions::notify_user(\"");
     }
 

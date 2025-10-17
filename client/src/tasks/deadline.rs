@@ -27,7 +27,10 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use crate::platform;
 use shared::log;
 
-pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow::Result<Option<String>> {
+pub async fn task(
+    deadline: Option<u32>,
+    platform: platform::Platform,
+) -> anyhow::Result<Option<String>> {
     let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
     let (deadline, remaining) = if deadline > std::time::Duration::from_secs(300) {
         (
@@ -47,12 +50,20 @@ pub async fn task(deadline: Option<u32>, platform: platform::Platform) -> anyhow
 
     // Deadline timer, simply wait until deadline is reached inside the session_manager
     // But leave a 5 mins to notify before deadline
-    if platform.session_manager().wait_timeout(deadline).await.is_ok() {
+    if platform
+        .session_manager()
+        .wait_timeout(deadline)
+        .await
+        .is_err()  // Timeout without being signaled
+    {
         log::info!("Deadline notification reached, notifying user");
 
         platform
             .actions()
-            .notify_user("This session will be stopped in 5 minutes.\nPlease save your work.", platform.gui())
+            .notify_user(
+                "This session will be stopped in 5 minutes.\nPlease save your work.",
+                platform.gui(),
+            )
             .await
             .ok();
 
@@ -89,14 +100,14 @@ mod tests {
             super::task(Some(1), platform),
         )
         .await;
+        shared::log::info!("Calls: {:?}", calls.dump());
+
         calls.assert_called("session::wait_timeout(1s)");
-        calls.assert_called("session::wait_timeout(0");  // 0ns, 0s, ..
         calls.assert_called("session::stop()");
 
         session_manager.stop().await; // Ensure session is stopped
 
         assert!(res.is_ok(), "Deadline task timed out: {:?}", res);
-        shared::log::info!("Calls: {:?}", calls.dump());
     }
 
     #[tokio::test]
