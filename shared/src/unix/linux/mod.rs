@@ -38,6 +38,7 @@ mod idle;
 mod network;
 mod renamer;
 mod session;
+mod watcher;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(LinuxOperations::new())
@@ -61,7 +62,6 @@ impl LinuxOperations {
         None
     }
 }
-
 
 impl crate::operations::Operations for LinuxOperations {
     fn check_permissions(&self) -> Result<()> {
@@ -130,7 +130,7 @@ impl crate::operations::Operations for LinuxOperations {
             .unwrap_or("generic-linux".to_string()))
     }
 
-    fn reboot(&self, flags: Option<u32>) -> Result<()> {
+    fn reboot(&self, _flags: Option<u32>) -> Result<()> {
         Command::new("systemctl").arg("reboot").status()?;
         Ok(())
     }
@@ -166,15 +166,28 @@ impl crate::operations::Operations for LinuxOperations {
         computer::refresh_system_time()
     }
 
-    fn protect_file_for_owner_only(&self, path: &str) -> Result<()> {
-        Ok(())
+    fn protect_file_for_owner_only(&self, _path: &str) -> Result<()> {
+        unsafe {
+            let res = if libc::chmod(
+                std::ffi::CString::new(_path)?.as_ptr(),
+                0o600, // Owner read/write only
+            ) == 0
+            {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("chmod failed"))
+            };
+            res
+        }
     }
 
-    fn ensure_user_can_rdp(&self, user: &str) -> Result<()> {
+    fn ensure_user_can_rdp(&self, _user: &str) -> Result<()> {
+        // On linux, all users can RDP by default
         Ok(())
     }
 
     fn is_some_installation_in_progress(&self) -> Result<bool> {
+        // On linux, we don't need to check for installation in progress
         Ok(false)
     }
 }

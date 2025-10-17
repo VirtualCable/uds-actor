@@ -24,7 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{env, io, process::Command};
+use std::{env, process::Command};
 
 use anyhow::Result;
 use zbus::blocking::{Connection, Proxy};
@@ -74,8 +74,16 @@ pub(super) fn logout() -> Result<()> {
     }
 }
 
+// Note that we will have only one cached session id, as this is per-process
+static CACHED_SESSION_ID: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| _current_session_id().unwrap_or_default());
+
+pub fn current_session_id() -> Result<String> {
+    Ok((&*CACHED_SESSION_ID).clone())
+}
+
 /// Intenta obtener el session id actual de varias formas (sync)
-pub fn current_session_id() -> io::Result<String> {
+fn _current_session_id() -> Result<String> {
     if let Ok(id) = env::var("XDG_SESSION_ID") {
         if !id.is_empty() {
             return Ok(id);
@@ -102,10 +110,7 @@ pub fn current_session_id() -> io::Result<String> {
         }
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        "No session id found",
-    ))
+    anyhow::bail!("Could not determine current session ID");
 }
 
 #[cfg(test)]

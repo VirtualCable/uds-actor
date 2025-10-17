@@ -67,16 +67,6 @@ impl Calls {
     }
 }
 
-pub struct ActionsMock {
-    calls: Calls,
-}
-
-impl ActionsMock {
-    pub fn new(calls: Calls) -> Self {
-        Self { calls }
-    }
-}
-
 pub struct OperationsMock {
     pub calls: Calls,
 }

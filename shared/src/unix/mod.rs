@@ -28,9 +28,9 @@ pub mod config;
 
 // If linux, include operations
 #[cfg(target_os = "linux")]
-pub mod operations_linux;
+pub mod linux;
 #[cfg(target_os = "linux")]
-pub use operations_linux as operations;
+pub use linux as operations;
 
 // TODO: macos implementation
 // #[cfg(target_os = "macos")]

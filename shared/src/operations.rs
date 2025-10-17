@@ -196,7 +196,7 @@ pub trait Operations: Send + Sync {
 pub use crate::windows::operations::new_operations;
 
 #[cfg(target_family = "unix")]
-pub use crate::unix::operations_linux::new_operations;
+pub use crate::unix::linux::new_operations;
 
 #[cfg(test)]
 mod tests {
