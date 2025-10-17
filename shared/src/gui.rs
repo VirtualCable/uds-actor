@@ -39,8 +39,10 @@ pub enum MessageBoxResult {
 enum GuiCommand {
     Show { title: String, message: String },
     CloseAll,
-    Quit,
 }
+
+// Global stop atomic for gui thread
+static STOP_GUI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone)]
 pub struct GuiHandle {
@@ -56,7 +58,7 @@ impl GuiHandle {
             let app = app::App::default();
 
             // Explicit main loop
-            loop {
+            while !STOP_GUI.load(std::sync::atomic::Ordering::Relaxed) {
                 // If no events, wait a bit
                 if !app.wait() {
                     std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
@@ -81,14 +83,11 @@ impl GuiHandle {
                                 }
                             }
                         }
-                        GuiCommand::Quit => {
-                            log::debug!("GUI: Quitting");
-                            return; // exit the GUI thread
-                        }
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
             }
+            log::debug!("GUI: Exiting GUI thread");
         });
 
         GuiHandle { sender: tx }
@@ -104,7 +103,13 @@ impl GuiHandle {
 
     pub fn shutdown(&self) {
         log::debug!("GUI: Shutting down");
-        self.sender.send(GuiCommand::Quit);
+        STOP_GUI.store(true, std::sync::atomic::Ordering::Relaxed);
+        // Give some time to the GUI thread to exit
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        // Wake up the app to process the quit command
+        // The only awake needed is for shutdown, to ensure it exits
+        app::awake(); 
+        log::debug!("GUI: Shutdown complete");
     }
 
     pub fn close_all_windows(&self) {
