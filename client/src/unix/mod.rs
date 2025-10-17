@@ -13,6 +13,7 @@ pub struct UnixSessionManager {
 
 impl UnixSessionManager {
     pub fn new() -> Self {
+        log::debug!("************* Creating UnixSessionManager ***********");
         Self {
             stop_event: Event::new(),
         }
@@ -29,9 +30,11 @@ impl SessionManagement for UnixSessionManager {
         tokio::select! {
             _ = sigterm.recv() => {
                 log::debug!("Received SIGTERM");
+                self.stop_event.signal();
             },
             _ = sigint.recv() => {
                 log::debug!("Received SIGINT");
+                self.stop_event.signal();
             },
             _ = self.stop_event.wait_async() => {
                 log::debug!("Unix session close event received");
