@@ -70,7 +70,7 @@ async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 
     shared::log::info!("Starting uds-actor client...");
-    let platform = platform::Platform::new();
+    let platform = platform::Platform::new().await;
 
     run(platform.clone()).await; // Run main loop
     shared::log::info!("uds-actor client stopped.");

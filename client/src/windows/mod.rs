@@ -44,7 +44,7 @@ impl SessionManagement for WindowsSessionManager {
     }
 }
 
-pub fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+pub async fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
     std::sync::Arc::new(WindowsSessionManager::new())
 }
 

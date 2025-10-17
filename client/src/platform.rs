@@ -1,9 +1,12 @@
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
 
 use shared::log;
 
-use crate::{rest::api::{ClientRest, new_client_rest_api}, session::SessionManagement};
+use crate::{
+    rest::api::{ClientRest, new_client_rest_api},
+    session::SessionManagement,
+};
 
 #[derive(Clone)]
 pub struct Platform {
@@ -14,8 +17,8 @@ pub struct Platform {
 }
 
 impl Platform {
-    pub fn new() -> Self {
-        let session_manager = crate::session::new_session_manager();
+    pub async fn new() -> Self {
+        let session_manager = crate::session::new_session_manager().await;
         let api = new_client_rest_api();
         let operations = shared::operations::new_operations();
 
@@ -39,32 +42,30 @@ impl Platform {
         self.operations.clone()
     }
 
-    pub async fn notify_user(
-        &self,
-        message: &str,
-    ) -> Result<()> {
+    pub async fn notify_user(&self, message: &str) -> Result<()> {
         let message = message.to_string();
         log::info!("Notifying user: {}", message);
         // self.gui.message_dialog("Notification", &message).await;
         Ok(())
     }
 
-    pub async fn dismiss_user_notifications(
-        &self,
-    ) -> Result<()> {
+    pub async fn dismiss_user_notifications(&self) -> Result<()> {
         self.gui.close_all_windows();
         Ok(())
     }
 
     // Only for tests
     #[cfg(test)]
-    pub fn new_with_params(
+    pub async fn new_with_params(
         session_manager: Option<Arc<dyn SessionManagement>>,
         api: Option<Arc<tokio::sync::RwLock<dyn ClientRest>>>,
         operations: Option<Arc<dyn shared::operations::Operations>>,
     ) -> Self {
-        let session_manager =
-            session_manager.unwrap_or_else(|| crate::session::new_session_manager());
+        let session_manager = if let Some(sm) = session_manager {
+            sm
+        } else {
+            crate::session::new_session_manager().await
+        };
         let api = api.unwrap_or_else(|| new_client_rest_api());
         let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
 
@@ -78,11 +79,5 @@ impl Platform {
 
     pub fn shutdown(&self) {
         self.gui.shutdown();
-    }
-}
-
-impl Default for Platform {
-    fn default() -> Self {
-        Self::new()
     }
 }

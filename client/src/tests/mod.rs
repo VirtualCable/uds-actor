@@ -3,7 +3,7 @@ use crate::testing::mock::mock_platform;
 #[tokio::test]
 async fn test_run_no_server() {
     // Execute run function. As long as there is no server running on localhost, it will fail to login (Before registering)
-    let platform = crate::platform::Platform::new(); // Default platform, no fake api
+    let platform = crate::platform::Platform::new().await; // Default platform, no fake api
     let session_manager = platform.session_manager();
 
     let res = tokio::time::timeout(std::time::Duration::from_secs(4), super::run(platform)).await;

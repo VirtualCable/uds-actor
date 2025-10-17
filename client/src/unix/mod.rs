@@ -7,16 +7,19 @@ use shared::{
 };
 
 use crate::session::SessionManagement;
+use shared::unix::linux::watcher::start_session_watch_task;
 
 pub struct UnixSessionManager {
     stop_event: OnceSignal,
 }
 
 impl UnixSessionManager {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
+        let stop_event = OnceSignal::new();
+        start_session_watch_task(stop_event.clone()).await.ok();
         Self {
-            stop_event: OnceSignal::new(),
+            stop_event,
         }
     }
 }
@@ -57,8 +60,8 @@ impl SessionManagement for UnixSessionManager {
     }
 }
 
-pub fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
-    std::sync::Arc::new(UnixSessionManager::new())
+pub async fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+    std::sync::Arc::new(UnixSessionManager::new().await)
 }
 
 #[cfg(test)]
@@ -67,7 +70,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unix_session_close() {
-        let session_close = UnixSessionManager::new();
+        let session_close = UnixSessionManager::new().await;
         let event = session_close.stop_event.clone();
         let _fake_closer = tokio::spawn(async move {
             session_close.wait().await;

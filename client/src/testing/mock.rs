@@ -106,7 +106,7 @@ pub async fn mock_platform(
             Some(manager),
             Some(api),
             Some(operations),
-        ),
+        ).await,
         calls,
     )
 }
