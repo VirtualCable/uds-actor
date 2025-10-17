@@ -24,9 +24,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+#[cfg(windows)]
 use std::thread;
+#[cfg(windows)]
 use std::time::Duration;
 
+#[cfg(windows)]
 use shared::windows::WindowsEvent;
 
 #[cfg(windows)]

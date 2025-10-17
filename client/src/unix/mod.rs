@@ -1,21 +1,22 @@
+use anyhow::Result;
 use tokio::signal::unix::{SignalKind, signal};
 
 use shared::{
     log,
-    sync::event::{Event, EventLike},
+    sync::OnceSignal,
 };
 
 use crate::session::SessionManagement;
 
 pub struct UnixSessionManager {
-    stop_event: Event,
+    stop_event: OnceSignal,
 }
 
 impl UnixSessionManager {
     pub fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
         Self {
-            stop_event: Event::new(),
+            stop_event: OnceSignal::new(),
         }
     }
 }
@@ -30,13 +31,13 @@ impl SessionManagement for UnixSessionManager {
         tokio::select! {
             _ = sigterm.recv() => {
                 log::debug!("Received SIGTERM");
-                self.stop_event.signal();
+                self.stop_event.set();
             },
             _ = sigint.recv() => {
                 log::debug!("Received SIGINT");
-                self.stop_event.signal();
+                self.stop_event.set();
             },
-            _ = self.stop_event.wait_async() => {
+            _ = self.stop_event.wait() => {
                 log::debug!("Unix session close event received");
             }
         }
@@ -47,12 +48,12 @@ impl SessionManagement for UnixSessionManager {
     }
 
     async fn stop(&self) {
-        self.stop_event.signal();
+        self.stop_event.set();
         log::debug!("Unix session close event signaled");
     }
 
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
-        self.stop_event.wait_timeout(timeout)
+    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
+        self.stop_event.wait_timeout(timeout).await
     }
 }
 
@@ -73,7 +74,7 @@ mod tests {
         });
         // Wait a bit to simulate waiting
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        event.signal();
+        event.set();
         // Wait a bit to ensure the event is handled
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
