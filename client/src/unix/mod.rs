@@ -7,7 +7,6 @@ use shared::{
 };
 
 use crate::session::SessionManagement;
-use shared::unix::linux::watcher::start_session_watch_task;
 
 pub struct UnixSessionManager {
     stop_event: OnceSignal,
@@ -17,7 +16,6 @@ impl UnixSessionManager {
     pub async fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
         let stop_event = OnceSignal::new();
-        start_session_watch_task(stop_event.clone()).await.ok();
         Self {
             stop_event,
         }
@@ -30,6 +28,7 @@ impl SessionManagement for UnixSessionManager {
         // Listen for SIGTERM or SIGINT
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
         let mut sigint = signal(SignalKind::interrupt()).unwrap();
+        let mut sighup = signal(SignalKind::hangup()).unwrap();
 
         tokio::select! {
             _ = sigterm.recv() => {
@@ -38,6 +37,10 @@ impl SessionManagement for UnixSessionManager {
             },
             _ = sigint.recv() => {
                 log::debug!("Received SIGINT");
+                self.stop_event.set();
+            },
+            _ = sighup.recv() => {
+                log::debug!("Received SIGHUP");
                 self.stop_event.set();
             },
             _ = self.stop_event.wait() => {

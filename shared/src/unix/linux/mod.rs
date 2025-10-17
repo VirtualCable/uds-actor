@@ -38,7 +38,9 @@ mod idle;
 mod network;
 mod renamer;
 mod session;
-pub mod watcher;
+
+// pub mod watcher;
+// pub mod loginctrl;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(LinuxOperations::new())
