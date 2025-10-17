@@ -66,10 +66,7 @@ pub async fn task(platform: platform::Platform) -> anyhow::Result<Option<String>
 
 #[cfg(test)]
 mod tests {
-
-    use shared::log;
-
-    // Test on unix that works the signal handler
+   // Test on unix that works the signal handler
     #[cfg(unix)]
     #[tokio::test]
     async fn test_signal_handler() {

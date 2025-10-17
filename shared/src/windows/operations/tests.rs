@@ -57,7 +57,7 @@ fn test_get_os_version() {
 fn test_idle_timer() {
     setup_logging("debug", LogType::Tests);
     let ops = new_operations();
-    let result = ops.init_idle_timer();
+    let result = ops.init_idle_timer(32);
     assert!(result.is_ok());
     // Wait a bit
     std::thread::sleep(std::time::Duration::from_millis(100));
