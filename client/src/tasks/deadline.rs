@@ -54,16 +54,13 @@ pub async fn task(
         .session_manager()
         .wait_timeout(deadline)
         .await
-        .is_err()  // Timeout without being signaled
+        .is_err()
+    // Timeout without being signaled
     {
         log::info!("Deadline notification reached, notifying user");
 
         platform
-            .actions()
-            .notify_user(
-                "This session will be stopped in 5 minutes.\nPlease save your work.",
-                platform.gui(),
-            )
+            .notify_user("This session will be stopped in 5 minutes.\nPlease save your work.")
             .await
             .ok();
 
@@ -91,7 +88,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -113,7 +110,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {

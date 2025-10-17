@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use anyhow::Result;
+
+use shared::log;
 
 use crate::{rest::api::{ClientRest, new_client_rest_api}, session::SessionManagement};
 
@@ -7,7 +10,6 @@ pub struct Platform {
     session_manager: Arc<dyn SessionManagement>,
     api: Arc<tokio::sync::RwLock<dyn ClientRest>>,
     operations: Arc<dyn shared::operations::Operations>,
-    actions: Arc<dyn shared::actions::Actions>,
     gui: shared::gui::GuiHandle,
 }
 
@@ -16,13 +18,11 @@ impl Platform {
         let session_manager = crate::session::new_session_manager();
         let api = new_client_rest_api();
         let operations = shared::operations::new_operations();
-        let actions = shared::actions::new_actions();
 
         Self {
             session_manager,
             api,
             operations,
-            actions,
             gui: shared::gui::GuiHandle::new(),
         }
     }
@@ -39,12 +39,21 @@ impl Platform {
         self.operations.clone()
     }
 
-    pub fn actions(&self) -> Arc<dyn shared::actions::Actions> {
-        self.actions.clone()
+    pub async fn notify_user(
+        &self,
+        message: &str,
+    ) -> Result<()> {
+        let message = message.to_string();
+        log::info!("Notifying user: {}", message);
+        // self.gui.message_dialog("Notification", &message).await;
+        Ok(())
     }
 
-    pub fn gui(&self) -> shared::gui::GuiHandle {
-        self.gui.clone()
+    pub async fn dismiss_user_notifications(
+        &self,
+    ) -> Result<()> {
+        self.gui.close_all_windows();
+        Ok(())
     }
 
     // Only for tests
@@ -53,19 +62,16 @@ impl Platform {
         session_manager: Option<Arc<dyn SessionManagement>>,
         api: Option<Arc<tokio::sync::RwLock<dyn ClientRest>>>,
         operations: Option<Arc<dyn shared::operations::Operations>>,
-        actions: Option<Arc<dyn shared::actions::Actions>>,
     ) -> Self {
         let session_manager =
             session_manager.unwrap_or_else(|| crate::session::new_session_manager());
         let api = api.unwrap_or_else(|| new_client_rest_api());
         let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
-        let actions = actions.unwrap_or_else(|| shared::actions::new_actions());
 
         Self {
             session_manager,
             api,
             operations,
-            actions,
             gui: shared::gui::GuiHandle::new(),
         }
     }

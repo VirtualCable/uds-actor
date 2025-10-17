@@ -31,7 +31,6 @@ pub mod tls;
 pub mod ws;
 pub mod broker;
 pub mod config;
-pub mod actions;
 pub mod service;
 pub mod operations;
 pub mod consts;

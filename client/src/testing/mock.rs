@@ -2,11 +2,10 @@ use anyhow::Result;
 
 use crate::rest::{api::ClientRest, types::LoginResponse};
 use shared::{
-    actions::Actions,
     sync::OnceSignal,
 };
 
-use shared::testing::mock::{Calls, ActionsMock, OperationsMock};
+use shared::testing::mock::{Calls, OperationsMock};
 
 #[derive(Clone)]
 struct SessionManagerMock {
@@ -93,7 +92,6 @@ pub async fn mock_platform(
     manager: Option<std::sync::Arc<dyn crate::session::SessionManagement>>,
     operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
     api: Option<std::sync::Arc<tokio::sync::RwLock<dyn ClientRest>>>,
-    actions: Option<std::sync::Arc<dyn Actions>>,
 ) -> (crate::platform::Platform, Calls) {
     let calls: Calls = Calls::new();
     let manager =
@@ -103,13 +101,11 @@ pub async fn mock_platform(
     let api = api.unwrap_or_else(|| {
         std::sync::Arc::new(tokio::sync::RwLock::new(ApiMock::new(calls.clone())))
     });
-    let actions = actions.unwrap_or_else(|| std::sync::Arc::new(ActionsMock::new(calls.clone())));
     (
         crate::platform::Platform::new_with_params(
             Some(manager),
             Some(api),
             Some(operations),
-            Some(actions),
         ),
         calls,
     )

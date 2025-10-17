@@ -1,6 +1,5 @@
 // Fake api to test run function
 use crate::{
-    actions::Actions,
     broker::api,
     log,
     operations::{NetworkInterface, Operations},
@@ -75,30 +74,6 @@ pub struct ActionsMock {
 impl ActionsMock {
     pub fn new(calls: Calls) -> Self {
         Self { calls }
-    }
-}
-
-#[async_trait::async_trait]
-impl Actions for ActionsMock {
-    async fn screenshot(&self) -> anyhow::Result<Vec<u8>> {
-        self.calls.push("actions::screenshot()");
-        const PNG_1X1_TRANSPARENT: &[u8] = &[
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
-            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
-            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-        ];
-        Ok(PNG_1X1_TRANSPARENT.to_vec())
-    }
-    async fn run_script(&self, script: &str) -> anyhow::Result<String> {
-        self.calls.push(format!("actions::run_script({})", script));
-        Ok(format!("Executed: {}", script))
-    }
-    async fn notify_user(&self, message: &str, _gui: crate::gui::GuiHandle) -> anyhow::Result<()> {
-        self.calls
-            .push(format!("actions::notify_user({:?})", message));
-        Ok(())
     }
 }
 
@@ -189,7 +164,8 @@ impl Operations for OperationsMock {
     }
 
     fn init_idle_timer(&self, min_required: u64) -> anyhow::Result<()> {
-        self.calls.push(format!("operations::init_idle_timer({})", min_required));
+        self.calls
+            .push(format!("operations::init_idle_timer({})", min_required));
         Ok(())
     }
 

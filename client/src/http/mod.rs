@@ -39,23 +39,26 @@ async fn screenshot(
     Extension(state): Extension<types::AppState>,
 ) -> Json<types::ScreenshotResponse> {
     log::info!("Screenshot requested via HTTP API");
-    let data = state
-        .platform
-        .actions()
-        .screenshot()
-        .await
-        .unwrap_or_default();
+
+    let data = tokio::task::spawn_blocking({
+        let platform = state.platform;
+        move || platform.operations().get_screenshot().unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
+
     // Encode to base64 using the standard engine
     let encoded = STANDARD.encode(&data);
     Json(types::ScreenshotResponse { result: encoded })
 }
 
 async fn script(
-    Extension(state): Extension<types::AppState>,
-    Json(req): Json<types::ScriptRequest>,
+    Extension(_state): Extension<types::AppState>,
+    Json(_req): Json<types::ScriptRequest>,
 ) -> &'static str {
     log::info!("Script execution requested via HTTP API");
-    _ = state.platform.actions().run_script(&req.script).await;
+    let _script = _req.script;
+    // TODO: Implement script execution
     "ok"
 }
 
@@ -64,11 +67,7 @@ async fn message(
     Json(req): Json<types::MessageRequest>,
 ) -> &'static str {
     log::info!("Message display requested via HTTP API");
-    let _ = state
-        .platform
-        .actions()
-        .notify_user(&req.message, state.platform.gui())
-        .await;
+    let _ = state.platform.notify_user(&req.message).await;
     "ok"
 }
 

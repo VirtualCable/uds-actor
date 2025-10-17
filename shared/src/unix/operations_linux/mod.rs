@@ -62,7 +62,7 @@ impl LinuxOperations {
     }
 }
 
-// TODO: Implement remaining methods
+
 impl crate::operations::Operations for LinuxOperations {
     fn check_permissions(&self) -> Result<()> {
         if unsafe { libc::geteuid() != 0 } {

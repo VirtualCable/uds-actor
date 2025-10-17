@@ -35,6 +35,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 // Windows-specific types.
 use anyhow::Result;
 
+use crate::log;
+
 // Struct for a network interface information
 #[derive(Debug, Clone)]
 pub struct NetworkInterface {
@@ -135,9 +137,10 @@ pub trait Operations: Send + Sync {
     // Implicitly, get first interface (if any)
     fn get_first_network_interface(&self) -> Result<NetworkInterface> {
         let ifaces = self.get_network_info()?;
-        ifaces.into_iter().next().ok_or_else(|| {
-            anyhow::anyhow!("No network interfaces found on this machine")
-        })
+        ifaces
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No network interfaces found on this machine"))
     }
 
     /// Get the duration the system has been idle (no user input) as a `Duration`.
@@ -167,6 +170,20 @@ pub trait Operations: Send + Sync {
     // This specifically checks if there is any installation in progress (like Windows Update)
     // On unix, this will always return false
     fn is_some_installation_in_progress(&self) -> Result<bool>;
+
+    // Get an screenshot of the current desktop
+    fn get_screenshot(&self) -> Result<Vec<u8>> {
+        log::info!("Screenshot requested (stub)");
+        // TODO: Implement screenshot on Unix. Return 1x1 transparent PNG for now.
+        const PNG_1X1_TRANSPARENT: &[u8] = &[
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        Ok(PNG_1X1_TRANSPARENT.to_vec())
+    }
 }
 
 // Re-export the Windows concrete implementation when building for Windows.

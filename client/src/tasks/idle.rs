@@ -61,13 +61,12 @@ pub async fn task(
             notified = false;
             log::debug!("User is active again, resetting notified flag");
             // Also, if any dialogs are open, close them
-            platform.gui().close_all_windows();
+            platform.dismiss_user_notifications().await.ok();
         }
 
         // Notify user:
         if !notified && remaining.as_secs() <= 120 {
-            platform.actions()
-                .notify_user("You have been idle for a while. If no action is taken, the session will be stopped.", platform.gui())
+            platform.notify_user("You have been idle for a while. If no action is taken, the session will be stopped.")
                 .await
                 .ok();
             log::info!("User idle for {:?} seconds", idle.as_secs());
@@ -88,7 +87,7 @@ pub async fn task(
             let message = format!("idle of {}s reached", max_idle.as_secs());
             shared::log::info!("{}", message);
             // Ensure all windows are closed
-            platform.gui().close_all_windows();
+            platform.dismiss_user_notifications().await.ok();
             // Use logoff in case of idle, should fire stop process
             operations.logoff().ok();
             // Just in case, ensure session manager is notified to stop
@@ -111,7 +110,7 @@ mod tests {
     async fn test_idle_task_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -134,7 +133,7 @@ mod tests {
     async fn test_idle_task_no_idle_exceeded() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (5 seconds)
@@ -156,7 +155,7 @@ mod tests {
     async fn test_idle_task_no_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, None).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle
