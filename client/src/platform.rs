@@ -1,11 +1,10 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use shared::log;
-
 use crate::{
     rest::api::{ClientRest, new_client_rest_api},
     session::SessionManagement,
+    gui,
 };
 
 #[derive(Clone)]
@@ -13,7 +12,6 @@ pub struct Platform {
     session_manager: Arc<dyn SessionManagement>,
     api: Arc<tokio::sync::RwLock<dyn ClientRest>>,
     operations: Arc<dyn shared::operations::Operations>,
-    gui: shared::gui::GuiHandle,
 }
 
 impl Platform {
@@ -26,7 +24,6 @@ impl Platform {
             session_manager,
             api,
             operations,
-            gui: shared::gui::GuiHandle::new(),
         }
     }
 
@@ -44,12 +41,11 @@ impl Platform {
 
     pub async fn notify_user(&self, message: &str) -> Result<()> {
         let message = message.to_string();
-        log::info!("Notifying user: {}", message);
-        self.gui.message_dialog("Notification", &message).await
+        gui::message_dialog("uds-actor Notification", &message).await
     }
 
     pub async fn dismiss_user_notifications(&self) -> Result<()> {
-        self.gui.close_all_windows().await
+        gui::close_all_windows().await
     }
 
     // Only for tests
@@ -71,7 +67,6 @@ impl Platform {
             session_manager,
             api,
             operations,
-            gui: shared::gui::GuiHandle::new(),
         }
     }
 

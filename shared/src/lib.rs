@@ -24,7 +24,6 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub mod gui;
 pub mod log;
 pub mod sync;
 pub mod tls;

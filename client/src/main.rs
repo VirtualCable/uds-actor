@@ -32,6 +32,7 @@ mod rest;
 mod session;
 
 mod platform;
+mod gui;
 
 #[cfg(unix)]
 mod unix;
