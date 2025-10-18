@@ -24,6 +24,8 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+#![cfg_attr(not(test), windows_subsystem = "windows")]
+
 use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, window::Window};
 
 const SIGNAL_FILE: &str = "uds-actor-gui-close-all";
@@ -58,7 +60,7 @@ fn show_messagebox(title: &str, message: &str) {
     let app = app::App::default();
 
     // Split message
-    let lines = split_message(&message, 64);
+    let lines = split_message(message, 64);
 
     // Fixe font and size
     let font = Font::Helvetica;

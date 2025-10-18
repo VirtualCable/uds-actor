@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 use fltk::prelude::*;
 
 use crate::config_unmanaged_fltk::ConfigGui;

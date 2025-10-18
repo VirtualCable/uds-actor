@@ -174,7 +174,7 @@ pub trait Operations: Send + Sync {
     // Get an screenshot of the current desktop
     fn get_screenshot(&self) -> Result<Vec<u8>> {
         log::info!("Screenshot requested (stub)");
-        // TODO: Implement screenshot on Unix. Return 1x1 transparent PNG for now.
+        // TODO: Implement screenshot functionality for each platform
         const PNG_1X1_TRANSPARENT: &[u8] = &[
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
             0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,

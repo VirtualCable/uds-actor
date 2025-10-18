@@ -7,3 +7,6 @@ edition = "2024"
 # Gui
 fltk = { version = "1.5.19", features = ["fltk-bundled"] }
 
+
+[build-dependencies]
+builder = { path = "../builder" }

@@ -21,10 +21,11 @@ impl Platform {
         // If no config, panic, we need config
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
 
-        // TODO: Restore real operations after development. To avoid platform-specific code for now, :)
-        // let operations = shared::operations::new_operations();
+        #[cfg(not(debug_assertions))]
+        let operations = shared::operations::new_operations();
         // Release compilation will fail, because testing is not allowed in release builds, so if we forget this
         // it will be caught.
+        #[cfg(debug_assertions)]
         let operations = Arc::new(shared::testing::mock::OperationsMock::default());
 
         let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
