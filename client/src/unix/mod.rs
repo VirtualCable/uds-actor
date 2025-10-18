@@ -16,7 +16,6 @@ impl UnixSessionManager {
     pub async fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
         let stop_event = OnceSignal::new();
-        shared::unix::linux::gtk::start_gtk_thread(stop_event.clone());
         Self {
             stop_event,
         }
