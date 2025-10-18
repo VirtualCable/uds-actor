@@ -40,12 +40,25 @@ pub async fn task(
 
     let operations = platform.operations();
     let session_manager = platform.session_manager();
+
     // Initialize idle timer if platform supports it
-    operations.init_idle_timer(max_idle.as_secs() + 1)?;
+    if let Err(e) = operations.init_idle_timer(max_idle.as_secs() + 1) {
+        // Simply wait for session end if idle timer cannot be initialized
+        log::warn!(
+            "Idle timer cannot be initialized: {}. Disabling idle task.",
+            e
+        );
+        session_manager.wait().await;
+        return Ok(None);
+    }
 
     let mut notified = false;
 
-    while session_manager.wait_timeout(std::time::Duration::from_secs(1)).await.is_err() {
+    while session_manager
+        .wait_timeout(std::time::Duration::from_secs(1))
+        .await
+        .is_err()
+    {
         // Get current idle time
         let idle = match operations.get_idle_duration() {
             Ok(idle) => idle,
@@ -95,7 +108,7 @@ pub async fn task(
             // Just in case, ensure session manager is notified to stop
             // On RDP session, we may be disconnected and no message is received
             session_manager.stop().await;
-            
+
             // Use logoff in case of idle, should fire stop process
             operations.logoff().ok();
 
@@ -121,12 +134,9 @@ mod tests {
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
-        let res = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            task(Some(1), platform),
-        )
-        .await;
-        
+        let res =
+            tokio::time::timeout(std::time::Duration::from_secs(5), task(Some(1), platform)).await;
+
         log::info!("Calls: {:?}", calls.dump());
 
         calls.assert_called("operations::logoff()");

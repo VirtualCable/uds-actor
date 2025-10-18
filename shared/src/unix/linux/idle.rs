@@ -200,7 +200,7 @@ pub(super) fn get_idle() -> Result<std::time::Duration> {
         };
 
         if !is_display_alive(state) {
-            log::debug!("Display connection is dead — skipping idle query");
+            log::debug!("Display connection is dead: skipping idle query");
             return Err(anyhow::anyhow!("Display connection is dead"));
         }
 

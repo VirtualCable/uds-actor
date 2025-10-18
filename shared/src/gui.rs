@@ -24,10 +24,12 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, window::Window};
 use std::thread;
 
-use crate::log;
+use anyhow::Result;
+use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, window::Window};
+
+use crate::{log, sync::OnceSignal};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageBoxResult {
@@ -41,81 +43,85 @@ enum GuiCommand {
     CloseAll,
 }
 
-// Global stop atomic for gui thread
-static STOP_GUI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
 #[derive(Clone)]
 pub struct GuiHandle {
     sender: fltk::app::Sender<GuiCommand>,
+    stop: OnceSignal,
 }
 
 impl GuiHandle {
     pub fn new() -> Self {
-        let (tx, rx) = fltk::app::channel::<GuiCommand>();
+        let (sender, rx) = fltk::app::channel::<GuiCommand>();
+
+        let stop = OnceSignal::new();
 
         // Dedicated thread for FLTK
-        thread::spawn(move || {
-            log::debug!("GUI: Starting GUI thread");
-            let app = app::App::default();
+        thread::spawn({
+            let stop = stop.clone();
+            move || {
+                let app = app::App::default();
 
-            // Explicit main loop
-            while !STOP_GUI.load(std::sync::atomic::Ordering::Relaxed) {
-                // If no events, wait a bit
-                if !app.wait() {
-                    std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
-                }
-                // Check if we have some command
-                while let Some(cmd) = rx.recv() {
-                    log::debug!("GUI: Received command: {:?}", cmd);
-                    match cmd {
-                        GuiCommand::Show { title, message } => {
-                            log::debug!("GUI: Showing message box: {} - {}", title, message);
-                            show_messagebox(&title, &message);
-                        }
-                        GuiCommand::CloseAll => {
-                            log::debug!("GUI: Closing all windows");
-                            if let Some(wins) = fltk::app::windows() {
-                                for mut w in wins {
-                                    let win: Window = unsafe { w.into_widget() };
-                                    if w.shown() {
-                                        w.hide();
-                                        Window::delete(win);
+                // Explicit main loop
+                while !stop.is_set() {
+                    // If no events, wait a bit
+                    if !app.wait() {
+                        fltk::app::check();
+                        std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
+                    }
+                    // Check if we have some command
+                    while let Some(cmd) = rx.recv() {
+                        log::debug!("GUI: Received command: {:?}", cmd);
+                        match cmd {
+                            GuiCommand::Show { title, message } => {
+                                log::debug!("GUI: Showing message box: {} - {}", title, message);
+                                show_messagebox(&title, &message);
+                            }
+                            GuiCommand::CloseAll => {
+                                log::debug!("GUI: Closing all windows");
+                                if let Some(wins) = fltk::app::windows() {
+                                    for mut w in wins {
+                                        // let win: Window = unsafe { w.into_widget() };
+                                        if w.shown() {
+                                            w.hide();
+                                            // Window::delete(win);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100)); // avoid busy loop
+                log::debug!("GUI: Exiting GUI thread");
             }
-            log::debug!("GUI: Exiting GUI thread");
         });
 
-        GuiHandle { sender: tx }
+        GuiHandle { sender, stop }
     }
 
-    pub async fn message_dialog(&self, title: &str, message: &str) {
+    pub async fn message_dialog(&self, title: &str, message: &str) -> Result<()> {
         log::debug!("GUI: Showing message dialog: {} - {}", title, message);
         self.sender.send(GuiCommand::Show {
             title: title.to_string(),
             message: message.to_string(),
         });
+        Ok(())
     }
 
     pub fn shutdown(&self) {
         log::debug!("GUI: Shutting down");
-        STOP_GUI.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.stop.set();
         // Give some time to the GUI thread to exit
         std::thread::sleep(std::time::Duration::from_secs(1));
         // Wake up the app to process the quit command
         // The only awake needed is for shutdown, to ensure it exits
-        app::awake(); 
+        app::awake();
         log::debug!("GUI: Shutdown complete");
     }
 
-    pub fn close_all_windows(&self) {
+    pub async fn close_all_windows(&self) -> Result<()> {
         log::debug!("GUI: Closing all windows");
         self.sender.send(GuiCommand::CloseAll);
+        Ok(())
     }
 }
 
@@ -149,7 +155,7 @@ fn show_messagebox(title: &str, message: &str) {
 
     let mut window = Window::new(100, 100, width, height, title).center_screen();
 
-    // Añadir un Frame por cada línea
+    // Add a frame for each line
     for (i, line) in lines.iter().enumerate() {
         let mut frame = Frame::new(
             10,
@@ -162,7 +168,16 @@ fn show_messagebox(title: &str, message: &str) {
         frame.set_label_font(font);
     }
 
-    _ = Button::new(width / 2 - 40, height - 50, 80, 30, "Ok");
+    let mut btn = Button::new(width / 2 - 40, height - 50, 80, 30, "Ok");
+
+    // Register button callback to close window
+    btn.set_callback({
+        let mut win = window.clone();
+        log::debug!("GUI: Message box OK button clicked");
+        move |_| {
+            win.hide();
+        }
+    });
 
     window.end();
     window.show();
@@ -207,16 +222,21 @@ mod tests {
     async fn test_message_dialog() {
         log::setup_logging("debug", log::LogType::Tests);
         let gui = GuiHandle::new();
-        let gui_task = gui.clone();
-        gui_task
-            .message_dialog("Confirm", "First dialog text\nWith a newline")
-            .await;
-        gui_task
+        // Wait a bit
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        gui.message_dialog("Confirm", "First dialog text\nWith a newline")
+            .await
+            .ok();
+        gui
                 .message_dialog("Test", "This is a test message with probable several lines and some more text\n even with a newline\n or two")
-                .await;
+                .await.ok();
         // Wait some time to allow interaction
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        gui.close_all_windows();
+        //tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        //gui.close_all_windows().await.ok();
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        gui.close_all_windows().await.ok();
+        // Wait a bit to ensure close
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         gui.shutdown();
     }
 }

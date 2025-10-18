@@ -5,7 +5,7 @@ members = [
     "builder",
     "client", 
     "config",
-    "config-unmanaged",
+    "config-unmanaged", "gui-helper",
     "service",
     "shared"
 ]

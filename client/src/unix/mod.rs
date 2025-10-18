@@ -25,7 +25,7 @@ impl UnixSessionManager {
 #[async_trait::async_trait]
 impl SessionManagement for UnixSessionManager {
     async fn wait(&self) {
-        // Listen for SIGTERM or SIGINT
+        // Listen for SIGTERM, SIGINT or SIGHUP
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
         let mut sigint = signal(SignalKind::interrupt()).unwrap();
         let mut sighup = signal(SignalKind::hangup()).unwrap();

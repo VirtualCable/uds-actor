@@ -735,9 +735,9 @@ checksum = "0399f9d26e5191ce32c498bebd31e7a3ceabc2745f0ac54af3f335126c3f24b3"
 
 [[package]]
 name = "fltk"
-version = "1.5.17"
+version = "1.5.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bbd413a9508f72cdd5d017ad9ee02a2f82e24354a0e46d82db0cfad2eaa9d13"
+checksum = "7429b2b1ba9acbcae0baed7299ef790315a599672689197aee8c03ed044fb504"
 dependencies = [
  "bitflags",
  "crossbeam-channel",
@@ -749,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "fltk-sys"
-version = "1.5.15"
+version = "1.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b630a800757b2be016ccdd9e8d80f9c30c97422e21230b18d78b5befecd48fd"
+checksum = "385fb24ba98b69a068c934f953b6b73970ab034db76090c61e12157baf7fb675"
 dependencies = [
  "cmake",
  "cmk",
@@ -947,6 +947,10 @@ name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
+name = "gui-helper"
+version = "0.1.0"
 
 [[package]]
 name = "h2"

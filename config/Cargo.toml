@@ -7,7 +7,9 @@ edition = "2024"
 shared = { path = "../shared" }
 anyhow = "1.0.100"
 
-fltk = { version = "1.5.17", features = ["fltk-bundled"] }
+# Gui
+fltk = { version = "1.5.19", features = ["fltk-bundled"] }
+
 reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
 
 [build-dependencies]
