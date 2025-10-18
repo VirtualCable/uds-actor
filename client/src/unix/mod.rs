@@ -4,8 +4,6 @@ use tokio::signal::unix::{SignalKind, signal};
 use shared::{
     log,
     sync::OnceSignal,
-    unix::linux::watcher_gnome::create_gnome_session_watcher_task,
-    unix::linux::watcher_kde::create_kde_session_watcher_task
 };
 
 use crate::session::SessionManagement;
@@ -18,16 +16,7 @@ impl UnixSessionManager {
     pub async fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
         let stop_event = OnceSignal::new();
-
-        // Create GNOME session watcher if available
-        if let Err(e) = create_gnome_session_watcher_task(stop_event.clone()).await {
-            log::error!("Failed to create GNOME session watcher task: {}", e);
-            // Try KDE session watcher if not GNOME
-            if let Err(e) = create_kde_session_watcher_task(stop_event.clone()).await {
-                log::error!("Failed to create KDE session watcher task: {}", e);
-            }
-        }
-
+        shared::unix::linux::gtk::start_gtk_thread(stop_event.clone());
         Self {
             stop_event,
         }
