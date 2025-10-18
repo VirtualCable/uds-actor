@@ -148,9 +148,9 @@ impl crate::operations::Operations for LinuxOperations {
     }
 
     fn get_idle_duration(&self) -> Result<std::time::Duration> {
-        let idle = idle::get_idle();
-        Ok(std::time::Duration::from_secs_f64(idle))
+        idle::get_idle()
     }
+        
 
     fn get_current_user(&self) -> Result<String> {
         Ok(whoami::username())

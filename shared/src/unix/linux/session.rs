@@ -27,23 +27,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::{env, process::Command};
 
 use anyhow::Result;
-use zbus::blocking::{Connection, Proxy};
 
 use crate::log;
-
-/// Try to terminate the current session via D-Bus (sync).
-fn try_dbus_logout(session_id: &str) -> Result<bool> {
-    let connection = Connection::system()?; // synchronous
-    let proxy = Proxy::new(
-        &connection,
-        "org.freedesktop.login1",
-        "/org/freedesktop/login1",
-        "org.freedesktop.login1.Manager",
-    )?;
-
-    proxy.call_method("TerminateSession", &(session_id.to_string(),))?;
-    Ok(true)
-}
 
 /// Fallback: invokes `loginctl terminate-session <id>`
 fn fallback_loginctl(session_id: &str) -> Result<()> {
@@ -58,20 +43,7 @@ fn fallback_loginctl(session_id: &str) -> Result<()> {
 pub(super) fn logout() -> Result<()> {
     crate::log::debug!("Attempting to log out current session");
     let session_id = current_session_id()?;
-    match try_dbus_logout(&session_id) {
-        Ok(true) => {
-            crate::log::debug!("Logout using D-Bus successful");
-            Ok(())
-        }
-        Ok(false) => {
-            crate::log::warn!("Logout using D-Bus not supported, falling back to loginctl");
-            fallback_loginctl(&session_id)
-        }
-        Err(e) => {
-            crate::log::warn!("D-Bus failed: {:?}, falling back to loginctl", e);
-            fallback_loginctl(&session_id)
-        }
-    }
+    fallback_loginctl(&session_id)
 }
 
 // Note that we will have only one cached session id, as this is per-process

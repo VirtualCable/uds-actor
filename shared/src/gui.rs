@@ -55,6 +55,7 @@ impl GuiHandle {
 
         // Dedicated thread for FLTK
         thread::spawn(move || {
+            log::debug!("GUI: Starting GUI thread");
             let app = app::App::default();
 
             // Explicit main loop

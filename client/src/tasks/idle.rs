@@ -50,8 +50,11 @@ pub async fn task(
         let idle = match operations.get_idle_duration() {
             Ok(idle) => idle,
             Err(_) => {
-                // If no idle, consider it as zero
-                std::time::Duration::from_secs(0)
+                // Idle not available anymore. IF not supported, should return simply Ok(0)
+                // This may occur, for example, on X if the display connection is lost
+                log::info!("Idle time lost, stopping idle task");
+                session_manager.stop().await;
+                return Ok(None);
             }
         };
 
@@ -88,11 +91,13 @@ pub async fn task(
             log::info!("{}", message);
             // Ensure all windows are closed
             platform.dismiss_user_notifications().await.ok();
-            // Use logoff in case of idle, should fire stop process
-            operations.logoff().ok();
+
             // Just in case, ensure session manager is notified to stop
             // On RDP session, we may be disconnected and no message is received
             session_manager.stop().await;
+            
+            // Use logoff in case of idle, should fire stop process
+            operations.logoff().ok();
 
             return Ok(Some(message)); // Message to include on logout reason
         }

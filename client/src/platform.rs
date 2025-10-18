@@ -13,7 +13,7 @@ pub struct Platform {
     session_manager: Arc<dyn SessionManagement>,
     api: Arc<tokio::sync::RwLock<dyn ClientRest>>,
     operations: Arc<dyn shared::operations::Operations>,
-    gui: shared::gui::GuiHandle,
+    //gui: shared::gui::GuiHandle,
 }
 
 impl Platform {
@@ -26,7 +26,7 @@ impl Platform {
             session_manager,
             api,
             operations,
-            gui: shared::gui::GuiHandle::new(),
+            // gui: shared::gui::GuiHandle::new(),
         }
     }
 
@@ -50,7 +50,7 @@ impl Platform {
     }
 
     pub async fn dismiss_user_notifications(&self) -> Result<()> {
-        self.gui.close_all_windows();
+        // self.gui.close_all_windows();
         Ok(())
     }
 
@@ -73,11 +73,11 @@ impl Platform {
             session_manager,
             api,
             operations,
-            gui: shared::gui::GuiHandle::new(),
+            // gui: shared::gui::GuiHandle::new(),
         }
     }
 
     pub fn shutdown(&self) {
-        self.gui.shutdown();
+        // self.gui.shutdown();
     }
 }

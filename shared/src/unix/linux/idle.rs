@@ -25,12 +25,20 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // Code adapted from udsactor v4.x python code
-use libloading::{Library, Symbol};
+use libloading::Library;
 use std::cell::RefCell;
 use std::os::raw::{c_int, c_ulong, c_void};
 use std::{ptr, thread_local};
 
 use anyhow::{Ok, Result};
+
+use crate::log;
+
+macro_rules! load_fn {
+    ($lib:expr, $name:expr, $ty:ty) => {
+        *$lib.get::<$ty>($name).ok()?
+    };
+}
 
 #[repr(C)]
 pub struct XScreenSaverInfo {
@@ -47,13 +55,32 @@ struct IdleState {
     _xss: Library,  // Keep the library loaded, avoid drop
     display: *mut c_void,
     info: *mut XScreenSaverInfo,
+    x_connection_number: unsafe extern "C" fn(*mut c_void) -> c_int,
     x_default_root_window: unsafe extern "C" fn(*mut c_void) -> c_ulong,
-    x_screensaver_query_info: unsafe extern "C" fn(*mut c_void, c_ulong, *mut XScreenSaverInfo),
+    xss_screensaver_query_info: unsafe extern "C" fn(*mut c_void, c_ulong, *mut XScreenSaverInfo),
     x_free: unsafe extern "C" fn(*mut c_void) -> c_int,
 }
 
 thread_local! {
     static IDLE_STATE: RefCell<Option<IdleState>> = RefCell::new(None);
+}
+
+// Silent X IO error handler to avoid crashes (because on session close
+// X server will be gone, but we will asking for idle time)
+extern "C" fn silent_io_error_handler(_: *mut c_void) -> c_int {
+    log::info!("X IO error — server may be dead");
+    0 // no exit
+}
+
+fn is_display_alive(state: &IdleState) -> bool {
+    let fd = unsafe { (state.x_connection_number)(state.display) };
+    let mut pfd = libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let res = unsafe { libc::poll(&mut pfd, 1, 0) };
+    res >= 0 && (pfd.revents & libc::POLLHUP == 0)
 }
 
 pub(super) fn init_idle(seconds: u64) -> Result<()> {
@@ -70,18 +97,28 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
                 .or_else(|_| Library::new("libXss.so"))
                 .ok()?;
 
-            let x_open_display: Symbol<unsafe extern "C" fn(*const i8) -> *mut c_void> =
-                xlib.get(b"XOpenDisplay").ok()?;
-            let x_default_root_window: Symbol<unsafe extern "C" fn(*mut c_void) -> c_ulong> =
-                xlib.get(b"XDefaultRootWindow").ok()?;
-            let x_free: Symbol<unsafe extern "C" fn(*mut c_void) -> c_int> =
-                xlib.get(b"XFree").ok()?;
-
-            let xss_alloc_info: Symbol<unsafe extern "C" fn() -> *mut XScreenSaverInfo> =
-                xss.get(b"XScreenSaverAllocInfo").ok()?;
-            let xss_query_info: Symbol<
-                unsafe extern "C" fn(*mut c_void, c_ulong, *mut XScreenSaverInfo),
-            > = xss.get(b"XScreenSaverQueryInfo").ok()?;
+            // use macro to load functions from libraries, copying types to avoid lifetime issues
+            let x_open_display = load_fn!(
+                xlib,
+                b"XOpenDisplay",
+                unsafe extern "C" fn(*const i8) -> *mut c_void
+            );
+            let x_default_root_window = load_fn!(
+                xlib,
+                b"XDefaultRootWindow",
+                unsafe extern "C" fn(*mut c_void) -> c_ulong
+            );
+            let x_free= load_fn!(xlib, b"XFree", unsafe extern "C" fn(*mut c_void) -> c_int);
+            let xss_alloc_info = load_fn!(
+                xss,
+                b"XScreenSaverAllocInfo",
+                unsafe extern "C" fn() -> *mut XScreenSaverInfo
+            );
+            let xss_screensaver_query_info = load_fn!(
+                xss,
+                b"XScreenSaverQueryInfo",
+                unsafe extern "C" fn(*mut c_void, c_ulong, *mut XScreenSaverInfo)
+            );
 
             let display = x_open_display(ptr::null());
             if display.is_null() {
@@ -92,10 +129,27 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
                 return None;
             }
 
+            // Set silent IO error handler
+            let x_set_io_error_handler = load_fn!(
+                xlib,
+                b"XSetIOErrorHandler",
+                unsafe extern "C" fn(unsafe extern "C" fn(*mut c_void) -> c_int)
+            );
+            x_set_io_error_handler(silent_io_error_handler);
+
+            // XConnectionNumber for testing connection to X server before using it
+            let x_connection_number = load_fn!(
+                xlib,
+                b"XConnectionNumber",
+                unsafe extern "C" fn(*mut c_void) -> c_int
+            );
+
             // XScreenSaverQueryExtension
-            let xss_query_extension: Symbol<
-                unsafe extern "C" fn(*mut c_void, *mut c_int, *mut c_int) -> c_int,
-            > = xss.get(b"XScreenSaverQueryExtension").ok()?;
+            let xss_query_extension = load_fn!(
+                xss,
+                b"XScreenSaverQueryExtension",
+                unsafe extern "C" fn(*mut c_void, *mut c_int, *mut c_int) -> c_int
+            );
 
             // I no extension, return error
             let mut event_base: c_int = 0;
@@ -105,18 +159,14 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
                 return None;
             }
 
-            // Copy symbols to avoid lifetime issues
-            let x_default_root_window = *x_default_root_window;
-            let x_screensaver_query_info = *xss_query_info;
-            let x_free = *x_free;
-
             let state = IdleState {
                 _xlib: xlib,
                 _xss: xss,
                 display,
                 info,
+                x_connection_number,
                 x_default_root_window,
-                x_screensaver_query_info,
+                xss_screensaver_query_info,
                 x_free,
             };
             cell.replace(Some(state));
@@ -142,19 +192,25 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
     }
 }
 
-pub(super) fn get_idle() -> f64 {
+pub(super) fn get_idle() -> Result<std::time::Duration> {
     IDLE_STATE.with(|cell| {
         let borrow = cell.borrow();
         let Some(state) = borrow.as_ref() else {
-            return 0.0;
+            return Ok(std::time::Duration::from_secs(0));
         };
+
+        if !is_display_alive(state) {
+            log::debug!("Display connection is dead — skipping idle query");
+            return Err(anyhow::anyhow!("Display connection is dead"));
+        }
+
         unsafe {
             let root = (state.x_default_root_window)(state.display);
-            (state.x_screensaver_query_info)(state.display, root, state.info);
-            if (*state.info).state == 1 {
-                return 3600.0 * 100.0 * 1000.0;
+            (state.xss_screensaver_query_info)(state.display, root, state.info);
+            if (*state.info).state == 1 {  // 1 = ScreenSaverActive
+                return Ok(std::time::Duration::from_secs(3600 * 24 * 365 * 1000));  // A very large idle time
             }
-            (*state.info).idle as f64 / 1000.0
+            Ok(std::time::Duration::from_millis((*state.info).idle as u64))
         }
     })
 }
@@ -186,9 +242,8 @@ mod tests {
         let _res = init_idle(32);
         // assert!(res.is_ok());
         for _i in 0..32 {
-            let idle = get_idle();
-            log::info!("Idle time: {} seconds", idle);
-            assert!(idle >= 0.0);
+            let idle = get_idle().unwrap();
+            log::info!("Idle time: {} seconds", idle.as_secs());
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         shutdown_idle();
