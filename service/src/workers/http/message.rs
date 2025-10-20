@@ -10,7 +10,7 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     if let Some(env) = wait_message_arrival::<MessageRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received MessageRequest");
         // Send logoff to wsclient
@@ -18,7 +18,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
             id: None,
             msg: shared::ws::types::RpcMessage::MessageRequest(MessageRequest { message: env.msg.message }),
         };
-        if let Err(e) = server_info.workers_to_wsclient.send(envelope).await {
+        if let Err(e) = server_info.to_ws.send(envelope).await {
             log::error!("Failed to send MessageRequest to wsclient: {}", e);
         } else {
             log::info!("Sent MessageRequest to wsclient");
@@ -45,7 +45,7 @@ mod tests {
         let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
 
         let msg: Arc<RwLock<Vec<RpcEnvelope<RpcMessage>>>> = Arc::new(RwLock::new(Vec::new()));
         // Subscribe to workers_to_wsclient to verify messages sent

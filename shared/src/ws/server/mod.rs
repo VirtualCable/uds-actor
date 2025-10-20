@@ -40,8 +40,8 @@ mod routes;
 
 #[derive(Clone)]
 pub struct ServerContext {
-    pub workers_to_wsclient: mpsc::Sender<RpcEnvelope<RpcMessage>>,
-    pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
+    pub to_ws: mpsc::Sender<RpcEnvelope<RpcMessage>>,
+    pub from_ws: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
 }
 
@@ -138,8 +138,8 @@ async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerStat
 
 pub async fn websocket_loop(
     socket: WebSocket,
-    workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
-    wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
+    to_ws: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
+    from_ws: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     stop: Arc<OnceSignal>,
     ws_active: Arc<AtomicBool>,
     tracker: RequestTracker,
@@ -148,7 +148,7 @@ pub async fn websocket_loop(
 
     // Task A: WS client → workers
     let mut tx_task = {
-        let wsclient_to_workers = wsclient_to_workers.clone();
+        let wsclient_to_workers = from_ws.clone();
         tokio::spawn(async move {
             while let Some(Ok(msg)) = ws_receiver.next().await {
                 log::debug!("WS client sent message: {:?}", msg);
@@ -191,7 +191,7 @@ pub async fn websocket_loop(
 
     // Task B: workers → WS client
     let mut rx_task = {
-        let workers_rx = workers_to_wsclient.clone();
+        let workers_rx = to_ws.clone();
         tokio::spawn(async move {
             loop {
                 let msg_opt = { workers_rx.lock().await.recv().await };
@@ -310,16 +310,16 @@ pub async fn start_server(
     port: Option<u16>,
 ) -> Result<(ServerContext, tokio::task::JoinHandle<()>)> {
     // Create channels
-    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
-    let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
+    let (to_ws, from_workers) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
+    let (from_ws, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
 
     // Armar ServerInfo
     let info = ServerStartInfo {
         cert_info,
         port: port.unwrap_or(crate::consts::UDS_PORT),
-        workers_to_wsclient: Arc::new(tokio::sync::Mutex::new(workers_rx)),
-        wsclient_to_workers: wsclient_to_workers.clone(),
+        workers_to_wsclient: Arc::new(tokio::sync::Mutex::new(from_workers)),
+        wsclient_to_workers: from_ws.clone(),
         tracker: tracker.clone(),
         stop: stop.clone(),
         secret,
@@ -336,8 +336,8 @@ pub async fn start_server(
 
     Ok((
         ServerContext {
-            workers_to_wsclient: workers_tx,
-            wsclient_to_workers,
+            to_ws,
+            from_ws,
             tracker,
         },
         handle,

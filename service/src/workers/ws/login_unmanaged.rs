@@ -16,7 +16,7 @@ use crate::{common, platform};
 // So we need to call "initialize" prior to login, to get the machine attached to the userservice.
 // Also, we will no "save" the token, store it on memoy only, as unmanaged actors are not supposed to be long-lived.
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LoginRequest with id {:?}", env.id);
@@ -43,7 +43,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                 id: env.id,
                 msg: RpcMessage::LoginResponse(response),
             };
-            if let Err(e) = server_info.workers_to_wsclient.send(response_env).await {
+            if let Err(e) = server_info.to_ws.send(response_env).await {
                 log::error!("Failed to send LoginResponse: {}", e);
             } else {
                 log::debug!("Sent LoginResponse for id {:?}", env.id);
@@ -70,7 +70,7 @@ mod tests {
         let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
         let _handle = tokio::spawn(async move {
             worker(server_info, platform).await.unwrap();
         });

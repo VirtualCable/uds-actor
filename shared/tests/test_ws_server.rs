@@ -75,7 +75,7 @@ async fn test_get_screenshot() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     let tracker = server_info.tracker.clone();
-    let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+    let wsclient_to_workers = server_info.from_ws.clone();
 
     // Fake WebSocket client that responds to ScreenshotRequest
     tokio::spawn({
@@ -120,7 +120,7 @@ async fn test_get_uuid() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     let tracker = server_info.tracker.clone();
-    let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+    let wsclient_to_workers = server_info.from_ws.clone();
     // Fake WebSocket client that responds to UUidRequest
     tokio::spawn({
         let tracker = tracker.clone();
@@ -171,7 +171,7 @@ async fn test_post_logout() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the LogoffRequest
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -198,7 +198,7 @@ pub async fn test_post_message() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the MessageRequest
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -230,7 +230,7 @@ pub async fn test_post_script() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
     // Subscribe to receive the ScriptExecRequest
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let result = post_request(
@@ -263,7 +263,7 @@ pub async fn test_post_script() {
 pub async fn test_post_pre_connect() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
     // Subscribe to receive the PreConnect
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let result = post_request(
@@ -368,7 +368,7 @@ async fn test_ws_no_localhost_ipv6() {
 async fn test_ws_connect_insecure_tls() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
 
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
 
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;

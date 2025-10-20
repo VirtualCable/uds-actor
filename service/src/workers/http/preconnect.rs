@@ -10,7 +10,7 @@ use crate::{actions, platform};
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received PreConnect: {:?}", env.msg);
         // Process the Preconnect. If protocol is rdp, ensure the user can rdp
@@ -43,7 +43,7 @@ mod tests {
         let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
 
         let _handle = tokio::spawn(async move {
             worker(server_info, platform).await.unwrap();

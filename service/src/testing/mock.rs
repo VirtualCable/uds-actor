@@ -45,8 +45,8 @@ pub async fn mock_server_info() -> ServerContext {
     let tracker = RequestTracker::new();
 
     ServerContext {
-        workers_to_wsclient: workers_tx,
-        wsclient_to_workers: wsclient_to_workers.clone(),
+        to_ws: workers_tx,
+        from_ws: wsclient_to_workers.clone(),
         tracker,
     }
 }
@@ -59,8 +59,8 @@ pub async fn mock_server_info_with_worker_rx() -> (ServerContext, broadcast::Rec
 
     (
         ServerContext {
-            workers_to_wsclient: workers_tx,
-            wsclient_to_workers: wsclient_to_workers.clone(),
+            to_ws: workers_tx,
+            from_ws: wsclient_to_workers.clone(),
             tracker,
         },
         wsclient_to_workers_rx,

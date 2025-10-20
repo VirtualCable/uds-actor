@@ -16,7 +16,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received UUidRequest");
@@ -64,7 +64,7 @@ mod tests {
         platform.config().write().await.master_token = Some("mastertoken".into());
         platform.config().write().await.own_token = Some("own_token".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
         let tracker = server_info.tracker.clone();
 
         let _handle = tokio::spawn(async move {

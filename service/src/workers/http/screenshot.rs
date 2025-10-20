@@ -16,7 +16,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     while let Some(env) =
         wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.get_stop())).await
     {
@@ -38,7 +38,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                 msg: shared::ws::types::RpcMessage::ScreenshotRequest(ScreenshotRequest),
             };
 
-        if let Err(e) = server_info.workers_to_wsclient.send(envelope).await {
+        if let Err(e) = server_info.to_ws.send(envelope).await {
             log::error!("Failed to send ScreenshotRequest to wsclient: {}", e);
             tracker.deregister(id).await;
         } else {
@@ -82,7 +82,7 @@ mod tests {
         let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
 
         let msg: Arc<RwLock<Vec<RpcEnvelope<RpcMessage>>>> = Arc::new(RwLock::new(Vec::new()));
         // Subscribe to workers_to_wsclient to verify messages sent

@@ -9,7 +9,7 @@ use crate::platform;
 
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logout is a simple notification. No response expected (in fact, will return "ok" immediately)
-    let mut rx = server_info.wsclient_to_workers.subscribe();
+    let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received LogoutRequest with id {:?}", env.id);
         let broker_api = platform.broker_api();
@@ -52,7 +52,7 @@ mod tests {
         let (platform, calls) = mock::mock_platform().await;
         platform.config().write().await.master_token = Some("mastertoken".into());
 
-        let wsclient_to_workers = server_info.wsclient_to_workers.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
         let _handle = tokio::spawn(async move {
             worker(server_info, platform).await.unwrap();
         });
