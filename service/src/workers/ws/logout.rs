@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerContext, types::LogoutRequest, wait_for_request},
+    ws::{server::ServerContext, types::LogoutRequest, wait_message_arrival},
 };
 
 use crate::platform;
@@ -10,7 +10,7 @@ use crate::platform;
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logout is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await {
+    while let Some(env) = wait_message_arrival::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received LogoutRequest with id {:?}", env.id);
         let broker_api = platform.broker_api();
         // Clone api to avoid holding the lock during await

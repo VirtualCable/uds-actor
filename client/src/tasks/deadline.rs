@@ -28,10 +28,10 @@ use crate::platform;
 use shared::log;
 
 pub async fn task(
-    deadline: Option<u32>,
+    deadline: Option<u64>,
     platform: platform::Platform,
 ) -> anyhow::Result<Option<String>> {
-    let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0) as u64);
+    let deadline = std::time::Duration::from_secs(deadline.unwrap_or(0));
     let (deadline, remaining) = if deadline > std::time::Duration::from_secs(300) {
         (
             deadline - std::time::Duration::from_secs(300),
@@ -88,7 +88,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform(None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, 43900).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -110,7 +110,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform(None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, 43901).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {

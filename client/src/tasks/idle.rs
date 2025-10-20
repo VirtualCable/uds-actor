@@ -28,10 +28,10 @@ use crate::platform;
 use shared::log;
 
 pub async fn task(
-    max_idle: Option<u32>,
+    max_idle: Option<u64>,
     platform: platform::Platform,
 ) -> anyhow::Result<Option<String>> {
-    let max_idle = std::time::Duration::from_secs(max_idle.unwrap_or(0) as u64);
+    let max_idle = std::time::Duration::from_secs(max_idle.unwrap_or(0));
     if max_idle.as_secs() == 0 {
         // Wait until signaled
         platform.session_manager().wait().await;
@@ -130,7 +130,7 @@ mod tests {
     async fn test_idle_task_idle() {
         log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, 43902).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -152,7 +152,7 @@ mod tests {
     async fn test_idle_task_no_idle_exceeded() {
         log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, 43903).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (5 seconds)
@@ -174,7 +174,7 @@ mod tests {
     async fn test_idle_task_no_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, None).await;
+        let (platform, calls) = mock_platform(None, None, 43904).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle

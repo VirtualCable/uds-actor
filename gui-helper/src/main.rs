@@ -30,12 +30,24 @@ use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, win
 
 const SIGNAL_FILE: &str = "uds-actor-gui-close-all";
 
-// We have created a separate gui helper because on linux
-// at session close the X windows (xrdp for example) destroys de X server.
-// fltk fails and do a Fl::fatal, that in turn executes "exit(1)" which makes
-// the whole process to exit with error, and that is not desired.
-// If this fails, only the message dialog will be lost :).
+/*
+This binary exists to solve a very specific problem:
 
+FLTK (and Xlib) will call `exit(1)` if the X server dies unexpectedly.
+That means: if you're running a GUI inside your main process and the X server closes/crashes,
+your entire app dies — no cleanup, no mercy.
+
+We need to keep the main app alive to log the event and clean up properly.
+
+So instead, we isolate the GUI in a separate process — this one.
+It shows message dialogs, and nothing else. If FLTK crashes, only this process dies.
+The main app stays alive, logs the event, and can clean up properly.
+
+Communication is minimal:
+- To show a message, the main app launches this binary with arguments.
+- To request all windows to close, it creates a temp file named `uds-actor-gui-close-all`.
+- This binary checks for that file periodically and exits if found.
+*/
 fn main() {
     // Get title and message from args
     let args: Vec<String> = std::env::args().collect();

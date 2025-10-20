@@ -144,8 +144,8 @@ pub struct InitializationResponse {
 pub struct LoginResponse {
     pub ip: String,
     pub hostname: String,
-    pub deadline: Option<i64>,
-    pub max_idle: Option<i64>,
+    pub deadline: Option<u64>,
+    pub max_idle: Option<u64>,
     pub session_id: Option<String>,
 }
 

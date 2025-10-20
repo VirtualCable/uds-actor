@@ -26,13 +26,15 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(not(test), windows_subsystem = "windows")]
+use shared::ws::{
+    types::{LoginRequest, LoginResponse, LogoutRequest, RpcEnvelope, RpcMessage},
+    wait_message_arrival,
+};
 
-mod http;
-mod rest;
 mod session;
 
-mod platform;
 mod gui;
+mod platform;
 
 #[cfg(unix)]
 mod unix;
@@ -42,27 +44,54 @@ mod windows;
 // Tasks
 mod tasks;
 
-async fn send_login(platform: &platform::Platform) -> anyhow::Result<rest::types::LoginResponse> {
+async fn send_login(platform: &platform::Platform) -> anyhow::Result<LoginResponse> {
     // Send login
     let username = platform.operations().get_current_user()?;
     let session_type = platform.operations().get_session_type()?;
-    let api = platform.api();
+    let ws_client = platform.ws_client();
+    let stop = platform.get_stop();
 
-    api.write()
+    ws_client
+        .to_ws
+        .send(RpcEnvelope {
+            id: Some(19720701), // Some arbitrary id
+            msg: RpcMessage::LoginRequest(LoginRequest {
+                username: username.clone(),
+                session_type: session_type.clone(),
+            }),
+        })
         .await
-        .login(&username, Some(&session_type))
+        .map_err(|e| anyhow::anyhow!("Failed to send login message: {}", e))?;
+
+    // Wait for response
+    let mut rx = ws_client.from_ws.subscribe();
+    let envelope = wait_message_arrival::<LoginResponse>(&mut rx, Some(stop))
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))
+        .ok_or_else(|| anyhow::anyhow!("Failed to receive login response for user {}", username))?;
+
+    Ok(envelope.msg)
 }
 
-async fn send_logout(platform: &platform::Platform, reason: Option<&str>) -> anyhow::Result<()> {
-    let api = platform.api();
+async fn send_logout(platform: &platform::Platform, session_id: Option<&str>) -> anyhow::Result<()> {
+    let username = platform.operations().get_current_user()?;
+    let session_type = platform.operations().get_session_type()?;
+    let ws_client = platform.ws_client();
 
-    api.write()
+        ws_client
+        .to_ws
+        .send(RpcEnvelope {
+            id: Some(19720701), // Some arbitrary id
+            msg: RpcMessage::LogoutRequest(LogoutRequest {
+                username: username.clone(),
+                session_type: session_type.clone(),
+                session_id: session_id.unwrap_or_default().to_string(),
+            }),
+        })
         .await
-        .logout(reason)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to logout: {}", e))
+        .map_err(|e| anyhow::anyhow!("Failed to send logout message: {}", e))?;
+
+    Ok(())
+
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -71,7 +100,7 @@ async fn main() {
     shared::log::setup_logging("debug", shared::log::LogType::Client);
 
     shared::log::info!("Starting uds-actor client...");
-    let platform = platform::Platform::new().await;
+    let platform = platform::Platform::new(43910).await;
 
     run(platform.clone()).await; // Run main loop
     shared::log::info!("uds-actor client stopped.");
@@ -80,9 +109,6 @@ async fn main() {
 }
 
 async fn run(platform: platform::Platform) {
-    // Listener for the HTTP server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-
     let login_info = match send_login(&platform).await {
         Ok(info) => info,
         Err(e) => {
@@ -91,9 +117,6 @@ async fn run(platform: platform::Platform) {
         }
     };
     shared::log::info!("Login successful: {:?}", login_info);
-
-    // Local server registers the callback, so it needs to be started before login
-    let server_task = tokio::spawn(http::run_server(listener, platform.clone()));
 
     let idle_task = tokio::spawn(tasks::idle::task(login_info.max_idle, platform.clone()));
 
@@ -110,7 +133,6 @@ async fn run(platform: platform::Platform) {
     let join_timeout = std::time::Duration::from_secs(5);
     let mut reason = None;
     if tokio::time::timeout(join_timeout, async {
-        let _ = server_task.await;
         for task in [idle_task, deadline_task] {
             let res = task.await;
             if let Ok(Ok(Some(r))) = res {

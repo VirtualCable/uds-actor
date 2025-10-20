@@ -5,7 +5,7 @@ use shared::{
     ws::{
         server::ServerContext,
         types::{ScreenshotRequest, ScreenshotResponse},
-        wait_for_request, wait_response,
+        wait_message_arrival, wait_response,
     },
 };
 
@@ -18,7 +18,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.wsclient_to_workers.subscribe();
     while let Some(env) =
-        wait_for_request::<ScreenshotRequest>(&mut rx, Some(platform.get_stop())).await
+        wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received ScreenshotRequest");
         let req_id = if let Some(id) = env.id {

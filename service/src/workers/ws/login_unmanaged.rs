@@ -4,7 +4,7 @@ use shared::{
     broker::api::BrokerApi, log, ws::{
         server::ServerContext,
         types::{LoginRequest, RpcEnvelope, RpcMessage},
-        wait_for_request,
+        wait_message_arrival,
     }
 };
 
@@ -17,7 +17,7 @@ use crate::{common, platform};
 // Also, we will no "save" the token, store it on memoy only, as unmanaged actors are not supposed to be long-lived.
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
+    while let Some(env) = wait_message_arrival::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LoginRequest with id {:?}", env.id);
         let broker_api: std::sync::Arc<tokio::sync::RwLock<dyn BrokerApi>> = platform.broker_api();

@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerContext, types::MessageRequest, wait_for_request},
+    ws::{server::ServerContext, types::MessageRequest, wait_message_arrival},
 };
 
 use crate::platform;
@@ -11,7 +11,7 @@ use crate::platform;
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    if let Some(env) = wait_for_request::<MessageRequest>(&mut rx, Some(platform.get_stop())).await {
+    if let Some(env) = wait_message_arrival::<MessageRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received MessageRequest");
         // Send logoff to wsclient
         let envelope = shared::ws::types::RpcEnvelope {

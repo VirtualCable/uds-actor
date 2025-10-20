@@ -5,7 +5,7 @@ use shared::{
     ws::{
         server::ServerContext,
         types::{UUidRequest, UUidResponse},
-        wait_for_request,
+        wait_message_arrival,
     },
 };
 
@@ -17,7 +17,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // for this, we use trackers for request/response matching
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
+    while let Some(env) = wait_message_arrival::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received UUidRequest");
         let req_id = if let Some(id) = env.id {

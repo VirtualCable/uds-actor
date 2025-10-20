@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerContext, types::LogoffRequest, wait_for_request},
+    ws::{server::ServerContext, types::LogoffRequest, wait_message_arrival},
 };
 
 use crate::platform;
@@ -11,7 +11,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
     while let Some(_env) =
-        wait_for_request::<LogoffRequest>(&mut rx, Some(platform.get_stop())).await
+        wait_message_arrival::<LogoffRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LogoffRequest");
         // Send logoff to wsclient

@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerContext, types::PreConnect, wait_for_request},
+    ws::{server::ServerContext, types::PreConnect, wait_message_arrival},
 };
 
 use crate::{actions, platform};
@@ -11,7 +11,7 @@ use crate::{actions, platform};
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.wsclient_to_workers.subscribe();
-    while let Some(env) = wait_for_request::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
+    while let Some(env) = wait_message_arrival::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received PreConnect: {:?}", env.msg);
         // Process the Preconnect. If protocol is rdp, ensure the user can rdp
         let msg = env.msg;

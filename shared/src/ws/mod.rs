@@ -51,7 +51,7 @@ where
 
 /// Wait until receiving a `RpcEnvelope<T>` from the broadcast channel.
 /// Cancels if the `stop` is triggered.
-pub async fn wait_for_request<T>(
+pub async fn wait_message_arrival<T>(
     rx: &mut broadcast::Receiver<RpcEnvelope<RpcMessage>>,
     stop: Option<Arc<OnceSignal>>,
 ) -> Option<RpcEnvelope<T>>
@@ -125,7 +125,7 @@ mod tests {
         // and return the first Ping it can parse
         // Note: we sent 10 messages but the buffer is only 2, so
         // it should have skipped some
-        let env = wait_for_request::<Ping>(&mut rx, stop).await;
+        let env = wait_message_arrival::<Ping>(&mut rx, stop).await;
 
         assert!(env.is_some());
     }

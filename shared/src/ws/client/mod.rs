@@ -8,6 +8,7 @@ use crate::{
     ws::types::{Close, RpcEnvelope, RpcMessage},
 };
 
+#[derive(Clone, Debug)]
 pub struct WsClient {
     pub from_ws: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub to_ws: mpsc::Sender<RpcEnvelope<RpcMessage>>,
