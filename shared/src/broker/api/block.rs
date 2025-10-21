@@ -33,6 +33,7 @@ pub fn register(
 ) -> Result<String> {
 	let rt = create_runtime()?;
 	let mut api = UdsBrokerApi::new(cfg, false, Some(std::time::Duration::from_millis(2000)));
+	api.set_retry_params(0, std::time::Duration::from_millis(0));
 	api.set_header("X-Auth-Token", token);
 
 	let res = rt.block_on(async { api.register(req).await });
@@ -42,7 +43,8 @@ pub fn register(
 /// Synchronous wrapper for `UdsBrokerApi::test`.
 pub fn test(cfg: ActorConfiguration, timeout: Option<std::time::Duration>) -> Result<String> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, timeout);
+	let mut api = UdsBrokerApi::new(cfg, false, timeout);
+	api.set_retry_params(0, std::time::Duration::from_millis(0));
 
 	let res = rt.block_on(async { api.test().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
@@ -54,7 +56,8 @@ pub fn enumerate_authenticators(
 	timeout: Option<std::time::Duration>,
 ) -> Result<Vec<types::Authenticator>> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, timeout);
+	let mut api = UdsBrokerApi::new(cfg, false, timeout);
+	api.set_retry_params(0, std::time::Duration::from_millis(0));
 
 	let res = rt.block_on(async { api.enumerate_authenticators().await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))
@@ -68,7 +71,8 @@ pub fn api_login(
 	password: &str,
 ) -> Result<String> {
 	let rt = create_runtime()?;
-	let api = UdsBrokerApi::new(cfg, false, None);
+	let mut api = UdsBrokerApi::new(cfg, false, None);
+	api.set_retry_params(0, std::time::Duration::from_millis(0));
 
 	let res = rt.block_on(async { api.api_login(auth, username, password).await });
 	res.map_err(|e| anyhow!(format!("{:?}", e)))

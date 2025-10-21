@@ -1,0 +1,65 @@
+uds/rest/auth/auths:
+  get:
+    response:
+      content_type: application/json
+      body:
+        - auth_id: "324bc7ed-adf9-11f0-b1c4-d45d649f5454"
+          auth_label: "first_label"
+          auth: "First Auth"
+          type: "password"
+          priority: 1
+          custom: false
+        - auth_id: "324bc7ed-adf9-11f0-b1c4-d45d649f5455"
+          auth_label: "second_label"
+          auth: "Second Auth"
+          type: "oauth"
+          priority: 2
+          custom: true
+        - auth_id: "324bc7ed-adf9-11f0-b1c4-d45d649f5456"
+          auth_label: "third_label"
+          auth: "Third Auth"
+          type: "sso"
+          priority: 3
+          custom: false
+        - auth_id: "324bc7ed-adf9-11f0-b1c4-d45d649f5457"
+          auth_label: "fourth_label"
+          auth: "Fourth Auth"
+          type: "token"
+          priority: 4
+          custom: true
+    status: 200
+
+uds/rest/auth/login:
+  post:
+    response:
+      content_type: application/json
+      body:
+        result: "ok"
+        token: "login_token"
+    status: 200
+
+uds/rest/actor/v3/register:
+  post:
+    response:
+      content_type: application/json
+      body:
+        result: "actor_token"
+        stamp: 1760994164
+        version: "5.0.0"
+        build: "1760994164"
+    status: 200
+
+uds/rest/actor/v3/initialize:
+  get:
+    response:
+      content_type: application/json
+      body:
+        message: "Hola fusca"
+    status: 200
+
+uds/rest/actor/v3/login:
+  post:
+    response:
+      content_type: text/plain
+      body: "pong recibido"
+    status: 201

@@ -129,7 +129,7 @@ pub struct TestRequest<'a> {
 pub struct ApiLoginResponse {
     pub result: String, // Info
     pub error: Option<String>,
-    pub token: String,
+    pub token: String,  // If unssuccessful, Token will be None and decoding will fail
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -202,7 +202,7 @@ impl From<crate::operations::NetworkInterface> for InterfaceInfo {
 // when server is updated to a version that supports it
 // Note that renamed fields are already present on 5.0 servers
 // But initally, we will use the old ones for compatibility with older servers
-// So we can use it now on 4.x, but we will rename the fields to the new ones
+// So we can use it now on 4.x. Will rename the fields to the new ones asap
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Authenticator {
     #[serde(rename = "auth_id")]  // On future releases, this will be "id"

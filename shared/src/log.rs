@@ -27,12 +27,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::{
-    fs,
-    fs::OpenOptions,
-    io::{self, Write},
-    panic,
-    path::PathBuf,
-    sync::OnceLock,
+    fs::{self, OpenOptions}, io::{self, Write}, panic, path::PathBuf, sync::OnceLock
 };
 use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -97,6 +92,17 @@ pub enum LogType {
     Tests,
 }
 
+impl std::fmt::Display for LogType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogType::Client => write!(f, "client"),
+            LogType::Service => write!(f, "service"),
+            LogType::Config => write!(f, "config"),
+            LogType::Tests => write!(f, "tests"),
+        }
+    }
+}
+
 // Our log system wil also hook panics to log them
 pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
@@ -114,26 +120,16 @@ pub fn setup_panic_hook() {
 }
 
 pub fn setup_logging(level: &str, log_type: LogType) {
-    let (level_key, log_path, use_datetime, log_name) = match log_type {
-        LogType::Client => (
-            "UDSACTOR_CLIENT_LOG_LEVEL",
-            "UDSACTOR_CLIENT_LOG_PATH",
-            "UDSACTOR_CLIENT_LOG_USE_DATETIME",
-            "udsactor-client",
-        ),
-        LogType::Service => (
-            "UDSACTOR_LOG_LEVEL",
-            "UDSACTOR_LOG_PATH",
-            "UDSACTOR_LOG_USE_DATETIME",
-            "udsactor",
-        ),
-        LogType::Tests | LogType::Config => (
-            "UDSACTOR_LOG_LEVEL",
-            "UDSACTOR_LOG_PATH",
-            "UDSACTOR_LOG_USE_DATETIME",
-            "udsactor-tests",
-        ),
-    };
+        // "UDSACTOR_CLIENT_LOG_LEVEL",
+        // "UDSACTOR_CLIENT_LOG_PATH",
+        // "UDSACTOR_CLIENT_LOG_USE_DATETIME",
+
+    let (level_key, log_path, use_datetime, log_name) = (
+        format!("UDSACTOR_{}_LOG_LEVEL", log_type.to_string().to_uppercase()),
+        format!("UDSACTOR_{}_LOG_PATH", log_type.to_string().to_uppercase()),
+        format!("UDSACTOR_{}_LOG_USE_DATETIME", log_type.to_string().to_uppercase()),
+        format!("udsactor-{}", log_type.to_string().to_lowercase()),
+    );
 
     let level = std::env::var(level_key).unwrap_or_else(|_| level.to_string());
     let log_path =

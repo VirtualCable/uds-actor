@@ -2,7 +2,11 @@ use std::sync::{Arc, Mutex};
 
 use fltk::prelude::*;
 
-use shared::{broker::api::types, config, log, operations::NetworkInterface};
+use shared::{
+    broker::api::{block, types},
+    config, log,
+    operations::NetworkInterface,
+};
 
 use crate::{config_fltk::ConfigGui, regcfg};
 
@@ -16,51 +20,62 @@ pub fn uds_server_changed(
     }
     let mut cfg_window = cfg_window.clone();
     let hostname = cfg_window.input_uds_server.value().trim().to_string();
-    let actor_cfg =
-        regcfg::broker_api_config(&hostname, cfg_window.choice_ssl_validation.value() == 1);
-    if let Ok(mut auths) = shared::broker::api::block::enumerate_authenticators(
-        actor_cfg,
-        Some(std::time::Duration::from_millis(800)),
-    ) {
-        // Sort auths by name before storing
-        auths.sort_by(|a, b| a.name.cmp(&b.name));
+    let ssl_validation = cfg_window.choice_ssl_validation.value() == 1;
+    std::thread::spawn(move || {
+        let actor_cfg = regcfg::broker_api_config(&hostname, ssl_validation);
+        match block::enumerate_authenticators(
+            actor_cfg,
+            Some(std::time::Duration::from_millis(800)),
+        ) {
+            Ok(mut auths) => {
+                if let Err(err) = fltk::app::lock() {
+                    log::error!("Failed to acquire FLTK lock: {}", err);
+                    return;
+                }
+                // Sort auths by name before storing
+                auths.sort_by(|a, b| a.name.cmp(&b.name));
 
-        // Store the authenticators in our Arc<Mutex<>>
-        saved_auths.lock().unwrap().clear();
-        saved_auths.lock().unwrap().extend(auths.clone());
+                // Store the authenticators in our Arc<Mutex<>>
+                saved_auths.lock().unwrap().clear();
+                saved_auths.lock().unwrap().extend(auths.clone());
 
-        cfg_window
-            .input_uds_server
-            .set_color(fltk::enums::Color::White);
-        log::debug!(
-            "Authenticator enumeration successful, found {} authenticators",
-            auths.len()
-        );
-        let mut auth_names: Vec<String> = auths.iter().map(|a| a.name.clone()).collect();
-        auth_names.sort();
-        auth_names.dedup();
+                cfg_window
+                    .input_uds_server
+                    .set_color(fltk::enums::Color::White);
+                log::debug!(
+                    "Authenticator enumeration successful, found {} authenticators",
+                    auths.len()
+                );
+                let mut auth_names: Vec<String> = auths.iter().map(|a| a.name.clone()).collect();
+                auth_names.sort();
+                auth_names.dedup();
 
-        // Add "Administration" as the first choice, and select it
-        cfg_window.choice_authenticator.add_choice("Administration");
-        cfg_window.choice_authenticator.set_value(0);
-        // Add all other authenticators
-        for (i, name) in auth_names.iter().enumerate() {
-            cfg_window.choice_authenticator.add_choice(name);
-            if name == "Administration" {
-                cfg_window.choice_authenticator.set_value(i as i32);
+                // Add "Administration" as the first choice, and select it
+                cfg_window.choice_authenticator.add_choice("Administration");
+                cfg_window.choice_authenticator.set_value(0);
+                // Add all other authenticators
+                for (i, name) in auth_names.iter().enumerate() {
+                    cfg_window.choice_authenticator.add_choice(name);
+                    if name == "Administration" {
+                        cfg_window.choice_authenticator.set_value(i as i32);
+                    }
+                }
+                fltk::app::awake();
+                fltk::app::unlock();
             }
-        }
-    } else {
-        cfg_window
-            .input_uds_server
-            .set_color(fltk::enums::Color::from_rgb(255, 100, 100)); // Light red
-        log::debug!("Authenticator enumeration failed");
-        cfg_window.choice_authenticator.clear();
-        cfg_window.choice_authenticator.add_choice("Administration");
-        cfg_window.choice_authenticator.set_value(0);
-    }
-    cfg_window.input_uds_server.redraw();
-    cfg_window.choice_authenticator.redraw();
+            Err(e) => {
+                cfg_window
+                    .input_uds_server
+                    .set_color(fltk::enums::Color::from_rgb(255, 100, 100)); // Light red
+                log::warn!("Authenticator enumeration failed: {}", e);
+                cfg_window.choice_authenticator.clear();
+                cfg_window.choice_authenticator.add_choice("Administration");
+                cfg_window.choice_authenticator.set_value(0);
+            }
+        };
+        cfg_window.input_uds_server.redraw();
+        cfg_window.choice_authenticator.redraw();
+    });
 }
 
 /// Callback for the "Register" button
@@ -103,8 +118,8 @@ pub fn btn_register_clicked(
             log::debug!("Login successful, got token: {}", token);
             token
         }
-        Err(e) => {
-            fltk::dialog::alert_default(&format!("Login failed: {}", e));
+        Err(_) => {
+            fltk::dialog::alert_default("Login failed");
             return;
         }
     };

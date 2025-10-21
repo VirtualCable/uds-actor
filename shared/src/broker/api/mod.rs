@@ -111,6 +111,9 @@ pub struct UdsBrokerApi {
     token: Option<String>,
     actor_type: crate::config::ActorType,
     custom_headers: reqwest::header::HeaderMap,
+    // For retries
+    retries: u8,
+    initial_backoff: std::time::Duration,
 }
 
 impl UdsBrokerApi {
@@ -124,7 +127,7 @@ impl UdsBrokerApi {
         let mut builder = ClientBuilder::new()
             .use_rustls_tls() // Use rustls for TLS
             .retry(policy)
-            .timeout(timeout.unwrap_or(std::time::Duration::from_secs(8)))
+            .timeout(timeout.unwrap_or(std::time::Duration::from_secs(2)))
             .connection_verbose(cfg!(debug_assertions))
             .danger_accept_invalid_certs(!cfg.verify_ssl);
 
@@ -156,6 +159,8 @@ impl UdsBrokerApi {
             token: Some(cfg.token().clone()),
             actor_type,
             custom_headers: reqwest::header::HeaderMap::new(),
+            retries: 3,
+            initial_backoff: std::time::Duration::from_millis(500),
         }
     }
 
@@ -172,6 +177,11 @@ impl UdsBrokerApi {
             headers.insert(key, value.clone());
         }
         headers
+    }
+
+    pub fn set_retry_params(&mut self, retries: u8, initial_backoff: std::time::Duration) {
+        self.retries = retries;
+        self.initial_backoff = initial_backoff;
     }
 
     fn api_url(&self, method: &str) -> String {
@@ -194,10 +204,9 @@ impl UdsBrokerApi {
     ) -> Result<T, types::RestError> {
         log::debug!("POST to {}", self.api_url(method));
 
-        let mut backoff = std::time::Duration::from_millis(500);
-        let max_retries = 5;
+        let mut backoff = self.initial_backoff;
 
-        for attempt in 0..=max_retries {
+        for attempt in 0..=self.retries {
             let resp = self
                 .client
                 .post(self.api_url(method))
@@ -219,7 +228,7 @@ impl UdsBrokerApi {
                     return Err(types::RestError::Other(txt));
                 }
                 Err(e) if e.is_timeout() || e.is_connect() => {
-                    if attempt < max_retries {
+                    if attempt < self.retries {
                         log::warn!("POST failed ({}), retrying in {:?}...", e, backoff);
                         tokio::time::sleep(backoff).await;
                         backoff = std::cmp::min(backoff * 2, std::time::Duration::from_secs(8));
@@ -237,16 +246,16 @@ impl UdsBrokerApi {
     async fn do_get<T: for<'de> Deserialize<'de>>(&self, url: &str) -> Result<T, types::RestError> {
         log::debug!("GET to {}", url);
 
-        let mut backoff = std::time::Duration::from_millis(500);
-        let max_retries = 5;
-
-        for attempt in 0..=max_retries {
+        let mut backoff = self.initial_backoff;
+        for attempt in 0..=self.retries {
             let resp = self
                 .client
                 .get(self.api_url(url))
                 .headers(self.headers())
                 .send()
                 .await;
+
+            log::debug!("GET response: {:?}", resp);
 
             match resp {
                 Ok(resp) if resp.status().is_success() => {
@@ -261,7 +270,8 @@ impl UdsBrokerApi {
                     return Err(types::RestError::Other(txt));
                 }
                 Err(e) if e.is_timeout() || e.is_connect() => {
-                    if attempt < max_retries {
+                    log::warn!("GET attempt {} failed: {}", attempt + 1, e);
+                    if attempt < self.retries {
                         log::warn!("GET failed ({}), retrying in {:?}...", e, backoff);
                         tokio::time::sleep(backoff).await;
                         backoff = std::cmp::min(backoff * 2, std::time::Duration::from_secs(8));
