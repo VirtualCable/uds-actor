@@ -10,10 +10,9 @@ use crate::platform;
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     // Note that logout is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.from_ws.subscribe();
+    let broker_api = platform.broker_api();
     while let Some(env) = wait_message_arrival::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received LogoutRequest with id {:?}", env.id);
-        let broker_api = platform.broker_api();
-        // Clone api to avoid holding the lock during await
         let interfaces = platform.operations().get_network_info()?;
         if let Err(err) = broker_api
             .write()
