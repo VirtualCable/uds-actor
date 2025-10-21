@@ -1,10 +1,4 @@
-use anyhow::Result;
-use tokio::signal::unix::{SignalKind, signal};
-
-use shared::{
-    log,
-    sync::OnceSignal,
-};
+use shared::{log, sync::OnceSignal};
 
 use crate::session::SessionManagement;
 
@@ -13,40 +7,16 @@ pub struct UnixSessionManager {
 }
 
 impl UnixSessionManager {
-    pub async fn new() -> Self {
+    pub async fn new(stop: OnceSignal) -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
-        let stop = OnceSignal::new();
-        Self {
-            stop,
-        }
+        Self { stop }
     }
 }
 
 #[async_trait::async_trait]
 impl SessionManagement for UnixSessionManager {
-    async fn wait(&self) {
-        // Listen for SIGTERM, SIGINT or SIGHUP
-        let mut sigterm = signal(SignalKind::terminate()).unwrap();
-        let mut sigint = signal(SignalKind::interrupt()).unwrap();
-        let mut sighup = signal(SignalKind::hangup()).unwrap();
-
-        tokio::select! {
-            _ = sigterm.recv() => {
-                log::debug!("Received SIGTERM");
-                self.stop.set();
-            },
-            _ = sigint.recv() => {
-                log::debug!("Received SIGINT");
-                self.stop.set();
-            },
-            _ = sighup.recv() => {
-                log::debug!("Received SIGHUP");
-                self.stop.set();
-            },
-            _ = self.stop.wait() => {
-                log::debug!("Unix session close event received");
-            }
-        }
+    fn get_stop(&self) -> OnceSignal {
+        self.stop.clone()
     }
 
     async fn is_running(&self) -> bool {
@@ -57,14 +27,10 @@ impl SessionManagement for UnixSessionManager {
         self.stop.set();
         log::debug!("Unix session close event signaled");
     }
-
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
-        self.stop.wait_timeout(timeout).await
-    }
 }
 
-pub async fn new_session_manager() -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
-    std::sync::Arc::new(UnixSessionManager::new().await)
+pub async fn new_session_manager(stop: OnceSignal) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+    std::sync::Arc::new(UnixSessionManager::new(stop).await)
 }
 
 #[cfg(test)]
@@ -73,14 +39,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_unix_session_close() {
-        let session_close = UnixSessionManager::new().await;
-        let event = session_close.stop.clone();
+        let stop = OnceSignal::new();
+        let session_close = UnixSessionManager::new(stop.clone()).await;
         let _fake_closer = tokio::spawn(async move {
-            session_close.wait().await;
+            session_close.get_stop().wait().await;
         });
         // Wait a bit to simulate waiting
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        event.set();
+        stop.set();
         // Wait a bit to ensure the event is handled
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
