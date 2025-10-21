@@ -42,7 +42,7 @@ static LAUNCHER: OnceLock<Arc<dyn AsyncServiceTrait>> = OnceLock::new();
 struct ServiceContext {
     status_handle: SERVICE_STATUS_HANDLE,
     stop_event: HANDLE,
-    async_stop: Arc<OnceSignal>,
+    async_stop: OnceSignal,
     exit_code: u32,
 }
 
@@ -50,7 +50,7 @@ unsafe impl Send for ServiceContext {}
 unsafe impl Sync for ServiceContext {}
 
 impl ServiceContext {
-    fn new(async_stop: Arc<OnceSignal>) -> Self {
+    fn new(async_stop: OnceSignal) -> Self {
         Self {
             status_handle: SERVICE_STATUS_HANDLE(std::ptr::null_mut()),
             stop_event: unsafe { CreateEventW(None, true, false, None).unwrap() },
@@ -152,7 +152,7 @@ extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         let launcher = LAUNCHER.get().expect("Launcher not set");
 
         // Register the service control handler, with our context
-        let mut ctx = ServiceContext::new(launcher.get_stop_notify());
+        let mut ctx = ServiceContext::new(launcher.get_stop());
 
         let ctx_ptr: *mut ServiceContext = &mut ctx;
         ctx.status_handle = match RegisterServiceCtrlHandlerExW(
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_stop_signals_notify_and_event() {
-        let async_stop = Arc::new(OnceSignal::new());
+        let async_stop = OnceSignal::new();
         let mut ctx = ServiceContext::new(async_stop.clone());
         ctx.status_handle = SERVICE_STATUS_HANDLE::default(); // dummy
 

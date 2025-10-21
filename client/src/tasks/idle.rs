@@ -32,9 +32,10 @@ pub async fn task(
     platform: platform::Platform,
 ) -> anyhow::Result<Option<String>> {
     let max_idle = std::time::Duration::from_secs(max_idle.unwrap_or(0));
+    let stop = platform.get_stop();
     if max_idle.as_secs() == 0 {
         // Wait until signaled
-        platform.session_manager().wait().await;
+        stop.wait().await;
         return Ok(None);
     }
 
@@ -48,13 +49,13 @@ pub async fn task(
             "Idle timer cannot be initialized: {}. Disabling idle task.",
             e
         );
-        session_manager.wait().await;
+        stop.wait().await;
         return Ok(None);
     }
 
     let mut notified = false;
 
-    while session_manager
+    while stop
         .wait_timeout(std::time::Duration::from_secs(1))
         .await
         .is_err()

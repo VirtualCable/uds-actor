@@ -1,5 +1,3 @@
-use anyhow::Result;
-
 use shared::sync::OnceSignal;
 use shared::ws::client::websocket_client_tasks;
 
@@ -22,9 +20,9 @@ impl SessionManagerMock {
 
 #[async_trait::async_trait]
 impl crate::session::SessionManagement for SessionManagerMock {
-    async fn wait(&self) {
-        self.calls.push("session::wait()");
-        self.event.wait().await;
+    fn get_stop(&self) -> OnceSignal {
+        self.calls.push("session::get_stop()");
+        self.event.clone()
     }
 
     async fn is_running(&self) -> bool {
@@ -35,13 +33,6 @@ impl crate::session::SessionManagement for SessionManagerMock {
     async fn stop(&self) {
         self.calls.push("session::stop()");
         self.event.set();
-    }
-
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
-        self.calls
-            .push(format!("session::wait_timeout({:?})", timeout));
-        let ev = self.event.clone();
-        ev.wait_timeout(timeout).await
     }
 }
 

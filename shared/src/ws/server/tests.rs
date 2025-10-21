@@ -25,7 +25,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
 
     let tracker = RequestTracker::new();
     let cert_info = crate::testing::test_certs::test_certinfo_with_pass();
-    let stop = Arc::new(OnceSignal::new());
+    let stop = OnceSignal::new();
 
     let server_info = ServerStartInfo {
         cert_info,

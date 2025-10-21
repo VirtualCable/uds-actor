@@ -43,9 +43,9 @@ use crate::sync::OnceSignal;
 pub use crate::windows::service::run_service;
 
 pub trait AsyncServiceTrait: Send + Sync + 'static {
-    fn run(&self, stop: Arc<OnceSignal>);
+    fn run(&self, stop: OnceSignal);
 
-    fn get_stop_notify(&self) -> Arc<OnceSignal>;
+    fn get_stop(&self) -> OnceSignal;
 
     fn get_restart_flag(&self) -> Arc<AtomicBool>;
 
@@ -53,12 +53,12 @@ pub trait AsyncServiceTrait: Send + Sync + 'static {
 }
 
 // Type alias for the main async function signature
-type MainAsyncFn = fn(Arc<OnceSignal>, Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+type MainAsyncFn = fn(OnceSignal, Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 pub struct AsyncService {
     // Add async fn to call as main_async
     main_async: MainAsyncFn,
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
     restart_flag: Arc<AtomicBool>,
 }
 
@@ -66,7 +66,7 @@ impl AsyncService {
     pub fn new(main_async: MainAsyncFn) -> Self {
         Self {
             main_async,
-            stop: Arc::new(OnceSignal::new()),
+            stop: OnceSignal::new(),
             restart_flag: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -82,7 +82,7 @@ impl AsyncService {
         Ok(())
     }
 
-    async fn signals(stop: Arc<OnceSignal>) {
+    async fn signals(stop: OnceSignal) {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{SignalKind, signal};
@@ -116,7 +116,7 @@ impl AsyncService {
 }
 
 impl AsyncServiceTrait for AsyncService {
-    fn run(&self, stop: Arc<OnceSignal>) {
+    fn run(&self, stop: OnceSignal) {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all() // Enable timers, I/O, etc.
             .build()
@@ -157,7 +157,7 @@ impl AsyncServiceTrait for AsyncService {
         });
     }
 
-    fn get_stop_notify(&self) -> Arc<OnceSignal> {
+    fn get_stop(&self) -> OnceSignal {
         self.stop.clone()
     }
 
@@ -178,7 +178,7 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn async_main(stop: Arc<OnceSignal>, _restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    fn async_main(stop: OnceSignal, _restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(async move {
             // main logic
             stop.wait().await;
@@ -187,7 +187,7 @@ mod tests {
         })
     }
 
-    fn async_main_restart(stop: Arc<OnceSignal>, restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    fn async_main_restart(stop: OnceSignal, restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(async move {
             // main logic
             restart_flag.store(true, Ordering::Relaxed);
@@ -202,7 +202,7 @@ mod tests {
         let service = AsyncService::new(async_main);
         let restart_flag = service.get_restart_flag();
 
-        let stop = service.get_stop_notify();
+        let stop = service.get_stop();
         let handle = std::thread::spawn({
             let stop = stop.clone();
             let stopped = stopped.clone();
@@ -236,7 +236,7 @@ mod tests {
         let service = AsyncService::new(async_main_restart);
         let restart_flag = service.get_restart_flag();
 
-        let stop = service.get_stop_notify();
+        let stop = service.get_stop();
         let handle = std::thread::spawn({
             let stop = stop.clone();
             let stopped = stopped.clone();

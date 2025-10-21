@@ -9,12 +9,12 @@ pub struct Platform {
     operations: Arc<dyn shared::operations::Operations>, // Different for Windows, Linux, Mac, ...
     broker_api: Arc<RwLock<dyn shared::broker::api::BrokerApi>>,
 
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
     restart_flag: Arc<AtomicBool>,
 }
 
 impl Platform {
-    pub fn new(stop: Arc<OnceSignal>, restart_flag: Arc<AtomicBool>) -> Self {
+    pub fn new(stop: OnceSignal, restart_flag: Arc<AtomicBool>) -> Self {
         let mut cfg = shared::config::new_config_storage();
         let cfg = cfg.config(true).unwrap(); // Forced load
 
@@ -55,7 +55,7 @@ impl Platform {
         shared::config::new_config_storage()
     }
 
-    pub fn get_stop(&self) -> Arc<OnceSignal> {
+    pub fn get_stop(&self) -> OnceSignal {
         self.stop.clone()
     }
 
@@ -89,7 +89,7 @@ impl Platform {
             operations,
             broker_api,
             config,
-            stop: Arc::new(OnceSignal::new()),
+            stop: OnceSignal::new(),
             restart_flag: Arc::new(AtomicBool::new(false)),
         }
     }

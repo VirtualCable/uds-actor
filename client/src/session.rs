@@ -1,11 +1,9 @@
-use anyhow::Result;
+use shared::sync::OnceSignal;
 
 #[async_trait::async_trait]
 #[allow(dead_code)]
 pub trait SessionManagement: Send + Sync {
-    async fn wait(&self);
-    /// Returns Ok if the event was signaled, Err if the timeout expired
-    async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()>;
+    fn get_stop(&self) -> OnceSignal;
     async fn is_running(&self) -> bool;
     async fn stop(&self);
 }

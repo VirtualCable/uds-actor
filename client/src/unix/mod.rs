@@ -9,15 +9,15 @@ use shared::{
 use crate::session::SessionManagement;
 
 pub struct UnixSessionManager {
-    stop_event: OnceSignal,
+    stop: OnceSignal,
 }
 
 impl UnixSessionManager {
     pub async fn new() -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
-        let stop_event = OnceSignal::new();
+        let stop = OnceSignal::new();
         Self {
-            stop_event,
+            stop,
         }
     }
 }
@@ -33,33 +33,33 @@ impl SessionManagement for UnixSessionManager {
         tokio::select! {
             _ = sigterm.recv() => {
                 log::debug!("Received SIGTERM");
-                self.stop_event.set();
+                self.stop.set();
             },
             _ = sigint.recv() => {
                 log::debug!("Received SIGINT");
-                self.stop_event.set();
+                self.stop.set();
             },
             _ = sighup.recv() => {
                 log::debug!("Received SIGHUP");
-                self.stop_event.set();
+                self.stop.set();
             },
-            _ = self.stop_event.wait() => {
+            _ = self.stop.wait() => {
                 log::debug!("Unix session close event received");
             }
         }
     }
 
     async fn is_running(&self) -> bool {
-        !self.stop_event.is_set()
+        !self.stop.is_set()
     }
 
     async fn stop(&self) {
-        self.stop_event.set();
+        self.stop.set();
         log::debug!("Unix session close event signaled");
     }
 
     async fn wait_timeout(&self, timeout: std::time::Duration) -> Result<()> {
-        self.stop_event.wait_timeout(timeout).await
+        self.stop.wait_timeout(timeout).await
     }
 }
 
@@ -74,7 +74,7 @@ mod tests {
     #[tokio::test]
     async fn test_unix_session_close() {
         let session_close = UnixSessionManager::new().await;
-        let event = session_close.stop_event.clone();
+        let event = session_close.stop.clone();
         let _fake_closer = tokio::spawn(async move {
             session_close.wait().await;
         });

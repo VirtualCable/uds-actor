@@ -24,7 +24,7 @@ mod actors;
 mod workers;
 
 fn executor(
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
     restart_flag: Arc<AtomicBool>,
 ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
     Box::pin(async move {

@@ -14,31 +14,14 @@ pub struct Platform {
     session_manager: Arc<dyn SessionManagement>,
     operations: Arc<dyn operations::Operations>,
     ws_client: WsClient,
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
 }
 
 impl Platform {
     pub async fn new(port: u16) -> Self {
-        let session_manager = crate::session::new_session_manager().await;
+        let stop = OnceSignal::new();
+        let session_manager = crate::session::new_session_manager(stop.clone()).await;
         let operations = shared::operations::new_operations();
-
-        let stop = Arc::new(OnceSignal::new());
-
-        // Task for conecting session maanger and stop flag
-        tokio::spawn({
-            let stop = stop.clone();
-            let session_manager = session_manager.clone();
-            async move {
-                tokio::select! {
-                    _ = stop.wait() => {
-                        session_manager.stop().await;
-                    }
-                    _ = session_manager.wait() => {
-                        stop.set();
-                    }
-                }
-            }
-        });
 
         Self {
             session_manager,
@@ -60,7 +43,7 @@ impl Platform {
         self.ws_client.clone()
     }
 
-    pub fn get_stop(&self) -> Arc<OnceSignal> {
+    pub fn get_stop(&self) -> OnceSignal {
         self.stop.clone()
     }
 
@@ -81,10 +64,12 @@ impl Platform {
         ws: Option<WsClient>,
         port: u16,
     ) -> Self {
+        let stop = OnceSignal::new();
+        
         let session_manager = if let Some(sm) = session_manager {
             sm
         } else {
-            crate::session::new_session_manager().await
+            crate::session::new_session_manager(stop.clone()).await
         };
         let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
         let ws_client = if let Some(ws) = ws {
@@ -92,24 +77,6 @@ impl Platform {
         } else {
             websocket_client_tasks(port, 32).await
         };
-
-        let stop = Arc::new(OnceSignal::new());
-
-        // Task for conecting session maanger and stop flag
-        tokio::spawn({
-            let stop = stop.clone();
-            let session_manager = session_manager.clone();
-            async move {
-                tokio::select! {
-                    _ = stop.wait() => {
-                        session_manager.stop().await;
-                    }
-                    _ = session_manager.wait() => {
-                        stop.set();
-                    }
-                }
-            }
-        });
 
         Self {
             session_manager,

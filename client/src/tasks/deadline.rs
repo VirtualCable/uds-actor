@@ -40,19 +40,18 @@ pub async fn task(
     } else {
         (deadline, std::time::Duration::from_secs(0)) // If less than 5 mins, just keep it as is
     };
+    let stop = platform.get_stop();
     // If no deadline, just wait until signaled
     if deadline.as_secs() == 0 {
         log::info!("No deadline set, waiting until signaled");
         // Wait until signaled
-        platform.session_manager().wait().await;
+        stop.wait().await;
         return Ok(None);
     }
 
     // Deadline timer, simply wait until deadline is reached inside the session_manager
     // But leave a 5 mins to notify before deadline
-    if platform
-        .session_manager()
-        .wait_timeout(deadline)
+    if stop.wait_timeout(deadline)
         .await
         .is_err()
     // Timeout without being signaled
@@ -65,7 +64,7 @@ pub async fn task(
             .ok();
 
         // Wait remaining minutes more or until signaled
-        let _ = platform.session_manager().wait_timeout(remaining).await;
+        let _ = stop.wait_timeout(remaining).await;
         log::info!("Session still running after deadline, stopping session");
     } else {
         log::info!("Session signaled or closed, stopping deadline task");

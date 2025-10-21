@@ -52,7 +52,7 @@ struct ServerStartInfo {
     pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>, // unique receiver
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>, // WS client → workers
     pub tracker: RequestTracker,
-    pub stop: Arc<OnceSignal>,
+    pub stop: OnceSignal,
     pub secret: String,
 }
 
@@ -61,7 +61,7 @@ pub struct ServerState {
     pub workers_to_wsclient: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     pub wsclient_to_workers: broadcast::Sender<RpcEnvelope<RpcMessage>>,
     pub tracker: RequestTracker,
-    pub stop: Arc<OnceSignal>,
+    pub stop: OnceSignal,
     pub secret: String,
     pub is_ws_active: Arc<AtomicBool>,
 }
@@ -140,7 +140,7 @@ pub async fn websocket_loop(
     socket: WebSocket,
     to_ws: Arc<tokio::sync::Mutex<mpsc::Receiver<RpcEnvelope<RpcMessage>>>>,
     from_ws: broadcast::Sender<RpcEnvelope<RpcMessage>>,
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
     ws_active: Arc<AtomicBool>,
     tracker: RequestTracker,
 ) {
@@ -305,7 +305,7 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
 //
 pub async fn start_server(
     cert_info: CertificateInfo,
-    stop: Arc<OnceSignal>,
+    stop: OnceSignal,
     secret: String,
     port: Option<u16>,
 ) -> Result<(ServerContext, tokio::task::JoinHandle<()>)> {

@@ -53,7 +53,7 @@ where
 /// Cancels if the `stop` is triggered.
 pub async fn wait_message_arrival<T>(
     rx: &mut broadcast::Receiver<RpcEnvelope<RpcMessage>>,
-    stop: Option<Arc<OnceSignal>>,
+    stop: Option<OnceSignal>,
 ) -> Option<RpcEnvelope<T>>
 where
     T: TryFrom<RpcMessage> + Clone,
@@ -119,7 +119,7 @@ mod tests {
         }
 
         // No stop signal
-        let stop: Option<Arc<OnceSignal>> = None;
+        let stop: Option<OnceSignal> = None;
 
         // Call wait_for_request it should skip Lagged messages
         // and return the first Ping it can parse

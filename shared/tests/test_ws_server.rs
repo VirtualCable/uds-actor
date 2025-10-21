@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::AtomicU16};
+use std::sync::{atomic::AtomicU16};
 
 use anyhow::Result;
 
@@ -8,25 +8,30 @@ use tokio_tungstenite::{Connector, connect_async_tls_with_config, tungstenite::M
 
 use reqwest::Client;
 use shared::{
-    log, sync::OnceSignal, testing::test_certs, ws::{
-        server::{start_server, ServerContext},
+    log,
+    sync::OnceSignal,
+    testing::test_certs,
+    ws::{
+        server::{ServerContext, start_server},
         types::{
             LogoffRequest, MessageRequest, Ping, PreConnect, RpcEnvelope, RpcMessage,
             ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, UUidRequest, UUidResponse,
         },
         wait_message_arrival, wait_response,
-    }
+    },
 };
 
 // Port counter to avoid collisions
 static NEXT_PORT: AtomicU16 = AtomicU16::new(32420);
 
-async fn create_test_server_task(secret: &str) -> (ServerContext, tokio::task::JoinHandle<()>, u16) {
+async fn create_test_server_task(
+    secret: &str,
+) -> (ServerContext, tokio::task::JoinHandle<()>, u16) {
     let port = NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     log::setup_logging("debug", crate::log::LogType::Tests);
     shared::tls::init_tls(None);
 
-    let stop = Arc::new(OnceSignal::new());
+    let stop = OnceSignal::new();
     let cert_info = test_certs::test_certinfo();
 
     let (server_info, handle) = start_server(cert_info, stop.clone(), secret.into(), Some(port))
@@ -411,7 +416,7 @@ async fn test_ws_connect_insecure_tls() {
 #[ignore = "Requires network access"]
 async fn test_ws_msg_with_envelope_id() {
     let (server_info, server_task, port) = create_test_server_task("-secret-").await;
-    
+
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 

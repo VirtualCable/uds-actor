@@ -35,6 +35,7 @@ mod session;
 
 mod gui;
 mod platform;
+mod workers;
 
 #[cfg(unix)]
 mod unix;
@@ -125,9 +126,8 @@ async fn run(platform: platform::Platform) {
     // On legacy, no ping is needed
     //let alive_task = tokio::spawn(tasks::alive::task(platform.clone()));
 
-    let session_manager = platform.session_manager();
     // Await for session end
-    session_manager.wait().await;
+    platform.get_stop().wait().await;
 
     // Join with a timeout all tasks to avoid hanging forever
     let join_timeout = std::time::Duration::from_secs(5);
