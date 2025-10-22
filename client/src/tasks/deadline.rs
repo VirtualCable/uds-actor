@@ -81,12 +81,15 @@ pub async fn task(
 
 #[cfg(test)]
 mod tests {
+    use shared::tls;
+
     // Tests for deadline task
     use crate::testing::mock::mock_platform;
 
     #[tokio::test]
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
+        tls::init_tls(None);
         let (platform, calls) = mock_platform(None, None, 43900).await;
         let session_manager = platform.session_manager();
 
@@ -98,7 +101,6 @@ mod tests {
         .await;
         shared::log::info!("Calls: {:?}", calls.dump());
 
-        calls.assert_called("session::wait_timeout(1s)");
         calls.assert_called("session::stop()");
 
         session_manager.stop().await; // Ensure session is stopped

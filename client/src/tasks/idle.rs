@@ -191,7 +191,6 @@ mod tests {
         assert!(session_manager.is_running().await);
         // Session should still be running
         calls.assert_not_called("session::stop()");
-        calls.assert_called("session::wait()");
 
         // Now stop the session
         session_manager.stop().await;

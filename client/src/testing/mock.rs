@@ -1,7 +1,9 @@
 use shared::sync::OnceSignal;
-use shared::ws::client::websocket_client_tasks;
+use shared::ws::client::WsClient;
 
 use shared::testing::mock::{Calls, OperationsMock};
+
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Clone)]
 struct SessionManagerMock {
@@ -46,7 +48,10 @@ pub async fn mock_platform(
         manager.unwrap_or_else(|| std::sync::Arc::new(SessionManagerMock::new(calls.clone())));
     let operations =
         operations.unwrap_or_else(|| std::sync::Arc::new(OperationsMock::new(calls.clone())));
-    let ws_client = websocket_client_tasks(port, 32).await;
+    let ws_client = WsClient {
+        from_ws: broadcast::channel(16).0,
+        to_ws: mpsc::channel(16).0,
+    };
 
     (
         crate::platform::Platform::new_with_params(

@@ -26,10 +26,10 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(not(test), windows_subsystem = "windows")]
-use shared::ws::{
+use shared::{tls, ws::{
     types::{LoginRequest, LoginResponse, LogoutRequest, RpcEnvelope, RpcMessage},
     wait_message_arrival,
-};
+}};
 
 mod session;
 
@@ -99,6 +99,7 @@ async fn send_logout(platform: &platform::Platform, session_id: Option<&str>) ->
 async fn main() {
     // Setup logging
     shared::log::setup_logging("debug", shared::log::LogType::Client);
+    tls::init_tls(None);
 
     shared::log::info!("Starting uds-actor client...");
     let platform = platform::Platform::new(43910).await;
