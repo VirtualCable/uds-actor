@@ -35,7 +35,7 @@ mod session;
 
 mod gui;
 mod platform;
-mod workers;
+mod ws_workers;
 
 #[cfg(unix)]
 mod unix;
@@ -124,7 +124,7 @@ async fn run(platform: platform::Platform) {
     shared::log::info!("Login successful: {:?}", login_info);
 
     // Setup ws workers
-    workers::setup_workers(platform.clone()).await;
+    ws_workers::setup_workers(platform.clone()).await;
 
     // Monitoring tasks, can stop the app (and session itself)
     let idle_task = tokio::spawn(tasks::idle::task(login_info.max_idle, platform.clone()));

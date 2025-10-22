@@ -17,7 +17,7 @@ async fn test_run_and_stop() {
     // Get real session manager for this test
     let stop = OnceSignal::new();
     let session_manager = crate::session::new_session_manager(stop.clone()).await;
-    let (platform, _calls) = mock_platform(Some(session_manager), None, 43910).await;
+    let (platform, _calls, _, _) = mock_platform(Some(session_manager), None, 43910).await;
 
     let session_manager = platform.session_manager();
 
@@ -48,7 +48,7 @@ async fn test_run_and_stop_via_platform() {
     // Get real session manager for this test
     let stop = OnceSignal::new();
     let session_manager = crate::session::new_session_manager(stop.clone()).await;
-    let (platform, _calls) = mock_platform(Some(session_manager), None, 43910).await;
+    let (platform, _calls, _, _) = mock_platform(Some(session_manager), None, 43910).await;
 
     let session_manager = platform.session_manager();
 

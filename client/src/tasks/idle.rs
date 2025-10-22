@@ -131,7 +131,7 @@ mod tests {
     async fn test_idle_task_idle() {
         log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, 43902).await;
+        let (platform, calls, _ ,_) = mock_platform(None, None, 43902).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (10 seconds)
@@ -153,7 +153,7 @@ mod tests {
     async fn test_idle_task_no_idle_exceeded() {
         log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, 43903).await;
+        let (platform, calls, _, _) = mock_platform(None, None, 43903).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with a short max_idle (5 seconds)
@@ -175,7 +175,7 @@ mod tests {
     async fn test_idle_task_no_idle() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
 
-        let (platform, calls) = mock_platform(None, None, 43904).await;
+        let (platform, calls, _, _) = mock_platform(None, None, 43904).await;
         let session_manager = platform.session_manager();
 
         // Run idle task in a separate task with no max_idle

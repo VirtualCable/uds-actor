@@ -90,7 +90,7 @@ mod tests {
     async fn test_deadline_task_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         tls::init_tls(None);
-        let (platform, calls) = mock_platform(None, None, 43900).await;
+        let (platform, calls, _, _) = mock_platform(None, None, 43900).await;
         let session_manager = platform.session_manager();
 
         // Run deadline task in a separate task with a short deadline (10 seconds)
@@ -111,7 +111,7 @@ mod tests {
     #[tokio::test]
     async fn test_deadline_task_no_deadline() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform(None, None, 43901).await;
+        let (platform, calls, _, _) = mock_platform(None, None, 43901).await;
         let session_manager = platform.session_manager();
         // Run deadline task in a separate task with no deadline
         let deadline_handle = tokio::spawn(async move {

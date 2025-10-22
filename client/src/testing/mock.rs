@@ -42,16 +42,23 @@ pub async fn mock_platform(
     manager: Option<std::sync::Arc<dyn crate::session::SessionManagement>>,
     operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
     port: u16,
-) -> (crate::platform::Platform, Calls) {
+) -> (
+    crate::platform::Platform,
+    Calls,
+    broadcast::Receiver<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>,
+    mpsc::Receiver<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>,
+) {
     let calls: Calls = Calls::new();
     let manager =
         manager.unwrap_or_else(|| std::sync::Arc::new(SessionManagerMock::new(calls.clone())));
     let operations =
         operations.unwrap_or_else(|| std::sync::Arc::new(OperationsMock::new(calls.clone())));
-    let ws_client = WsClient {
-        from_ws: broadcast::channel(16).0,
-        to_ws: mpsc::channel(16).0,
-    };
+
+    let (from_ws, from_rx_receiver) =
+        broadcast::channel::<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>(32);
+    let (to_ws, to_ws_receiver) =
+        mpsc::channel::<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>(32);
+    let ws_client = WsClient { from_ws, to_ws };
 
     (
         crate::platform::Platform::new_with_params(
@@ -60,7 +67,10 @@ pub async fn mock_platform(
             Some(ws_client),
             port,
         )
-        .await.unwrap(),
+        .await
+        .unwrap(),
         calls,
+        from_rx_receiver,
+        to_ws_receiver,
     )
 }
