@@ -102,7 +102,10 @@ async fn main() {
     tls::init_tls(None);
 
     shared::log::info!("Starting uds-actor client...");
-    let platform = platform::Platform::new(43910).await;
+    let platform = platform::Platform::new(43910).await.unwrap_or_else(|err| {
+        shared::log::error!("Failed to initialize platform: {}", err);
+        std::process::exit(1);
+    });
 
     run(platform.clone()).await; // Run main loop
     shared::log::info!("uds-actor client stopped.");

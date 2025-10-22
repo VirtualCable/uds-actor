@@ -18,17 +18,19 @@ pub struct Platform {
 }
 
 impl Platform {
-    pub async fn new(port: u16) -> Self {
+    pub async fn new(port: u16) -> Result<Self> {
+        // If cannot connect, do not initialize the rest of the platform
+        let ws_client = websocket_client_tasks(port, 32).await?;
         let stop = OnceSignal::new();
         let session_manager = crate::session::new_session_manager(stop.clone()).await;
         let operations = shared::operations::new_operations();
 
-        Self {
+        Ok(Self {
             session_manager,
             operations,
-            ws_client: websocket_client_tasks(port, 32).await,
+            ws_client,
             stop,
-        }
+        })
     }
 
     pub fn session_manager(&self) -> Arc<dyn SessionManagement> {
@@ -63,9 +65,9 @@ impl Platform {
         operations: Option<Arc<dyn shared::operations::Operations>>,
         ws: Option<WsClient>,
         port: u16,
-    ) -> Self {
+    ) -> Result<Self> {
         let stop = OnceSignal::new();
-        
+
         let session_manager = if let Some(sm) = session_manager {
             sm
         } else {
@@ -75,15 +77,15 @@ impl Platform {
         let ws_client = if let Some(ws) = ws {
             ws
         } else {
-            websocket_client_tasks(port, 32).await
+            websocket_client_tasks(port, 32).await?
         };
 
-        Self {
+        Ok(Self {
             session_manager,
             operations,
             ws_client,
             stop,
-        }
+        })
     }
 
     pub fn shutdown(&self) {

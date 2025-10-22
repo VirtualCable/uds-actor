@@ -60,7 +60,7 @@ pub async fn mock_platform(
             Some(ws_client),
             port,
         )
-        .await,
+        .await.unwrap(),
         calls,
     )
 }

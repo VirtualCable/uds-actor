@@ -1,23 +1,23 @@
+use shared::sync::OnceSignal;
+
 use crate::testing::mock::mock_platform;
 
 #[tokio::test]
 async fn test_run_no_server() {
+    shared::log::setup_logging("debug", shared::log::LogType::Tests);
+    shared::tls::init_tls(None);
     // Execute run function. As long as there is no server running on localhost, it will fail to login (Before registering)
-    let platform = crate::platform::Platform::new(43910).await; // Default platform, no fake api
-    let session_manager = platform.session_manager();
-
-    let res = tokio::time::timeout(std::time::Duration::from_secs(4), super::run(platform)).await;
-    shared::log::info!("Run finished with result: {:?}", res);
-
-    // Stop should not be set, as run should fail to login and stop the session
-    assert!(session_manager.is_running().await);
+    assert!(crate::platform::Platform::new(43910).await.is_err());
 }
 
 #[tokio::test]
 async fn test_run_and_stop() {
     shared::log::setup_logging("debug", shared::log::LogType::Tests);
     // Start a mock server to allow login
-    let (platform, _calls) = mock_platform(None, None, 43910).await;
+    // Get real session manager for this test
+    let stop = OnceSignal::new();
+    let session_manager = crate::session::new_session_manager(stop.clone()).await;
+    let (platform, _calls) = mock_platform(Some(session_manager), None, 43910).await;
 
     let session_manager = platform.session_manager();
 
@@ -35,6 +35,39 @@ async fn test_run_and_stop() {
     assert!(session_manager.is_running().await);
     // Now stop the session
     session_manager.stop().await;
+    shared::log::info!("Session stop requested");
+    // Wait for run to finish
+    let _ = run_handle.await;
+    assert!(!session_manager.is_running().await);
+}
+
+#[tokio::test]
+async fn test_run_and_stop_via_platform() {
+    shared::log::setup_logging("debug", shared::log::LogType::Tests);
+    // Start a mock server to allow login
+    // Get real session manager for this test
+    let stop = OnceSignal::new();
+    let session_manager = crate::session::new_session_manager(stop.clone()).await;
+    let (platform, _calls) = mock_platform(Some(session_manager), None, 43910).await;
+
+    let session_manager = platform.session_manager();
+
+    assert!(session_manager.is_running().await);
+
+    // Run on a separate task to be able to stop it, but use a timeout to avoid hanging forever
+    let run_handle = tokio::spawn(async move {
+        let res =
+            tokio::time::timeout(std::time::Duration::from_secs(8), super::run(platform)).await;
+        shared::log::info!("Run finished with result: {:?}", res);
+    });
+
+    // Wait a bit to ensure run has started and logged in
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    assert!(session_manager.is_running().await);
+    // Now stop the session
+    stop.set();
+    // Wait a bit to ensure the stop is processed
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     shared::log::info!("Session stop requested");
     // Wait for run to finish
     let _ = run_handle.await;

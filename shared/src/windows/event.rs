@@ -123,6 +123,7 @@ impl WindowsEvent {
     pub async fn wait_async(&self)
     {
         let ev = self.clone();
+        crate::log::debug!("Entering wait_async()");
         tokio::task::spawn_blocking(move || ev.wait())
             .await
             .expect("Join error in wait_async()");

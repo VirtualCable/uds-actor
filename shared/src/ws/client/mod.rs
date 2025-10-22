@@ -1,4 +1,4 @@
-
+use anyhow::Result;
 use futures_util::{StreamExt, SinkExt};
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{Connector, tungstenite::protocol::Message};
@@ -23,7 +23,7 @@ pub struct WsClient {
 ///
 /// # Returns
 /// A `WsClient` instance that can be used to send and receive messages.
-pub async fn websocket_client_tasks(port: u16, capacity: usize) -> WsClient {
+pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClient> {
     let (from_ws, _rx) = broadcast::channel::<RpcEnvelope<RpcMessage>>(capacity);
     let (to_ws, mut from_clients) = mpsc::channel::<RpcEnvelope<RpcMessage>>(capacity);
 
@@ -33,7 +33,10 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> WsClient {
     let (ws_stream, _resonse) =
         tokio_tungstenite::connect_async_tls_with_config(url, None, true, Some(connector))
             .await
-            .expect("WS connect failed");
+            .map_err(|e| {
+                log::error!("WebSocket connection error: {}", e);
+                e
+            })?;
 
     let (mut write, mut read) = ws_stream.split();        
 
@@ -93,8 +96,8 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> WsClient {
         }
     });
 
-    WsClient {
+    Ok(WsClient {
         from_ws,
         to_ws,
-    }
+    })
 }
