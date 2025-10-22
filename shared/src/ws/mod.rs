@@ -74,6 +74,7 @@ where
             msg = rx.recv() => {
                 match msg {
                     Ok(env) => {
+                        // Only return if we can parse the inner message as T
                         if let Ok(inner) = T::try_from(env.msg.clone()) {
                             return Some(RpcEnvelope {
                                 id: env.id,

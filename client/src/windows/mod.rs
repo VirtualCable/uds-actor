@@ -21,6 +21,24 @@ impl WindowsSessionManager {
             msg_window.task();
         });
 
+        // A watchdog to monitor the stop or the msg_window event and set counterpart
+        tokio::spawn({
+            let stop_event = stop_event.clone();
+            let stop = stop.clone();
+            async move {
+                tokio::select! {
+                    _ = stop.wait() => {
+                        log::debug!("WindowsSessionManager: Stop signal received, signaling windows event");
+                        stop_event.signal();
+                    }
+                    _ = stop_event.wait_async() => {
+                        log::debug!("WindowsSessionManager: Windows event signaled, setting stop signal");
+                        stop.set();
+                    }
+                }
+            }
+        });
+
         Self {
             windows_stop_event: stop_event,
             stop,
@@ -51,16 +69,38 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_windows_session_close() {
+    async fn test_windows_session_close_by_event() {
         let session_close = WindowsSessionManager::new(OnceSignal::new());
         let event = session_close.windows_stop_event.clone();
-        let _fake_closer = tokio::spawn(async move {
+        let stop = session_close.get_stop();
+        let _fake_closer = tokio::spawn({
+            async move {
             session_close.get_stop().wait().await;
-        });
+        }});
         // wait a bit to simulate work
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         event.signal();
         // Wait a bit to ensure the event has been handled
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        // stop should be set now
+        assert!(stop.is_set());
+    }
+
+    #[tokio::test]
+    async fn test_windows_session_close_by_stop() {
+        let session_close = WindowsSessionManager::new(OnceSignal::new());
+        let event = session_close.windows_stop_event.clone();
+        let stop = session_close.get_stop();
+        let _fake_closer = tokio::spawn({
+            async move {
+            session_close.get_stop().wait().await;
+        }});
+        // wait a bit to simulate work
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        stop.set();
+        // Wait a bit to ensure the event has been handled
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        // event should be set now
+        assert!(event.is_set());
     }
 }
