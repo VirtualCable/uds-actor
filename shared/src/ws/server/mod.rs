@@ -32,7 +32,7 @@ use crate::{
     tls::{CertificateInfo, certool},
     ws::{
         request_tracker::RequestTracker,
-        types::{Close, Ping, RpcEnvelope, RpcMessage},
+        types::{Close, Ping, Pong, RpcEnvelope, RpcMessage},
     },
 };
 
@@ -150,6 +150,7 @@ pub async fn websocket_loop(
     let mut tx_task = {
         let wsclient_to_workers = from_ws.clone();
         tokio::spawn(async move {
+            let mut closed = false;
             while let Some(Ok(msg)) = ws_receiver.next().await {
                 log::debug!("WS client sent message: {:?}", msg);
                 let env = match msg {
@@ -165,15 +166,22 @@ pub async fn websocket_loop(
                         id: None,
                         msg: RpcMessage::Ping(Ping(data.to_vec())),
                     },
-                    Message::Close(_) => RpcEnvelope {
+                    Message::Pong(data) => RpcEnvelope {
                         id: None,
-                        msg: RpcMessage::Close(Close),
+                        msg: RpcMessage::Pong(Pong(data.to_vec())),
                     },
+                    // Not sent to us by client, but handle gracefully
+                    Message::Close(_) => {
+                        closed = true;
+                        RpcEnvelope {
+                            id: None,
+                            msg: RpcMessage::Close(Close),
+                        }
+                    }
                     Message::Binary(_) => {
                         log::warn!("Unexpected binary");
                         continue;
                     }
-                    _ => continue,
                 };
 
                 if let Some(id) = env.id {
@@ -186,6 +194,14 @@ pub async fn websocket_loop(
                     break;
                 }
             }
+            // Send Close to workers
+            if !closed {
+                let _ = wsclient_to_workers.send(RpcEnvelope {
+                    id: None,
+                    msg: RpcMessage::Close(Close),
+                });
+            }
+            log::info!("WebSocket receiver task ended");
         })
     };
 

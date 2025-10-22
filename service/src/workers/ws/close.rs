@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{server::ServerContext, types::LogoutRequest, wait_message_arrival},
+    ws::{server::ServerContext, types::Close, wait_message_arrival},
 };
 
 use crate::platform;
@@ -11,30 +11,26 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // Note that logout is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.from_ws.subscribe();
     let broker_api = platform.broker_api();
-    while let Some(env) =
-        wait_message_arrival::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await
-    {
+    while let Some(env) = wait_message_arrival::<Close>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received LogoutRequest with id {:?}", env.id);
-        if platform.get_user_info().read().await.is_none() {
-            log::warn!("Received LogoutRequest but no user is logged in");
-            continue;
-        }
-        let interfaces = platform.operations().get_network_info()?;
-        if let Err(err) = broker_api
-            .write()
-            .await
-            .logout(
-                interfaces.as_slice(),
-                env.msg.username.as_str(),
-                env.msg.session_type.as_str(),
-                env.msg.session_id.as_str(),
-            )
-            .await
-        {
-            log::error!("Logout failed for user {}: {:?}", env.msg.username, err);
-        } else {
-            platform.get_user_info().write().await.take(); // Clear user info on logout success
-            log::debug!("Processed LogoutRequest for user {}", env.msg.username);
+        let user_info = platform.get_user_info().write().await.take();
+        if let Some(user) = user_info {
+            let interfaces = platform.operations().get_network_info()?;
+            if let Err(err) = broker_api
+                .write()
+                .await
+                .logout(
+                    interfaces.as_slice(),
+                    (user.username.clone() + " (closed)").as_str(),
+                    user.session_type.as_str(),
+                    user.session_id.as_deref().unwrap_or(""),
+                )
+                .await
+            {
+                log::error!("Logout failed for user {}: {:?}", user.username, err);
+            } else {
+                log::debug!("Processed LogoutRequest for user {}", user.username);
+            }
         }
     }
 
@@ -79,15 +75,11 @@ mod tests {
         }
         log::info!("wsclient_to_workers has receiver");
 
-        // Send 3 logout requests
-        for i in 0..3 {
+        // Send 3 close requests
+        for _i in 0..3 {
             let req = RpcEnvelope {
                 id: None,
-                msg: RpcMessage::LogoutRequest(LogoutRequest {
-                    username: format!("user{}", i),
-                    session_type: "test".into(),
-                    session_id: format!("session{}", i),
-                }),
+                msg: RpcMessage::Close(Close),
             };
             if let Err(e) = wsclient_to_workers.send(req) {
                 log::error!("Failed to send LogoutRequest: {}", e);

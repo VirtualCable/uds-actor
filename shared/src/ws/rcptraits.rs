@@ -1,7 +1,7 @@
 use crate::ws::types::{
-    LoginRequest, LoginResponse, LogoffRequest, MessageRequest, Ping, PreConnect, RpcError,
-    RpcMessage, ScreenshotRequest, ScreenshotResponse, ScriptExecRequest, ScriptExecResponse,
-    UUidRequest, UUidResponse, LogoutRequest, LogRequest
+    Close, LogRequest, LoginRequest, LoginResponse, LogoffRequest, LogoutRequest, MessageRequest,
+    Ping, Pong, PreConnect, RpcError, RpcMessage, ScreenshotRequest, ScreenshotResponse,
+    ScriptExecRequest, ScriptExecResponse, UUidRequest, UUidResponse,
 };
 
 macro_rules! impl_tryfrom {
@@ -31,6 +31,8 @@ impl_tryfrom! {
     PreConnect => PreConnect,
     Error => RpcError,
     Ping => Ping,
+    Pong => Pong,
+    Close => Close,
     LoginRequest => LoginRequest,
     LogoutRequest => LogoutRequest,
     LogRequest => LogRequest,

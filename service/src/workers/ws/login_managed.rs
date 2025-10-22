@@ -14,7 +14,8 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.from_ws.subscribe();
-    while let Some(env) = wait_message_arrival::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
+    while let Some(env) =
+        wait_message_arrival::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LoginRequest with id {:?}", env.id);
         let broker_api = platform.broker_api();
@@ -30,6 +31,15 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
             )
             .await
         {
+            platform
+                .get_user_info()
+                .write()
+                .await
+                .replace(platform::UserInfo {
+                    username: env.msg.username.clone(),
+                    session_type: env.msg.session_type.clone(),
+                    session_id: response.session_id.clone(),
+                });
             let response_env = RpcEnvelope {
                 id: env.id,
                 msg: RpcMessage::LoginResponse(response),

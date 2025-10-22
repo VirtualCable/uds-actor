@@ -38,6 +38,7 @@ pub enum RpcMessage {
 
     // Notifications (no id)
     Ping(Ping),                // Used to maintain connection alive
+    Pong(Pong),                // Response to Ping, same payload
     LogoffRequest(LogoffRequest), // From broker for client
     PreConnect(PreConnect),       // From broker for server
     LogoutRequest(LogoutRequest), // From client ws for the broker
@@ -116,6 +117,9 @@ pub struct LogoffRequest;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ping(pub Vec<u8>); // Payload is arbitrary data, to be sent back as-is
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pong(pub Vec<u8>); // Payload is arbitrary data received from Ping
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Close;

@@ -4,12 +4,20 @@ use tokio::sync::RwLock;
 use shared::sync::OnceSignal;
 
 #[derive(Clone)]
+pub struct UserInfo {
+    pub username: String,
+    pub session_type: String,
+    pub session_id: Option<String>,
+}
+
+#[derive(Clone)]
 pub struct Platform {
     config: Arc<RwLock<shared::config::ActorConfiguration>>,
     operations: Arc<dyn shared::operations::Operations>, // Different for Windows, Linux, Mac, ...
     broker_api: Arc<RwLock<dyn shared::broker::api::BrokerApi>>,
 
     stop: OnceSignal,
+    user_info: Arc<RwLock<Option<UserInfo>>>,
     restart_flag: Arc<AtomicBool>,
 }
 
@@ -35,6 +43,7 @@ impl Platform {
             operations,
             broker_api: Arc::new(tokio::sync::RwLock::new(broker_api)),
             stop,
+            user_info: Arc::new(RwLock::new(None)),
             restart_flag,
         }
     }
@@ -57,6 +66,10 @@ impl Platform {
 
     pub fn get_stop(&self) -> OnceSignal {
         self.stop.clone()
+    }
+
+    pub fn get_user_info(&self) -> Arc<RwLock<Option<UserInfo>>> {
+        self.user_info.clone()
     }
 
     pub fn get_restart_flag(&self) -> Arc<AtomicBool> {
@@ -90,6 +103,7 @@ impl Platform {
             broker_api,
             config,
             stop: OnceSignal::new(),
+            user_info: Arc::new(RwLock::new(None)),
             restart_flag: Arc::new(AtomicBool::new(false)),
         }
     }
