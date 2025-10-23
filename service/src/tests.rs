@@ -9,7 +9,8 @@ use crate::testing::mock::mock_platform;
 async fn test_async_main_stops_managed() {
     log::setup_logging("debug", log::LogType::Tests);
 
-    let (platform, _calls) = mock_platform().await;
+    let mocked_platform = mock_platform().await;
+    let platform = mocked_platform.platform.clone();
     platform.config().write().await.own_token = Some("dummy_token".to_string());
     platform.config().write().await.actor_type = ActorType::Managed;
 
@@ -26,7 +27,8 @@ async fn test_async_main_stops_managed() {
 async fn test_async_main_stops_unmanaged() {
     log::setup_logging("debug", log::LogType::Tests);
 
-    let (platform, _calls) = mock_platform().await;
+    let mocked_platform = mock_platform().await;
+    let platform = mocked_platform.platform.clone();
     platform.config().write().await.master_token = Some("dummy_token".to_string());
     platform.config().write().await.actor_type = ActorType::Unmanaged;
 

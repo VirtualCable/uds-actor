@@ -62,7 +62,7 @@ async fn main() {
 }
 
 async fn run(platform: platform::Platform) {
-    let login_info = match platform.ws_requester().send_login().await {
+    let login_info = match platform.ws_requester().login().await {
         Ok(info) => info,
         Err(e) => {
             shared::log::error!("Login failed: {}", e);
@@ -102,7 +102,7 @@ async fn run(platform: platform::Platform) {
     }
 
     // Send logout
-    if let Err(e) = platform.ws_requester().send_logout(reason.as_deref()).await {
+    if let Err(e) = platform.ws_requester().logout(reason.as_deref()).await {
         shared::log::error!("Logout failed: {}", e);
     } else {
         shared::log::info!("Logout successful");

@@ -12,7 +12,14 @@ use shared::{
     },
 };
 
-pub async fn mock_platform() -> (Platform, Calls) {
+#[derive(Clone)]
+pub struct MockedPlatform {
+    pub platform: Platform,
+    pub calls: Calls,
+    pub broker_api: Arc<tokio::sync::RwLock<BrokerApiMock>>,
+}
+
+pub async fn mock_platform() -> MockedPlatform {
     let config = ActorConfiguration {
         broker_url: "https://localhost".to_string(),
         verify_ssl: true,
@@ -34,9 +41,9 @@ pub async fn mock_platform() -> (Platform, Calls) {
     let platform = crate::platform::Platform::new_with_params(
         Some(config),
         Some(operations),
-        Some(broker_api),
+        Some(broker_api.clone()),
     );
-    (platform, calls)
+    MockedPlatform { platform, calls, broker_api }
 }
 
 pub async fn mock_server_info() -> ServerContext {

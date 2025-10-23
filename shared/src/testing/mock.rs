@@ -226,6 +226,7 @@ pub struct BrokerApiMock {
     calls: Calls,
     secret: Option<String>,
     token: Option<String>,
+    pub init_response: api::types::InitializationResponse,
 }
 
 impl BrokerApiMock {
@@ -234,6 +235,12 @@ impl BrokerApiMock {
             calls,
             secret: Some("dummy_secret".into()),
             token: Some("dummy_token".into()),
+            init_response: api::types::InitializationResponse {
+                master_token: Some("init_master_token".into()),
+                token: Some("init_token".into()),
+                unique_id: Some("init_unique_id".into()),
+                os: None,
+            },
         }
     }
 }
@@ -311,12 +318,7 @@ impl api::BrokerApi for BrokerApiMock {
     ) -> Result<api::types::InitializationResponse, api::types::RestError> {
         self.calls
             .push(format!("broker_api::initialize({:?})", interfaces));
-        Ok(api::types::InitializationResponse {
-            master_token: Some("fake_master_token".into()),
-            token: Some("fake_token".into()),
-            unique_id: Some("fake_unique_id".into()),
-            os: None,
-        })
+        Ok(self.init_response.clone())
     }
     async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, api::types::RestError> {
         self.calls

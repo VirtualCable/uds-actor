@@ -28,7 +28,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    if crate::actions::process_command(&platform, crate::actions::CommandType::RunOnce).await {
+    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce).await {
         // If runonce was executed, exit
         log::info!("Exiting after runonce execution as requested");
         return Ok(());
@@ -41,7 +41,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             }
             ActorOsAction::Rename => {
                 log::info!("OS action requested: Rename to '{}'", os_data.name);
-                if crate::actions::rename_computer(&platform, os_data.name.as_str()).await? {
+                if crate::computer::rename_computer(&platform, os_data.name.as_str()).await? {
                     // Reboot to apply changes
                     log::info!("Rebooting system to apply rename");
                     platform.operations().reboot(None)?;
@@ -54,7 +54,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                     "OS action requested: Join domain with name '{}'",
                     os_data.name
                 );
-                if crate::actions::join_domain(
+                if crate::computer::join_domain(
                     &platform,
                     os_data.name.as_str(),
                     os_data.custom.clone(),
@@ -74,7 +74,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     }
 
     // Post-config command will run, but no reboot will be done after it
-    crate::actions::process_command(&platform, crate::actions::CommandType::PostConfig).await;
+    crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig).await;
 
     // Notify ready to broker, will return TLS certs
     let broker = platform.broker_api();

@@ -175,7 +175,9 @@ mod tests {
     #[tokio::test]
     async fn test_initialize() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         platform.config().write().await.master_token = Some("mastertoken".into());
         let result = initialize(&platform).await;
         assert!(result.is_ok());
@@ -186,7 +188,9 @@ mod tests {
     #[tokio::test]
     async fn test_interfaces_watch() {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         let subnet = platform.config().read().await.restrict_net.clone();
         let stop = platform.get_stop();
         let handle = tokio::spawn(async move {

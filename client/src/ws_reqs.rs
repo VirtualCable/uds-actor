@@ -12,8 +12,8 @@ use shared::{
 
 #[async_trait::async_trait]
 pub trait WsReqs: Send + Sync {
-    async fn send_login(&self) -> anyhow::Result<LoginResponse>;
-    async fn send_logout(&self, session_id: Option<&str>) -> anyhow::Result<()>;
+    async fn login(&self) -> anyhow::Result<LoginResponse>;
+    async fn logout(&self, session_id: Option<&str>) -> anyhow::Result<()>;
 }
 
 pub struct WsRequester {
@@ -30,7 +30,7 @@ impl WsRequester {
 
 #[async_trait::async_trait]
 impl WsReqs for WsRequester {
-    async fn send_login(&self) -> anyhow::Result<LoginResponse> {
+    async fn login(&self) -> anyhow::Result<LoginResponse> {
         // Send login
         let username = self.operations.get_current_user()?;
         let session_type = self.operations.get_session_type()?;
@@ -60,7 +60,7 @@ impl WsReqs for WsRequester {
         Ok(envelope.msg)
     }
 
-    async fn send_logout(&self, session_id: Option<&str>) -> anyhow::Result<()> {
+    async fn logout(&self, session_id: Option<&str>) -> anyhow::Result<()> {
         let username = self.operations.get_current_user()?;
         let session_type = self.operations.get_session_type()?;
         let ws_client = self.ws_client.clone();

@@ -60,7 +60,9 @@ mod tests {
     async fn test_uniqueid_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = mock::mock_server_info().await;
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         platform.config().write().await.master_token = Some("mastertoken".into());
         platform.config().write().await.own_token = Some("own_token".into());
 

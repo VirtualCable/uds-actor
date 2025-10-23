@@ -5,7 +5,7 @@ use shared::{
     ws::{server::ServerContext, types::PreConnect, wait_message_arrival},
 };
 
-use crate::{actions, platform};
+use crate::{computer, platform};
 
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
@@ -23,7 +23,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
             }
         }
         // If the a pre command is configured, run it
-        actions::process_command(&platform, actions::CommandType::PreConnect).await;
+        computer::process_command(&platform, computer::CommandType::PreConnect).await;
     }
     Ok(())
 }
@@ -40,7 +40,9 @@ mod tests {
     async fn test_preconnect_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = mock::mock_server_info().await;
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.from_ws.clone();

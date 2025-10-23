@@ -104,7 +104,9 @@ mod tests {
     async fn handle_log_respects_flood_guard() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = mock::mock_server_info().await;
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
 
         let wsclient_to_workers = server_info.from_ws.clone();
 
@@ -139,7 +141,9 @@ mod tests {
     async fn test_log_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = mock::mock_server_info().await;
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
 
         let wsclient_to_workers = server_info.from_ws.clone();
 

@@ -17,11 +17,13 @@ pub struct TestSetup {
 impl TestSetup {
     pub async fn new<F, Fut>(runner: F) -> Self
     where
-        F: FnOnce(platform::Platform) -> Fut + Send + 'static,
+        F: FnOnce(platform::Platform) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<()>> + Send + 'static,
     {
         log::setup_logging("debug", shared::log::LogType::Tests);
-        let (platform, calls) = mock_platform().await;
+        let mocked_platform = mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         let notify = Arc::new(Notify::new());
 
         // Run the managed run function in a separate task

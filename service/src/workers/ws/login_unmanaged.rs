@@ -79,7 +79,9 @@ mod tests {
     async fn test_login_worker() {
         log::setup_logging("debug", shared::log::LogType::Tests);
         let server_info = mock::mock_server_info().await;
-        let (platform, calls) = mock::mock_platform().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        let calls = mocked_platform.calls.clone();
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.from_ws.clone();

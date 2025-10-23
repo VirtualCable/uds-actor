@@ -17,7 +17,7 @@ use shared::{
 
 mod common;
 mod platform;
-mod actions;
+mod computer;
 
 mod actors;
 

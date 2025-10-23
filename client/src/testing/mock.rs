@@ -50,7 +50,7 @@ impl WsReqsMock {
 
 #[async_trait::async_trait]
 impl crate::ws_reqs::WsReqs for WsReqsMock {
-    async fn send_login(&self) -> anyhow::Result<shared::ws::types::LoginResponse> {
+    async fn login(&self) -> anyhow::Result<shared::ws::types::LoginResponse> {
         self.calls.push("ws_reqs::send_login()");
         Ok(shared::ws::types::LoginResponse {
             ip: "127.0.0.1".to_string(),
@@ -60,7 +60,7 @@ impl crate::ws_reqs::WsReqs for WsReqsMock {
             session_id: Some("mock_session_id".to_string()),
         })
     }
-    async fn send_logout(&self, _session_id: Option<&str>) -> anyhow::Result<()> {
+    async fn logout(&self, _session_id: Option<&str>) -> anyhow::Result<()> {
         self.calls.push("ws_reqs::send_logout()");
         Ok(())
     }
