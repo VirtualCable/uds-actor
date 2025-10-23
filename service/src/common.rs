@@ -108,6 +108,11 @@ pub async fn interfaces_watch_task(
     let known_interfaces =
         network_interfaces_in_subnet(platform.operations(), subnet.as_deref()).await?;
 
+    log::info!(
+        "Starting network interfaces watch task, monitoring {} interfaces",
+        known_interfaces.len()
+    );
+
     let stop = platform.get_stop();
     loop {
         if let Ok(interfaces) = network_interfaces_changed(
@@ -124,13 +129,15 @@ pub async fn interfaces_watch_task(
             log::warn!(
                 "Network interfaces changed (IP change, new interface, etc), stopping service to allow restart"
             );
+            // Set restart flag and stop (restart will be handled by main service loop)
+            platform.get_restart_flag().store(true, std::sync::atomic::Ordering::Relaxed);
             stop.set(); // Signal stop
             break;
         }
-        // Wait for 10 seconds or stop signal
+        // Wait for 30 seconds or stop signal
         // wait_timeout returns Ok if signaled, Err if timeout elapsed
         if stop
-            .wait_timeout(std::time::Duration::from_secs(10))
+            .wait_timeout(std::time::Duration::from_secs(30))
             .await
             .is_ok()
         {

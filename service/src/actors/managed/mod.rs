@@ -77,6 +77,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig).await;
 
     // Notify ready to broker, will return TLS certs
+    // Note: The server is started after this, as we need the certs to start it
+    // Is not expected to receive any calls before server is started (and will not)
     let broker = platform.broker_api();
     let ip = platform
         .operations()

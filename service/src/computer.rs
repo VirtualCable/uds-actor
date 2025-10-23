@@ -96,6 +96,7 @@ pub async fn join_domain(
         );
         return Ok(false);
     }
+    log::info!("Joining system to domain '{}'", join_options.domain);
 
     // Join the domain on a blocking task to avoid blocking the async runtime
     tokio::task::spawn_blocking(move || operations.join_domain(&join_options)).await??;
@@ -125,10 +126,7 @@ impl Display for CommandType {
 }
 
 // Returns true if a command was executed, Ok(false) if no command was pending
-pub async fn process_command(
-    platform: &platform::Platform,
-    command_type: CommandType,
-) -> bool {
+pub async fn process_command(platform: &platform::Platform, command_type: CommandType) -> bool {
     // Note that if already initialized, runonce has already been executed and cleared
     let cfg = platform.config(); // Avoid drop while writing
     let mut cfg_guard = cfg.write().await;

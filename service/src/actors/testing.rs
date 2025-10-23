@@ -10,6 +10,7 @@ use shared::log;
 pub struct TestSetup {
     pub platform: platform::Platform,
     pub calls: shared::testing::mock::Calls,
+    pub broker_api: Arc<tokio::sync::RwLock<shared::testing::mock::BrokerApiMock>>,
     pub handle: Option<tokio::task::JoinHandle<()>>,
     pub notify: Arc<Notify>,
 }
@@ -24,6 +25,7 @@ impl TestSetup {
         let mocked_platform = mock_platform().await;
         let platform = mocked_platform.platform.clone();
         let calls = mocked_platform.calls.clone();
+        let broker_api = mocked_platform.broker_api.clone();
         let notify = Arc::new(Notify::new());
 
         // Run the managed run function in a separate task
@@ -44,6 +46,7 @@ impl TestSetup {
         Self {
             platform,
             calls,
+            broker_api,
             handle: Some(handle),
             notify,
         }
