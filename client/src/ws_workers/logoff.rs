@@ -11,10 +11,10 @@ use crate::platform;
 pub async fn worker(platform: platform::Platform) -> Result<()> {
     let mut rx = platform.ws_client().from_ws.subscribe();
     while let Some(_env) =
-        wait_message_arrival::<LogoffRequest>(&mut rx, Some(platform.get_stop())).await
+        wait_message_arrival::<LogoffRequest>(&mut rx, Some(platform.stop())).await
     {
         log::info!("Received logoff request, performing logoff");
-        platform.get_stop().set();
+        platform.stop().set();
         platform.operations().logoff()?;
     }
 
@@ -33,9 +33,9 @@ mod tests {
     async fn test_logoff_worker_stops() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, _calls, _, _) = mock_platform(None, None, 43910).await;
+        let (platform, _calls, _, _) = mock_platform(None, None, None, None,43910).await;
 
-        let stop = platform.get_stop();
+        let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
             let res = tokio::time::timeout(
@@ -58,7 +58,7 @@ mod tests {
     async fn test_logoff_worker_logs_off() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, calls, _, _) = mock_platform(None, None, 43910).await;
+        let (platform, calls, _, _) = mock_platform(None, None, None, None, 43910).await;
         let from_ws = platform.ws_client().from_ws.clone();
 
         // Run alive worker

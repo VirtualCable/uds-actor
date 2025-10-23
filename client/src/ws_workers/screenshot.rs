@@ -13,7 +13,7 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(platform: platform::Platform) -> Result<()> {
     let mut rx = platform.ws_client().from_ws.subscribe();
-    while let Some(env) = wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.get_stop())).await
+    while let Some(env) = wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.stop())).await
     {
         // Currently, no screenshot supported
         log::warn!("Received screenshot request, but screenshot worker is not implemented: {:?}", env);
@@ -32,9 +32,9 @@ mod tests {
     async fn test_screenshot_worker_stops() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, _calls, _, _) = mock_platform(None, None, 43910).await;
+        let (platform, _calls, _, _) = mock_platform(None, None, None, None, 43910).await;
 
-        let stop = platform.get_stop();
+        let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
             let res = tokio::time::timeout(

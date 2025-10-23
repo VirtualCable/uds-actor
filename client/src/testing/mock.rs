@@ -12,9 +12,9 @@ struct SessionManagerMock {
 }
 
 impl SessionManagerMock {
-    fn new(calls: Calls) -> Self {
+    fn new(calls: Calls, stop_signal: OnceSignal) -> Self {
         Self {
-            event: OnceSignal::new(),
+            event: stop_signal,
             calls,
         }
     }
@@ -38,9 +38,39 @@ impl crate::session::SessionManagement for SessionManagerMock {
     }
 }
 
+struct WsReqsMock {
+    calls: Calls,
+}
+
+impl WsReqsMock {
+    fn new(calls: Calls) -> Self {
+        Self { calls }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::ws_reqs::WsReqs for WsReqsMock {
+    async fn send_login(&self) -> anyhow::Result<shared::ws::types::LoginResponse> {
+        self.calls.push("ws_reqs::send_login()");
+        Ok(shared::ws::types::LoginResponse {
+            ip: "127.0.0.1".to_string(),
+            hostname: "mock_host".to_string(),
+            deadline: None,
+            max_idle: Some(600),
+            session_id: Some("mock_session_id".to_string()),
+        })
+    }
+    async fn send_logout(&self, _session_id: Option<&str>) -> anyhow::Result<()> {
+        self.calls.push("ws_reqs::send_logout()");
+        Ok(())
+    }
+}
+
 pub async fn mock_platform(
     manager: Option<std::sync::Arc<dyn crate::session::SessionManagement>>,
     operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
+    ws_requester: Option<std::sync::Arc<dyn crate::ws_reqs::WsReqs>>,
+    stop_signal: Option<OnceSignal>,
     port: u16,
 ) -> (
     crate::platform::Platform,
@@ -49,28 +79,36 @@ pub async fn mock_platform(
     mpsc::Receiver<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>,
 ) {
     let calls: Calls = Calls::new();
-    let manager =
-        manager.unwrap_or_else(|| std::sync::Arc::new(SessionManagerMock::new(calls.clone())));
+    let stop_signal = stop_signal.unwrap_or_default();
+    let manager = manager.unwrap_or_else(|| {
+        std::sync::Arc::new(SessionManagerMock::new(calls.clone(), stop_signal.clone()))
+    });
     let operations =
         operations.unwrap_or_else(|| std::sync::Arc::new(OperationsMock::new(calls.clone())));
 
-    let (from_ws, from_rx_receiver) =
+    let (from_ws, from_ws_receiver) =
         broadcast::channel::<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>(32);
     let (to_ws, to_ws_receiver) =
         mpsc::channel::<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>(32);
     let ws_client = WsClient { from_ws, to_ws };
+
+    let ws_requester = ws_requester.unwrap_or_else(|| {
+        std::sync::Arc::new(WsReqsMock::new(calls.clone()))
+    });
 
     (
         crate::platform::Platform::new_with_params(
             Some(manager),
             Some(operations),
             Some(ws_client),
+            Some(ws_requester),
+            Some(stop_signal),
             port,
         )
         .await
         .unwrap(),
         calls,
-        from_rx_receiver,
+        from_ws_receiver,
         to_ws_receiver,
     )
 }

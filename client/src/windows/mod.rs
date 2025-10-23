@@ -12,7 +12,7 @@ pub struct WindowsSessionManager {
 }
 
 impl WindowsSessionManager {
-    pub fn new(stop: OnceSignal) -> Self {
+    pub async fn new(stop: OnceSignal) -> Self {
         // Create the event to signal the window to stop
         let stop_event = WindowsEvent::new();
         // Launch the window task in a dedicated thread
@@ -21,11 +21,15 @@ impl WindowsSessionManager {
             msg_window.task();
         });
 
+        // Flag to signal task is running
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         // A watchdog to monitor the stop or the msg_window event and set counterpart
         tokio::spawn({
+            let flag = flag.clone();
             let stop_event = stop_event.clone();
             let stop = stop.clone();
             async move {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
                 tokio::select! {
                     _ = stop.wait() => {
                         log::debug!("WindowsSessionManager: Stop signal received, signaling windows event");
@@ -38,6 +42,11 @@ impl WindowsSessionManager {
                 }
             }
         });
+
+        // Wait until the watchdog is running
+        while !flag.load(std::sync::atomic::Ordering::SeqCst) {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
 
         Self {
             windows_stop_event: stop_event,
@@ -61,7 +70,7 @@ impl SessionManagement for WindowsSessionManager {
 }
 
 pub async fn new_session_manager(stop: OnceSignal) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
-    std::sync::Arc::new(WindowsSessionManager::new(stop))
+    std::sync::Arc::new(WindowsSessionManager::new(stop).await)
 }
 
 #[cfg(test)]
@@ -70,7 +79,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_windows_session_close_by_event() {
-        let session_close = WindowsSessionManager::new(OnceSignal::new());
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+        let session_close = WindowsSessionManager::new(OnceSignal::new()).await;
         let event = session_close.windows_stop_event.clone();
         let stop = session_close.get_stop();
         let _fake_closer = tokio::spawn({
@@ -88,7 +98,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_windows_session_close_by_stop() {
-        let session_close = WindowsSessionManager::new(OnceSignal::new());
+        shared::log::setup_logging("debug", shared::log::LogType::Tests);
+        let session_close = WindowsSessionManager::new(OnceSignal::new()).await;
         let event = session_close.windows_stop_event.clone();
         let stop = session_close.get_stop();
         let _fake_closer = tokio::spawn({

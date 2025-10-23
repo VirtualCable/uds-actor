@@ -1,21 +1,14 @@
 use anyhow::Result;
 
-use shared::{
-    log,
-    ws::{types::Ping},
-};
+use shared::{log, ws::types::Ping};
 
 use crate::platform;
 
 // Owned ServerInfo and Platform
 async fn _worker(platform: platform::Platform, timeout: std::time::Duration) -> Result<()> {
-    let stop = platform.get_stop();
+    let stop = platform.stop();
     // Err means timeout
-    while stop
-        .wait_timeout(timeout)
-        .await
-        .is_err()
-    {
+    while stop.wait_timeout(timeout).await.is_err() {
         // Sending ping
         let ws_client = platform.ws_client();
         ws_client
@@ -36,7 +29,6 @@ pub async fn worker(platform: platform::Platform) -> Result<()> {
     _worker(platform, std::time::Duration::from_secs(30)).await
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::testing::mock::mock_platform;
@@ -47,16 +39,14 @@ mod tests {
     async fn test_alive_worker_stops() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, _calls, _, _) = mock_platform(None, None, 43910).await;
+        let (platform, _calls, _, _) = mock_platform(None, None, None, None, 43910).await;
 
-        let stop = platform.get_stop();
+        let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
-            let res = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                super::worker(platform),
-            )
-            .await;
+            let res =
+                tokio::time::timeout(std::time::Duration::from_secs(10), super::worker(platform))
+                    .await;
             log::info!("Alive worker finished with result: {:?}", res);
         });
 
@@ -72,9 +62,10 @@ mod tests {
     async fn test_alive_worker_sends_ping() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, _calls, _from_rx_receiver, mut to_ws_receiver) = mock_platform(None, None, 43910).await;
+        let (platform, _calls, _from_rx_receiver, mut to_ws_receiver) =
+            mock_platform(None, None, None, None, 43910).await;
 
-        let stop = platform.get_stop();
+        let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
             let res = tokio::time::timeout(
@@ -96,10 +87,13 @@ mod tests {
                 ping_count += 1;
             }
         }
-        assert!(ping_count >= 2, "Expected at least 2 pings, got {}", ping_count);
+        assert!(
+            ping_count >= 2,
+            "Expected at least 2 pings, got {}",
+            ping_count
+        );
 
         // Wait for the worker to finish
         let _ = worker_handle.await;
     }
-
 }

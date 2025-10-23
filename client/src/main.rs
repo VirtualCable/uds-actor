@@ -26,15 +26,13 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(not(test), windows_subsystem = "windows")]
-use shared::{tls, ws::{
-    types::{LoginRequest, LoginResponse, LogoutRequest, RpcEnvelope, RpcMessage},
-    wait_message_arrival,
-}};
+use shared::{log, tls};
 
 mod session;
 
 mod gui;
 mod platform;
+mod ws_reqs;
 mod ws_workers;
 
 #[cfg(unix)]
@@ -45,79 +43,31 @@ mod windows;
 // Tasks
 mod tasks;
 
-async fn send_login(platform: &platform::Platform) -> anyhow::Result<LoginResponse> {
-    // Send login
-    let username = platform.operations().get_current_user()?;
-    let session_type = platform.operations().get_session_type()?;
-    let ws_client = platform.ws_client();
-    let stop = platform.get_stop();
-
-    ws_client
-        .to_ws
-        .send(RpcEnvelope {
-            id: Some(19720701), // Some arbitrary id
-            msg: RpcMessage::LoginRequest(LoginRequest {
-                username: username.clone(),
-                session_type: session_type.clone(),
-            }),
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to send login message: {}", e))?;
-
-    // Wait for response
-    let mut rx = ws_client.from_ws.subscribe();
-    let envelope = wait_message_arrival::<LoginResponse>(&mut rx, Some(stop))
-        .await
-        .ok_or_else(|| anyhow::anyhow!("Failed to receive login response for user {}", username))?;
-
-    Ok(envelope.msg)
-}
-
-async fn send_logout(platform: &platform::Platform, session_id: Option<&str>) -> anyhow::Result<()> {
-    let username = platform.operations().get_current_user()?;
-    let session_type = platform.operations().get_session_type()?;
-    let ws_client = platform.ws_client();
-
-        ws_client
-        .to_ws
-        .send(RpcEnvelope {
-            id: Some(19720701), // Some arbitrary id
-            msg: RpcMessage::LogoutRequest(LogoutRequest {
-                username: username.clone(),
-                session_type: session_type.clone(),
-                session_id: session_id.unwrap_or_default().to_string(),
-            }),
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to send logout message: {}", e))?;
-
-    Ok(())
-
-}
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     // Setup logging
-    shared::log::setup_logging("debug", shared::log::LogType::Client);
+    log::setup_logging("debug", shared::log::LogType::Client);
     tls::init_tls(None);
 
-    shared::log::info!("Starting uds-actor client...");
+    log::info!("Starting uds-actor client...");
     let platform = platform::Platform::new(43910).await.unwrap_or_else(|err| {
-        shared::log::error!("Failed to initialize platform: {}", err);
+        log::error!("Failed to initialize platform: {}", err);
         std::process::exit(1);
     });
 
     run(platform.clone()).await; // Run main loop
-    shared::log::info!("uds-actor client stopped.");
+    log::info!("uds-actor client stopped.");
 
     platform.shutdown();
 }
 
 async fn run(platform: platform::Platform) {
-    let login_info = match send_login(&platform).await {
+    let login_info = match platform.ws_requester().send_login().await {
         Ok(info) => info,
         Err(e) => {
             shared::log::error!("Login failed: {}", e);
+            // Ensure stop is set
+            platform.stop().set();
             return;
         }
     };
@@ -131,7 +81,7 @@ async fn run(platform: platform::Platform) {
     let deadline_task = tokio::spawn(tasks::deadline::task(login_info.deadline, platform.clone()));
 
     // Await for session end
-    platform.get_stop().wait().await;
+    platform.stop().wait().await;
 
     // Join with a timeout all tasks to avoid hanging forever
     let join_timeout = std::time::Duration::from_secs(5);
@@ -152,7 +102,7 @@ async fn run(platform: platform::Platform) {
     }
 
     // Send logout
-    if let Err(e) = send_logout(&platform, reason.as_deref()).await {
+    if let Err(e) = platform.ws_requester().send_logout(reason.as_deref()).await {
         shared::log::error!("Logout failed: {}", e);
     } else {
         shared::log::info!("Logout successful");
