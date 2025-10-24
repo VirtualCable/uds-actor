@@ -28,10 +28,13 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 fn main() {
     #[cfg(windows)]
-    builder::build_windows(
-        "UDS Actor Config Unmanaged",
-        "UDS Actor Config Unmanaged",
-        None,
-        None,
+    builder::build_windows( 
+        builder::BuildInfo {
+            product_name: "UDS Actor Config Unmanaged",
+            description: "UDS Actor Config Unmanaged",
+            icon: None,
+            bmp: None,
+            requires_admin: !cfg!(debug_assertions),
+        }
     );
 }

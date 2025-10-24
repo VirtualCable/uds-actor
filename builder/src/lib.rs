@@ -1,12 +1,24 @@
+use std::path::PathBuf;
+
 // uds-build/src/lib.rs
 use chrono::{Datelike, Utc, NaiveDate};
 use winres::WindowsResource;
 
-pub fn build_windows(product_name: &str, description: &str, icon: Option<&str>, bmp: Option<&str>) {
-    let icon = icon.unwrap_or("../img/uds.ico");
-    let bmp = bmp.unwrap_or("../img/uds.bmp");
+pub struct BuildInfo<'a> {
+    pub product_name: &'a str,
+    pub description: &'a str,
+    pub icon: Option<&'a str>,
+    pub bmp: Option<&'a str>,
+    pub requires_admin: bool,
+}
+
+pub fn build_windows(build_info: BuildInfo) {
+    let icon = build_info.icon.unwrap_or("../img/uds.ico");
+    let bmp = build_info.bmp.unwrap_or("../img/uds.bmp");
     println!("cargo:rerun-if-changed={icon}");
     println!("cargo:rerun-if-changed={bmp}");
+    // Print current folder for debugging
+    // eprintln!("Current folder: {}", std::env::current_dir().unwrap().display());
 
     let current_year = Utc::now().year();
     let base_date = NaiveDate::from_ymd_opt(1972, 7, 1).unwrap();
@@ -32,8 +44,8 @@ pub fn build_windows(product_name: &str, description: &str, icon: Option<&str>, 
 
     res.set("FileVersion", &format!("{major}.{minor}.{patch}.{build}"));
     res.set("ProductVersion", &format!("{major}.{minor}.{patch}.{build}"));
-    res.set("ProductName", product_name);
-    res.set("FileDescription", description);
+    res.set("ProductName", build_info.product_name);
+    res.set("FileDescription", build_info.description);
     res.set(
         "LegalCopyright",
         format!("Copyright © 2012-{current_year} Virtual Cable S.L.U.").as_str(),
@@ -41,6 +53,13 @@ pub fn build_windows(product_name: &str, description: &str, icon: Option<&str>, 
     res.set("CompanyName", "Virtual Cable S.L.U.");
 
     res.append_rc_content(&format!(r##"101 BITMAP DISCARDABLE "{}""##, bmp));
+    if build_info.requires_admin {
+        let manifest_bytes = include_bytes!("../admin.manifest");
+        let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let manifest_path = out_dir.join("admin.manifest");
+        std::fs::write(&manifest_path, manifest_bytes).unwrap();
+        res.append_rc_content(&format!(r#"1 24 "{}""#, manifest_path.display()));
+    }
 
     res.compile().unwrap();
 }

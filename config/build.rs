@@ -29,9 +29,12 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 fn main() {
     #[cfg(windows)]
     builder::build_windows(
-        "UDS Actor Config",
-        "UDS Actor Config",
-        None,
-        None,
+        builder::BuildInfo {
+            product_name: "UDS Actor Config",
+            description: "UDS Actor Config",
+            icon: None,
+            bmp: None,
+            requires_admin: !cfg!(debug_assertions),
+        }
     );
 }

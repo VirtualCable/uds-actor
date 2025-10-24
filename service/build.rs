@@ -28,10 +28,13 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 fn main() {
     #[cfg(windows)]
-    builder::build_windows(
-        "UDS Actor Service",
-        "UDS Actor Service",
-        None,
-        None,
+    builder::build_windows(  
+        builder::BuildInfo {
+            product_name: "UDS Actor Service",
+            description: "UDS Actor Service",
+            icon: None,
+            bmp: None,
+            requires_admin: false,
+        }
     );
 }
