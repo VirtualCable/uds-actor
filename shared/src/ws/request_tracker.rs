@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::{atomic::{AtomicU64, Ordering}, Arc}, time::Instant};
 use tokio::sync::{Mutex, oneshot};
+use anyhow::Result;
 
 use crate::{
     log,
@@ -76,18 +77,22 @@ impl RequestTracker {
     }
 
     /// Resolve a request by id with a successful payload.
-    pub async fn resolve_ok(&self, id: RequestId, message: RpcMessage) {
+    pub async fn resolve_ok(&self, id: RequestId, message: RpcMessage) -> Result<()> {
         log::debug!("Resolving request id {} with success", id);
         let mut guard = self.inner.lock().await;
         if let Some(p) = guard.pending.remove(&id) {
             let _ = p.tx.send(message);
+            Ok(())
+        } else {
+            // Not found, may be ok if it's an external req
+            Err(anyhow::anyhow!("Request id {} not found for resolution", id))
         }
     }
 
     /// Resolve a request by id with an error.
-    pub async fn resolve_err(&self, id: RequestId, code: u32, message: String) {
+    pub async fn resolve_err(&self, id: RequestId, code: u32, message: String) -> Result<()> {
         self.resolve_ok(id, RpcMessage::Error(RpcError { code, message }))
-            .await;
+            .await
     }
 
     /// Remove expired requests and notify their receivers with a timeout error.

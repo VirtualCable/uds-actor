@@ -97,7 +97,7 @@ async fn test_get_screenshot() {
                                 result: "fake_base64_image".into(),
                             }),
                         )
-                        .await;
+                        .await.ok();  // Consume error silently since request may be already deregistered
                 }
             }
         }
@@ -139,7 +139,7 @@ async fn test_get_uuid() {
                             id,
                             RpcMessage::UUidResponse(UUidResponse("fake-uuid-1234".into())),
                         )
-                        .await;
+                        .await.ok();  // Consume error silently since request may be already deregistered
                 }
             }
         }

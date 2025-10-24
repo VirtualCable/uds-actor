@@ -59,7 +59,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                     req_id,
                     shared::ws::types::RpcMessage::ScreenshotResponse(screenshot_response.0),
                 )
-                .await;
+                .await.ok();  // Consume error silently since request may be already deregistered
         }
     }
     Ok(())

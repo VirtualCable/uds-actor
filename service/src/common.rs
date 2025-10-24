@@ -57,26 +57,39 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
     // Initialize
     let master_token = cfg_guard.master_token.clone().unwrap_or_default();
     broker_api_guard.set_token(&master_token);
-    log::info!("{:?} actor not initialized, initializing with broker", actor_type);
+    log::info!(
+        "{:?} actor not initialized, initializing with broker",
+        actor_type
+    );
     if let Ok(response) = broker_api_guard.initialize(interfaces.as_slice()).await {
         // If token on response is none, this is not a managed host,continue until next request
         if response.token.is_none() {
             log::error!(
-                "{:?} actor initialization did not return a token, cannot continue login", actor_type
+                "{:?} actor initialization did not return a token, cannot continue login",
+                actor_type
             );
             return Err(anyhow::anyhow!(
-                "{:?} actor initialization did not return a token", actor_type
+                "{:?} actor initialization did not return a token",
+                actor_type
             ));
         }
 
         // If master token is present on response, and is different of current, update it
-        if let Some(master_token) = response.master_token
+        // but if actor_type is managed, master_token must be cleared
+        if actor_type != shared::config::ActorType::Managed
+            && let Some(master_token) = response.master_token
             && cfg_guard.master_token.as_ref() != Some(&master_token)
         {
             log::info!("Master token updated from broker");
             cfg_guard.master_token = Some(master_token);
         }
 
+        if actor_type == shared::config::ActorType::Managed {
+            // On managed, master_token must be cleared
+            // TODO: clear master_token (remove commented line when tested)
+            log::info!("Clearing master token on managed actor (currently not doing for debugging)");
+            // cfg_guard.master_token.take();
+        }
         cfg_guard.own_token = response.token;
         cfg_guard.config.unique_id = response.unique_id;
         cfg_guard.config.os = response.os;
@@ -92,7 +105,8 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
             // it contains the token
             if actor_type == shared::config::ActorType::Managed {
                 return Err(anyhow::anyhow!(
-                    "Failed to save updated config with new master_token: {}", e
+                    "Failed to save updated config with new master_token: {}",
+                    e
                 ));
             }
             // Continue anyway, we have the token in our in-memory config
@@ -141,7 +155,9 @@ pub async fn interfaces_watch_task(
                 "Network interfaces changed (IP change, new interface, etc), stopping service to allow restart"
             );
             // Set restart flag and stop (restart will be handled by main service loop)
-            platform.get_restart_flag().store(true, std::sync::atomic::Ordering::Relaxed);
+            platform
+                .get_restart_flag()
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             stop.set(); // Signal stop
             break;
         }

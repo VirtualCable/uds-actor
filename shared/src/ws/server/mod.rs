@@ -79,6 +79,24 @@ impl From<&ServerStartInfo> for ServerState {
     }
 }
 
+// To ensure ws_active is released on drop
+struct WsActiveGuard {
+    ws_active: Arc<AtomicBool>,
+}
+
+impl WsActiveGuard {
+    fn new(ws_active: Arc<AtomicBool>) -> Self {
+        ws_active.store(true, Ordering::Relaxed);
+        WsActiveGuard { ws_active }
+    }
+}
+
+impl Drop for WsActiveGuard {
+    fn drop(&mut self) {
+        self.ws_active.store(false, Ordering::Relaxed);
+    }
+}
+
 /// Middleware for verifying the secret in the path
 async fn check_secret_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -115,7 +133,7 @@ async fn check_secret_middleware(
 
 async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerState>) -> Response {
     let ws_active = state.is_ws_active.clone();
-    if ws_active.swap(true, Ordering::SeqCst) {
+    if ws_active.load(Ordering::Relaxed) {
         // ya estaba true → hay cliente activo
         log::warn!("WebSocket connection attempt while another is active");
         return (StatusCode::CONFLICT, "Another WebSocket client is active").into_response();
@@ -144,6 +162,7 @@ pub async fn websocket_loop(
     ws_active: Arc<AtomicBool>,
     tracker: RequestTracker,
 ) {
+    let _guard = WsActiveGuard::new(ws_active.clone());
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Task A: WS client → workers
@@ -155,7 +174,9 @@ pub async fn websocket_loop(
                 log::debug!("WS client sent message: {:?}", msg);
                 let env = match msg {
                     Message::Text(txt) => {
+                        log::debug!("WS Text: {}", txt);
                         if let Ok(env) = serde_json::from_str::<RpcEnvelope<RpcMessage>>(&txt) {
+                            log::debug!("Parsed WS JSON: {:?}", env);
                             env
                         } else {
                             log::warn!("Invalid WS JSON: {txt}");
@@ -184,10 +205,14 @@ pub async fn websocket_loop(
                     }
                 };
 
-                if let Some(id) = env.id {
-                    tracker.resolve_ok(id, env.msg.clone()).await;
+                if let Some(id) = env.id
+                    && tracker.resolve_ok(id, env.msg.clone()).await.is_ok()
+                {
+                    // Resolved internally, do not forward
+                    log::debug!("Resolved internal request id {}", id);
                     continue;
                 }
+                // Not resolved, forward to workers
 
                 if let Err(e) = wsclient_to_workers.send(env) {
                     log::warn!("Failed to broadcast WS->workers: {e}");

@@ -31,6 +31,8 @@ pub mod config;
 pub mod linux;
 #[cfg(target_os = "linux")]
 pub use linux as operations;
+#[cfg(target_os = "linux")]
+pub use linux::installer;
 
 // TODO: macos implementation
 // #[cfg(target_os = "macos")]

@@ -28,6 +28,7 @@ pub mod operations;
 pub mod service;
 pub mod config;
 pub mod sens;
+pub mod installer;
 
 mod event;
 mod safehandle;
