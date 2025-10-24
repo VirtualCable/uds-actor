@@ -43,6 +43,7 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
     // Receiver task, from websocket to broadcast
     tokio::spawn({
         let from_ws = from_ws.clone();
+        let mut close_sent = false;
         async move {
             while let Some(msg) = read.next().await {
                 let env = match msg {
@@ -59,10 +60,12 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
                         log::warn!("Binary frame received, ignored.");
                         continue;
                     }
-                    Ok(Message::Close(_)) => RpcEnvelope {
+                    Ok(Message::Close(_)) => {
+                        close_sent = true;
+                        RpcEnvelope {
                         id: None,
                         msg: RpcMessage::Close(Close),
-                    },
+                    }},
                     Ok(Message::Ping(data)) => RpcEnvelope {
                         id: None,
                         msg: RpcMessage::Ping(crate::ws::types::Ping(data.to_vec())),
@@ -73,6 +76,13 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
                     log::warn!("Failed to broadcast WS message: {e}");
                     break;
                 }
+            }
+            if !close_sent {
+                log::info!("WebSocket connection closed, sending Close message");
+                let _ = from_ws.send(RpcEnvelope {
+                    id: None,
+                    msg: RpcMessage::Close(Close),
+                });
             }
         }
     });

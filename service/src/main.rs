@@ -9,11 +9,10 @@ use std::{
 
 use shared::{
     config::ActorType,
-    log,
+    installer, log,
     service::{AsyncService, AsyncServiceTrait},
     sync::OnceSignal,
     tls,
-    installer
 };
 
 mod actors;
@@ -37,25 +36,32 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() > 1 {
+        println!("Service installer options detected: {}", args[1]);
         match args[1].as_str() {
             "--install" => {
-                if let Err(e) =installer::register(
-                    "UDSActor",
+                if let Err(e) = installer::register(
+                    "UDSActorService",
                     "UDS Actor Service",
-                    "Conecta tu equipo con la plataforma",
+                    "UDS Actor Management Service",
                 ) {
                     eprintln!("Failed to install service: {}", e);
-                    std::process::exit(1);
+                } else {
+                    println!("Service installed successfully.");
                 }
             }
             "--uninstall" => {
-                if let Err(e) = installer::unregister("UDSActor") {
+                if let Err(e) = installer::unregister("UDSActorService") {
                     eprintln!("Failed to uninstall service: {}", e);
-                    std::process::exit(1);
+                } else {
+                    println!("Service uninstalled successfully.");
                 }
             }
-            _ => {}
+            _ => {
+                eprintln!("Unknown option: {}", args[1]);
+                eprintln!("Usage: {} [--install|--uninstall]", args[0]);
+            }
         }
+        std::process::exit(1);
     }
 
     // Setup logging

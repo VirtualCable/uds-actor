@@ -7,6 +7,7 @@ mod logoff;
 mod screenshot;
 mod alive;
 mod pong;
+mod close;
 
 use crate::spawn_workers;
 
@@ -18,7 +19,8 @@ pub async fn setup_workers(platform: platform::Platform) {
             ("Logoff", logoff::worker),
             ("Screenshot", screenshot::worker),
             ("Alive", alive::worker),
-            ("Pong", pong::worker)
+            ("Pong", pong::worker),
+            ("Close", close::worker)
         ],
     );
 }

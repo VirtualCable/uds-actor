@@ -25,7 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![cfg_attr(not(test), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use shared::{log, tls};
 
 mod session;

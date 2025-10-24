@@ -81,11 +81,12 @@ impl RequestTracker {
         log::debug!("Resolving request id {} with success", id);
         let mut guard = self.inner.lock().await;
         if let Some(p) = guard.pending.remove(&id) {
+            log::debug!("Request id {} found, sending response", id);
             let _ = p.tx.send(message);
             Ok(())
         } else {
             // Not found, may be ok if it's an external req
-            Err(anyhow::anyhow!("Request id {} not found for resolution", id))
+            Err(anyhow::anyhow!("Request id {} not found", id))
         }
     }
 
