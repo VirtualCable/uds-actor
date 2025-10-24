@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 
-$serviceName = "UDS Actor Service"
+$serviceName = "UDSActorService"
 $binPath = "$PSScriptRoot\uds-actor-service.exe"
 
 if (-not (Test-Path $binPath)) {

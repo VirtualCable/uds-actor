@@ -66,6 +66,9 @@ pub struct RegisterRequest<'a> {
     pub ip: &'a str,
     pub mac: &'a str,
     pub commands: RegisterCommands,
+    // Compat witho server 4.x, compats directly on root
+
+
     pub log_level: u32,
     pub os: &'a str,
 }
@@ -304,6 +307,19 @@ impl From<&str> for LogLevel {
             "error" => LogLevel::Error,
             "fatal" => LogLevel::Fatal,
             _ => LogLevel::Other,
+        }
+    }
+}
+
+impl From<LogLevel> for &str {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Debug => "debug",
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+            LogLevel::Fatal => "fatal",
+            LogLevel::Other => "other",
         }
     }
 }

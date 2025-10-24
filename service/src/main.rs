@@ -36,6 +36,7 @@ fn executor(
 fn main() {
     // Setup logging
     log::setup_logging("info", log::LogType::Service);
+    log::info!("***** Starting UDS Actor Service *****");
 
     tls::init_tls(None);
 
@@ -63,6 +64,10 @@ fn main() {
 // Real "main" async logic of the service
 async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
+    // Setup logging level from config
+    let log_level = platform.config().read().await.log_level();
+    log::set_log_level(log_level.into());
+    log::info!("Logging level set to: {:?}", log_level);
 
     // Validate config. If no config, this will error out
     let cfg = platform.config().read().await.clone();

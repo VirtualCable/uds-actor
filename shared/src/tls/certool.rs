@@ -3,6 +3,8 @@ use axum_server::tls_rustls::RustlsConfig;
 use rustls::version::{TLS12, TLS13};
 use std::sync::Arc;
 
+use crate::log;
+
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
@@ -13,6 +15,9 @@ use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys}; // necesario 
 use super::{CertificateInfo, ciphers};
 
 pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig> {
+    // Infor for error logging
+    let err_cert_info = cert_info.clone();
+
     // Extract certificate chain
     let cert_pem: Vec<u8> = cert_info.certificate.into();
     let mut cert_reader = cert_pem.as_slice();
@@ -27,6 +32,7 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
             let epki = EncryptedPrivateKeyInfo::from_der(pem_block.contents())
                 .map_err(|e| anyhow::anyhow!("Failed to parse encrypted private key: {:?}", e))?;
             let doc = epki.decrypt(pass).map_err(|e| {
+                log::info!("Invalid TLS certificate info: {:?}", err_cert_info);
                 anyhow::anyhow!(
                     "Failed to decrypt private key with provided password: {:?}",
                     e

@@ -27,14 +27,21 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::{
-    fs::{self, OpenOptions}, io::{self, Write}, panic, path::PathBuf, sync::OnceLock
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    panic,
+    path::PathBuf,
+    sync::OnceLock,
 };
-use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
+};
 
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
 
 static LOGGER_INIT: OnceLock<()> = OnceLock::new();
+static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
 
 struct RotatingWriter {
     path: PathBuf,
@@ -120,14 +127,13 @@ pub fn setup_panic_hook() {
 }
 
 pub fn setup_logging(level: &str, log_type: LogType) {
-        // "UDSACTOR_CLIENT_LOG_LEVEL",
-        // "UDSACTOR_CLIENT_LOG_PATH",
-        // "UDSACTOR_CLIENT_LOG_USE_DATETIME",
-
     let (level_key, log_path, use_datetime, log_name) = (
         format!("UDSACTOR_{}_LOG_LEVEL", log_type.to_string().to_uppercase()),
         format!("UDSACTOR_{}_LOG_PATH", log_type.to_string().to_uppercase()),
-        format!("UDSACTOR_{}_LOG_USE_DATETIME", log_type.to_string().to_uppercase()),
+        format!(
+            "UDSACTOR_{}_LOG_USE_DATETIME",
+            log_type.to_string().to_uppercase()
+        ),
         format!("udsactor-{}", log_type.to_string().to_lowercase()),
     );
 
@@ -144,15 +150,22 @@ pub fn setup_logging(level: &str, log_type: LogType) {
         let op = crate::operations::new_operations();
         let computer_name = op.get_computer_name().unwrap_or_else(|_| "unknown".into());
         let dt = chrono::Local::now();
-        format!("{}-{}-{}", log_name, computer_name, dt.format("%Y%m%d-%H%M%S"))
+        format!(
+            "{}-{}-{}",
+            log_name,
+            computer_name,
+            dt.format("%Y%m%d-%H%M%S")
+        )
     } else {
         log_name.to_string()
     } + ".log";
 
-    println!("Logging to {}/{} with level {}", log_path, log_name, level);
-
     LOGGER_INIT.get_or_init(|| {
         let env_filter = EnvFilter::new(level.clone());
+        let (reload_layer, handle) = reload::Layer::<EnvFilter, Registry>::new(env_filter);
+
+        let _ = RELOAD_HANDLE.set(handle);
+
         let main_layer = fmt::layer()
             .with_writer(RotatingWriter {
                 path: std::path::Path::new(&log_path).join(log_name),
@@ -163,7 +176,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .with_target(true)
             .with_level(true)
             .with_thread_ids(level == "debug" || level == "trace")
-            .with_filter(env_filter.clone());
+            .with_filter(reload_layer);
 
         #[cfg(debug_assertions)]
         let main_layer = main_layer.and_then(
@@ -175,7 +188,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
                 .with_thread_ids(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_filter(env_filter),
+                .with_filter(EnvFilter::new("debug")),
         );
 
         tracing_subscriber::registry()
@@ -183,12 +196,24 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .try_init()
             .ok();
 
-        info!("Logging initialized with level: {}", level);
         // Setup panic hook, not if testing
         if log_type != LogType::Tests {
             setup_panic_hook();
         }
     });
+}
+
+pub fn set_log_level(level: &str) {
+    // Note: Changing log level at runtime is not directly supported by tracing_subscriber.
+    // This is a workaround by re-initializing the subscriber with the new level.
+    if let Some(handle) = RELOAD_HANDLE.get() {
+        let new_filter = EnvFilter::new(level);
+        if let Err(e) = handle.modify(|f| *f = new_filter) {
+            eprintln!("Failed to reload log level: {}", e);
+        }
+    } else {
+        eprintln!("Logger not initialized yet");
+    }
 }
 
 #[cfg(test)]

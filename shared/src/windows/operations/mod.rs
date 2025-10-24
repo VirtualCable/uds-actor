@@ -476,7 +476,7 @@ impl Operations for WindowsOperations {
         if status.success() {
             Ok(())
         } else {
-            anyhow::bail!("w32tm /resync failed with {:?}", status);
+            anyhow::bail!("w32tm /resync failed with {:?}", status.code());
         }
     }
 

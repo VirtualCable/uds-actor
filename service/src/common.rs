@@ -10,6 +10,7 @@ use shared::{
 use crate::platform;
 
 pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
+    log::debug!("Waiting for platform readyness");
     // We need some network interface to be up and have an IP address in the configured subnet (if any)
     let subnet = platform.config().read().await.restrict_net.clone();
     let stop = platform.get_stop();
@@ -39,13 +40,14 @@ pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
             break;
         }
     }
-
+    log::info!("Platform is ready");
     Ok(())
 }
 
 // Invokes initialization and updates config accordingly
 pub async fn initialize(platform: &platform::Platform) -> Result<()> {
     let cfg_guard = platform.config();
+    let actor_type = cfg_guard.read().await.actor_type.clone();
 
     let mut cfg_guard = cfg_guard.write().await;
 
@@ -55,15 +57,15 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
     // Initialize
     let master_token = cfg_guard.master_token.clone().unwrap_or_default();
     broker_api_guard.set_token(&master_token);
-    log::info!("Unmanaged actor not initialized, initializing with broker");
+    log::info!("{:?} actor not initialized, initializing with broker", actor_type);
     if let Ok(response) = broker_api_guard.initialize(interfaces.as_slice()).await {
         // If token on response is none, this is not a managed host,continue until next request
         if response.token.is_none() {
             log::error!(
-                "Unmanaged actor initialization did not return a token, cannot continue login"
+                "{:?} actor initialization did not return a token, cannot continue login", actor_type
             );
             return Err(anyhow::anyhow!(
-                "Unmanaged actor initialization did not return a token"
+                "{:?} actor initialization did not return a token", actor_type
             ));
         }
 
@@ -81,12 +83,21 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 
         // Update stored config.
         // Note that in fact, on unmanaged, we do not need to store own_token or unique_id,
+        // On managed, it's needed, but we store it anyway on both for simplicity,
         // because it's volatile, but we do it anyway for simplicity as it really does not harm
         let mut saver = platform.config_storage();
         if let Err(e) = saver.save_config(&cfg_guard) {
             log::error!("Failed to save updated config with new master_token: {}", e);
+            // If type is managed, we cannot continue without saving the config beceuse
+            // it contains the token
+            if actor_type == shared::config::ActorType::Managed {
+                return Err(anyhow::anyhow!(
+                    "Failed to save updated config with new master_token: {}", e
+                ));
+            }
             // Continue anyway, we have the token in our in-memory config
         }
+        // Note: right here we are storing all de config, including that one not needed for in fact
 
         // Now, set the broker_api token to the new own_token
         if let Some(own_token) = cfg_guard.own_token.clone() {

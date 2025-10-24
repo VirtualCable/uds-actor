@@ -98,6 +98,10 @@ impl ActorConfiguration {
     pub fn already_initialized(&self) -> bool {
         self.own_token.is_some()
     }
+
+    pub fn log_level(&self) -> crate::broker::api::types::LogLevel {
+        self.log_level.into()
+    }
 }
 
 pub trait Configuration: Send + Sync + 'static {

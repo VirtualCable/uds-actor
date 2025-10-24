@@ -104,7 +104,7 @@ unsafe fn fix_registry_permissions(hkey: HKEY) -> Result<()> {
 const PATH: PCWSTR = w!("SOFTWARE\\UDSActor");
 
 fn get_key_root() -> HKEY {
-    if cfg!(test) || cfg!(debug_assertions) {
+    if std::env::var("UDS_ACTOR_TEST").is_ok() {
         HKEY_CURRENT_USER
     } else {
         HKEY_LOCAL_MACHINE
