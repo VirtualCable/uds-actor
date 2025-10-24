@@ -38,7 +38,7 @@ mod idle;
 mod network;
 mod renamer;
 mod session;
-mod installer;
+pub mod installer;
 
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
