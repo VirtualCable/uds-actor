@@ -1,18 +1,17 @@
-use windows::{
-    Win32::{Foundation::E_FAIL, System::Services::*},
-    core::*,
-};
+use anyhow::Result;
+
+use windows::{Win32::System::Services::*, core::*};
 
 use crate::log;
 
-pub fn register(name: &str, display_name: &str, description: &str) -> windows::core::Result<()> {
+pub fn register(name: &str, display_name: &str, description: &str) -> Result<()> {
     log::info!("Registering service: {}", name);
 
     let name = widestring::U16CString::from_str_truncate(name);
     let display_name = widestring::U16CString::from_str_truncate(display_name);
     let description = widestring::U16CString::from_str_truncate(description);
     let bin_path = std::env::current_exe()
-        .map_err(|_| E_FAIL)?
+        .map_err(|e| anyhow::anyhow!("Failed to get current exe path: {}", e))?
         .to_string_lossy()
         .to_string();
 
@@ -71,15 +70,15 @@ pub fn register(name: &str, display_name: &str, description: &str) -> windows::c
                 Ok(())
             } else {
                 CloseServiceHandle(scm)?;
-                Err(windows::core::Error::from_thread())
+                Err(anyhow::anyhow!("Failed to create service: {}", windows::core::Error::from_thread()))
             }
         } else {
-            Err(windows::core::Error::from_thread())
+            Err(anyhow::anyhow!("Failed to open service manager: {}", windows::core::Error::from_thread()))
         }
     }
 }
 
-pub fn unregister(name: &str) -> windows::core::Result<()> {
+pub fn unregister(name: &str) -> Result<()> {
     let name = widestring::U16CString::from_str_truncate(name);
     unsafe {
         if let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS) {
@@ -89,7 +88,7 @@ pub fn unregister(name: &str) -> windows::core::Result<()> {
             }
             CloseServiceHandle(scm)?;
         } else {
-            return Err(windows::core::Error::from_thread());
+            return Err(anyhow::anyhow!("Failed to open service manager: {}", windows::core::Error::from_thread()));
         }
     }
     Ok(())

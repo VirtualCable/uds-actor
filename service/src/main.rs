@@ -13,12 +13,13 @@ use shared::{
     service::{AsyncService, AsyncServiceTrait},
     sync::OnceSignal,
     tls,
+    installer
 };
 
-mod common;
-mod platform;
-mod computer;
 mod actors;
+mod common;
+mod computer;
+mod platform;
 
 mod workers;
 
@@ -33,6 +34,30 @@ fn executor(
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--install" => {
+                if let Err(e) =installer::register(
+                    "UDSActor",
+                    "UDS Actor Service",
+                    "Conecta tu equipo con la plataforma",
+                ) {
+                    eprintln!("Failed to install service: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            "--uninstall" => {
+                if let Err(e) = installer::unregister("UDSActor") {
+                    eprintln!("Failed to uninstall service: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            _ => {}
+        }
+    }
+
     // Setup logging
     log::setup_logging("info", log::LogType::Service);
     log::info!("***** Starting UDS Actor Service *****");
