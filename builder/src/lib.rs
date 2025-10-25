@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 // uds-build/src/lib.rs
 use chrono::{Datelike, Utc, NaiveDate};
 use winres::WindowsResource;
@@ -54,11 +52,7 @@ pub fn build_windows(build_info: BuildInfo) {
 
     res.append_rc_content(&format!(r##"101 BITMAP DISCARDABLE "{}""##, bmp));
     if build_info.requires_admin {
-        let manifest_bytes = include_bytes!("../admin.manifest");
-        let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-        let manifest_path = out_dir.join("admin.manifest");
-        std::fs::write(&manifest_path, manifest_bytes).unwrap();
-        res.append_rc_content(&format!(r#"1 24 "{}""#, manifest_path.display()));
+        res.append_rc_content(r#"1 24 "../builder/admin.manifest""#);
     }
 
     res.compile().unwrap();
