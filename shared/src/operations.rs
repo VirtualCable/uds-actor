@@ -187,16 +187,11 @@ pub trait Operations: Send + Sync {
 }
 
 // Re-export the Windows concrete implementation when building for Windows.
-//
-// NOTE: I export it as `WindowsOperationsImpl` to avoid name conflicts with
-// the trait itself. If you prefer the concrete type to be re-exported as
-// `Operations`, I can change it (but that will shadow the trait name in this
-// module).
 #[cfg(target_os = "windows")]
 pub use crate::windows::operations::new_operations;
 
 #[cfg(target_family = "unix")]
-pub use crate::unix::mac::new_operations;
+pub use crate::unix::operations::new_operations;
 
 #[cfg(test)]
 mod tests {
