@@ -30,12 +30,14 @@ use libc::{self};
 
 use anyhow::Result;
 
-use crate::{operations::NetworkInterface};
+use crate::operations::NetworkInterface;
 
+use libc::{
+    AF_INET, AF_LINK, IFF_LOOPBACK, IFF_RUNNING, IFF_UP, freeifaddrs, getifaddrs, ifaddrs,
+    sockaddr_dl, sockaddr_in,
+};
 /// Returns iterator (Vec) of InterfaceInfo for “valid” interfaces.
 use std::ffi::CStr;
-use libc::{getifaddrs, freeifaddrs, ifaddrs, AF_INET, AF_LINK, sockaddr_in, sockaddr_dl};
-
 
 pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
     let mut ifaces: *mut ifaddrs = std::ptr::null_mut();
@@ -50,12 +52,16 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
         while !cur.is_null() {
             let ifa = &*cur;
 
-            if !ifa.ifa_addr.is_null() {
+            if !ifa.ifa_addr.is_null()
+                && (ifa.ifa_flags & IFF_UP as u32) != 0
+                && (ifa.ifa_flags & IFF_RUNNING as u32) != 0
+                && (ifa.ifa_flags & IFF_LOOPBACK as u32) == 0
+            {
                 let name = CStr::from_ptr(ifa.ifa_name).to_string_lossy().into_owned();
                 let family = (*ifa.ifa_addr).sa_family as i32;
 
                 if family == AF_INET {
-                    // Dirección IPv4
+                    // IPv4 address
                     let sa = &*(ifa.ifa_addr as *const sockaddr_in);
                     let ip = Ipv4Addr::from(u32::from_be(sa.sin_addr.s_addr));
                     result.push(NetworkInterface {
@@ -64,7 +70,7 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
                         mac: String::new(), // se rellena en AF_LINK
                     });
                 } else if family == AF_LINK {
-                    // Dirección MAC
+                    // MAC address
                     let sdl = &*(ifa.ifa_addr as *const sockaddr_dl);
                     let mac_bytes = std::slice::from_raw_parts(
                         sdl.sdl_data.as_ptr().offset(sdl.sdl_nlen as isize) as *const u8,
@@ -90,7 +96,27 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
         freeifaddrs(ifaces);
     }
 
-    Ok(result)
+    // Now, we need to merge IP and MAC info for the same interface
+    let mut merged_result: Vec<NetworkInterface> = Vec::new();
+    for iface in result {
+        if let Some(existing) = merged_result
+            .iter_mut()
+            .find(|i| i.name == iface.name)
+        {
+            if !iface.ip_addr.is_empty() {          
+                existing.ip_addr = iface.ip_addr;
+            }
+            if !iface.mac.is_empty() {
+                existing.mac = iface.mac;
+            }
+        } else {
+            merged_result.push(iface);
+        }
+    }
+    // Remove any interfaces that have neither IP nor MAC
+    merged_result.retain(|i| !i.ip_addr.is_empty() && !i.mac.is_empty());
+
+    Ok(merged_result)
 }
 
 #[cfg(test)]

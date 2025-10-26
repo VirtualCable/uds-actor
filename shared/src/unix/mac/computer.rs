@@ -32,9 +32,8 @@ use crate::log;
 
 // Get computer name on macos
 pub(super) fn get_computer_name() -> Result<String> {
-    let output = Command::new("scutil")
-        .arg("--get")
-        .arg("ComputerName")
+    let output = Command::new("hostname")
+        .arg("-s")
         .output()?;
 
     if output.status.success() {

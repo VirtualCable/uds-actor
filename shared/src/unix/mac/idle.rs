@@ -33,7 +33,12 @@ pub(super) fn init_idle(_seconds: u64) -> Result<()> {
 
 pub(super) fn get_idle() -> f64 {
     // Not implemented for macOS right now, return 0
-    0.0
+    let idle = user_idle::UserIdle::get_time();
+    if let Ok(idle) = idle {
+        idle.as_milliseconds() as f64 / 1000.0
+    } else {
+        0.0
+    }
 }
 
 #[allow(dead_code)]
