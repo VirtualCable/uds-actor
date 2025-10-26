@@ -11,8 +11,8 @@ pub struct BuildInfo<'a> {
 }
 
 pub fn build_windows(build_info: BuildInfo) {
-    let icon = build_info.icon.unwrap_or("../img/uds.ico");
-    let bmp = build_info.bmp.unwrap_or("../img/uds.bmp");
+    let icon = build_info.icon.unwrap_or("../../img/uds.ico");
+    let bmp = build_info.bmp.unwrap_or("../../img/uds.bmp");
     println!("cargo:rerun-if-changed={icon}");
     println!("cargo:rerun-if-changed={bmp}");
     // Print current folder for debugging

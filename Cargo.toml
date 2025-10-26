@@ -2,12 +2,12 @@
 resolver = "3"
 
 members = [
-    "builder",
-    "client", 
-    "config",
-    "config-unmanaged", "gui-helper",
-    "service",
-    "shared"
+    "crates/builder",
+    "crates/client", 
+    "crates/config",
+    "crates/config-unmanaged", "crates/gui-helper",
+    "crates/service",
+    "crates/shared"
 ]
 
 [profile.release]
