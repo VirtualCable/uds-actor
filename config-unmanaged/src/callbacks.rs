@@ -15,8 +15,8 @@ pub fn bnt_save_clicked(cfg_window: &ConfigGui) {
     let net = cfg_window.input_net.value().trim().to_string(); // Can be enpty
     let log_level: types::LogLevel = (cfg_window.choice_log_level.value() as u8).min(4).into();
 
-    if uds_server.is_empty() || token.is_empty() {
-        fltk::dialog::alert_default("Hostname and token are required");
+    if uds_server.is_empty() {
+        fltk::dialog::alert_default("Hostname is required");
         return;
     }
 
@@ -58,7 +58,7 @@ pub fn btn_test_clicked(cfg_window: &ConfigGui) {
     // Must have uds_server & token
     let actor_cfg = cfg.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
-        fltk::dialog::alert_default("Register with UDS before testing connection");
+        fltk::dialog::alert_default("Nothing to test: Only actors with tokens can be tested");
         return;
     }
 

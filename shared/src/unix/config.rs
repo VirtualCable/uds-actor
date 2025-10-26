@@ -10,18 +10,28 @@ pub struct UnixConfig {
     actor: Option<ActorConfiguration>,
 }
 
+fn get_config_file() -> String {
+    if std::env::var("UDS_ACTOR_TEST").is_ok() {
+        "/tmp/udsactor_test_config.toml".to_string()
+    } else {
+        format!("{}/udsactor.toml", CONFIG_PATH)
+    }
+}
+
 impl Configuration for UnixConfig {
     fn load_config(&mut self) -> Result<ActorConfiguration> {
-        // If not exists
-        if !std::path::Path::new(CONFIG_PATH).exists() {
+        // If not exists folder (in CONFIG_PATH), create it
+        std::fs::create_dir_all(std::path::Path::new(CONFIG_PATH).parent().unwrap())?;
+        let config_file = get_config_file();
+        if !std::path::Path::new(&config_file).exists() {
             return Ok(ActorConfiguration::default());
         }
 
         // TODO: maybe if invalid data, back it up and return default?
-        let config_str = std::fs::read_to_string(CONFIG_PATH)?;
+        let config_str = std::fs::read_to_string(&config_file)?;
         let config: ActorConfiguration = toml::from_str(&config_str)?;
         self.actor = Some(config.clone());
-        log::info!("Configuration loaded from {}", CONFIG_PATH);
+        log::info!("Configuration loaded from {}", config_file);
         Ok(config)
     }
 
@@ -31,19 +41,22 @@ impl Configuration for UnixConfig {
     fn save_config(&mut self, config: &ActorConfiguration) -> Result<()> {
         self.actor = Some(config.clone());
 
+        let config_file = get_config_file();
+
         let toml_str = toml::to_string(config)?;
         // Ensure folder exists or create it
-        std::fs::create_dir_all(std::path::Path::new(CONFIG_PATH).parent().unwrap())?;
-        std::fs::write(CONFIG_PATH, toml_str)?;
+        std::fs::create_dir_all(std::path::Path::new(&config_file).parent().unwrap())?;
+        std::fs::write(&config_file, toml_str)?;
 
-        log::info!("Configuration saved to {}", CONFIG_PATH);
+        log::info!("Configuration saved to {}", config_file);
         Ok(())
     }
 
     fn clear_config(&mut self) -> Result<()> {
-        std::fs::remove_file(CONFIG_PATH).ok();
+        let config_file = get_config_file();
+        std::fs::remove_file(&config_file).ok();
         self.actor = None;
-        log::info!("Configuration file {} removed", CONFIG_PATH);
+        log::info!("Configuration file {} removed", config_file);
         Ok(())
     }
 
@@ -60,8 +73,4 @@ pub fn new_config_storage() -> Box<dyn Configuration> {
     Box::new(UnixConfig::default())
 }
 
-#[cfg(not(debug_assertions))]
-const CONFIG_PATH: &str = "/etc/udsactor/config.toml";
-
-#[cfg(debug_assertions)]
-const CONFIG_PATH: &str = "/tmp/udsactor_config.toml";
+const CONFIG_PATH: &str = "/etc/udsactor/";
