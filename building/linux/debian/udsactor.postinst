@@ -5,8 +5,8 @@
 set -e
 case "$1" in
 	configure)
-		/usr/bin/python3 -m compileall /usr/share/UDSActor > /dev/nul 2>&1
-
+        # Ensure configuration directory exists
+        mkdir -p /etc/udsactor
 		# Fix perms so only root can access "masterKey"
 		chmod 0700 /etc/udsactor
 		# chmod 0600 /etc/udsactor/udsactor.cfg

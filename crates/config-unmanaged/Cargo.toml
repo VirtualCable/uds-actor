@@ -1,5 +1,5 @@
 [package]
-name = "config-unmanaged"
+name = "udsactor-unmanaged-config"
 version = "5.0.0"
 edition = "2024"
 

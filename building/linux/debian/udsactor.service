@@ -7,9 +7,12 @@ KillMode=mixed
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/usr/share/UDSActor
-ExecStart=/usr/bin/python3 actor_service.py start-foreground
+WorkingDirectory=/usr/share/udsactor
+ExecStart=uds-actor-service
 PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
 
 [Install]
 WantedBy=multi-user.target

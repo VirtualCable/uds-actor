@@ -1,3 +1,10 @@
+udsactor (5.0.0) stable; urgency=medium
+
+  * Heavy refactor to Rust implementation
+  * Upgraded to 5.0.0 release
+
+ -- Adolfo Gómez García <agomez@virtualcable.es>  Fri, 1 Jul 2025 15:00:00 +0200
+
 udsactor (4.0.0) stable; urgency=medium
 
   * Upgraded to 4.0.0 release

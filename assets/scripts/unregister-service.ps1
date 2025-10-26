@@ -1,9 +1,9 @@
 #Requires -RunAsAdministrator
 
-# Script to unregister the RustExampleService
+# Script to unregister the UDSActorService
 # Run this script as Administrator
 
-$serviceName = "RustExampleService"
+$serviceName = "UDSActorService"
 
 # Delete the service
 & "$env:windir\System32\sc.exe" delete $serviceName

@@ -11,8 +11,8 @@ pub struct BuildInfo<'a> {
 }
 
 pub fn build_windows(build_info: BuildInfo) {
-    let icon = build_info.icon.unwrap_or("../../img/uds.ico");
-    let bmp = build_info.bmp.unwrap_or("../../img/uds.bmp");
+    let icon = build_info.icon.unwrap_or("../../assets/img/uds.ico");
+    let bmp = build_info.bmp.unwrap_or("../../assets/img/uds.bmp");
     println!("cargo:rerun-if-changed={icon}");
     println!("cargo:rerun-if-changed={bmp}");
     // Print current folder for debugging
@@ -52,7 +52,7 @@ pub fn build_windows(build_info: BuildInfo) {
 
     res.append_rc_content(&format!(r##"101 BITMAP DISCARDABLE "{}""##, bmp));
     if build_info.requires_admin {
-        res.append_rc_content(r#"1 24 "../builder/admin.manifest""#);
+        res.append_rc_content(r#"1 24 "../../assets/admin.manifest""#);
     }
 
     res.compile().unwrap();

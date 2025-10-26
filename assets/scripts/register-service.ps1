@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 
 $serviceName = "UDSActorService"
-$binPath = "$PSScriptRoot\uds-actor-service.exe"
+$binPath = "$PSScriptRoot\udsactor-service.exe"
 
 if (-not (Test-Path $binPath)) {
     Write-Host "Error: Executable not found at $binPath. Please build the project first."
