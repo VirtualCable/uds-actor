@@ -8,3 +8,4 @@ debian/udsactor-unmanaged/
 debian/files
 debian/*.debhelper
 debian/*.substvars
+__pycache__/
