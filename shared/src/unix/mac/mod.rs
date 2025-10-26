@@ -36,9 +36,8 @@ use crate::log;
 mod computer;
 mod idle;
 mod network;
-mod renamer;
 mod session;
-mod installer;
+pub mod installer;
 
 pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
     std::sync::Arc::new(MacOperations::new())
@@ -86,10 +85,7 @@ impl crate::operations::Operations for MacOperations {
 
     fn rename_computer(&self, new_name: &str) -> Result<()> {
         log::debug!("MacOperations::rename_computer called: {}", new_name);
-        renamer::renamer(
-            new_name,
-            self.get_linux_version().as_deref().unwrap_or("unknown"),
-        )
+        Ok(())
     }
 
     fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
@@ -154,9 +150,12 @@ impl crate::operations::Operations for MacOperations {
         network::get_network_info()
     }
 
-    fn init_idle_timer(&self) -> Result<()> {
-        log::debug!("MacOperations::init_idle_timer called");
-        idle::init_idle()
+    fn init_idle_timer(&self, min_required: u64) -> Result<()> {
+        log::debug!(
+            "MacOperations::init_idle_timer called: min_required={}",
+            min_required
+        );
+        idle::init_idle(min_required)
     }
 
     fn get_idle_duration(&self) -> Result<std::time::Duration> {

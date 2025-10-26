@@ -24,11 +24,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::{
-    ffi::CStr,
-    io::{self, Write},
-    process::{Command, Stdio},
-};
+use std::process::Command;
 
 use anyhow::Result;
 
@@ -52,7 +48,7 @@ pub(super) fn get_computer_name() -> Result<String> {
     }
 }
 
-pub(super) fn join_domain(options: &crate::operations::JoinDomainOptions) -> Result<()> {
+pub(super) fn join_domain(_options: &crate::operations::JoinDomainOptions) -> Result<()> {
     // Currently, no join domain implementation for macOS
     log::warn!("join_domain is not implemented for macOS");
     Ok(())
@@ -69,4 +65,19 @@ pub(super) fn refresh_system_time() -> Result<()> {
     println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
     println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_computer_name() {
+        crate::log::setup_logging("debug", crate::log::LogType::Tests);
+        let res = get_computer_name();
+        assert!(res.is_ok());
+        let name = res.unwrap();
+        println!("Computer name: {}", name);
+        assert!(!name.is_empty());
+    }
 }

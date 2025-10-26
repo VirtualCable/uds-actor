@@ -24,29 +24,18 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use std::io;
-use std::mem;
 use std::net::Ipv4Addr;
-use std::os::raw::{c_char, c_int};
-use std::ptr;
 
-use libc::{self, sockaddr};
+use libc::{self};
 
 use anyhow::Result;
 
-use crate::{log, operations::NetworkInterface};
+use crate::{operations::NetworkInterface};
 
 /// Returns iterator (Vec) of InterfaceInfo for “valid” interfaces.
 use std::ffi::CStr;
-use std::net::Ipv4Addr;
 use libc::{getifaddrs, freeifaddrs, ifaddrs, AF_INET, AF_LINK, sockaddr_in, sockaddr_dl};
 
-#[derive(Debug)]
-pub struct NetworkInterface {
-    pub name: String,
-    pub ip_addr: String,
-    pub mac: String,
-}
 
 pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
     let mut ifaces: *mut ifaddrs = std::ptr::null_mut();
@@ -54,7 +43,7 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
 
     unsafe {
         if getifaddrs(&mut ifaces) != 0 {
-            return result;
+            return Ok(result);
         }
 
         let mut cur = ifaces;
@@ -108,37 +97,7 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_list_interfaces() {
-        log::setup_logging("debug", crate::log::LogType::Tests);
-        let names = list_interfaces().unwrap();
-        assert!(!names.is_empty());
-        for name in &names {
-            log::info!("Interface: {}", name);
-        }
-    }
-
-    #[test]
-    fn test_get_ipv4_addr() {
-        log::setup_logging("debug", crate::log::LogType::Tests);
-        let names = list_interfaces().unwrap();
-        for name in &names {
-            if let Some(ip) = get_ipv4_addr(name) {
-                log::info!("Interface: {}, IPv4: {}", name, ip);
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_mac_addr() {
-        log::setup_logging("debug", crate::log::LogType::Tests);
-        let names = list_interfaces().unwrap();
-        for name in &names {
-            if let Some(mac) = get_mac_addr(name) {
-                log::info!("Interface: {}, MAC: {}", name, mac);
-            }
-        }
-    }
+    use crate::log;
 
     #[test]
     fn test_get_network_info() {

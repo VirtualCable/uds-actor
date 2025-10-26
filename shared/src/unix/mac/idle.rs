@@ -25,14 +25,9 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 // Code adapted from udsactor v4.x python code
-use libloading::{Library, Symbol};
-use std::cell::RefCell;
-use std::os::raw::{c_int, c_ulong, c_void};
-use std::{ptr, thread_local};
-
 use anyhow::Result;
 
-pub(super) fn init_idle() -> Result<()> {
+pub(super) fn init_idle(_seconds: u64) -> Result<()> {
     Ok(())
 }
 
@@ -52,7 +47,7 @@ mod tests {
     #[test]
     fn test_get_idle() {
         crate::log::setup_logging("debug", crate::log::LogType::Tests);
-        let res =init_idle();
+        let res =init_idle(300);
         assert!(res.is_ok());
         let idle = get_idle();
         println!("Idle time: {} seconds", idle);

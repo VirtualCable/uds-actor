@@ -29,7 +29,7 @@ use anyhow::Result;
 /// Logouts the user with dbus or loginctl
 pub(super) fn logout() -> Result<()> {
     // TODO: Implement macOS logout
-    log::warn!("logout is not implemented for macOS");
+    crate::log::warn!("logout is not implemented for macOS");
     Ok(())
 }
 
