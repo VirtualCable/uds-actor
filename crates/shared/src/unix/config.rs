@@ -5,6 +5,8 @@ use crate::{
     log,
 };
 
+const CONFIG_PATH: &str = "/etc/udsactor/";
+
 #[derive(Default, Debug, Clone)]
 pub struct UnixConfig {
     actor: Option<ActorConfiguration>,
@@ -12,9 +14,9 @@ pub struct UnixConfig {
 
 fn get_config_file() -> String {
     if std::env::var("UDS_ACTOR_TEST").is_ok() {
-        "/tmp/udsactor_test_config.toml".to_string()
+        "/tmp/udsactor_test_config.cfg".to_string()
     } else {
-        format!("{}/udsactor.toml", CONFIG_PATH)
+        format!("{}/udsactor.cfg", CONFIG_PATH)
     }
 }
 
@@ -72,5 +74,3 @@ impl Configuration for UnixConfig {
 pub fn new_config_storage() -> Box<dyn Configuration> {
     Box::new(UnixConfig::default())
 }
-
-const CONFIG_PATH: &str = "/etc/udsactor/";
