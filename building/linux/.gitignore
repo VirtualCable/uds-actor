@@ -9,3 +9,5 @@ debian/files
 debian/*.debhelper
 debian/*.substvars
 __pycache__/
+output/
+package/
