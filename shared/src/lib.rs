@@ -24,6 +24,10 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
+// We need msvc toolchain on windows
+#[cfg(all(windows, target_env = "gnu"))]
+compile_error!("This crate requires the MSVC toolchain on Windows.");
+
 pub mod log;
 pub mod sync;
 pub mod tls;
