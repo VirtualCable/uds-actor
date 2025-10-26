@@ -52,6 +52,11 @@ install-udsactor-common: $(OUTPUTDIR)/udsactor-client
 	# Install PolicyKit
 	cp policy/org.openuds.pkexec.udsactor_config.policy $(POLKITDIR)/
 
+	# Install desktop entries
+	cp desktop/udsactor_config.desktop $(APPSDIR)/
+	cp desktop/udsactor_client.desktop $(AUTOSTARTDIR)/
+
+
 	# Install systemd service for RH-based distros
 ifneq (,$(filter $(DISTRO),Fedora41 openSUSE15))
 	mkdir -p $(SYSTEMDDIR)
@@ -69,43 +74,11 @@ install-udsactor: install-udsactor-common
 	# Install managed config
 	cp $(OUTPUTDIR)/udsactor-config $(SBINDIR)/udsactor-config
 
-	# Install managed desktop entry
-	cp desktop/udsactor_config.desktop $(APPSDIR)/
-	cp desktop/udsactor_client.desktop $(AUTOSTARTDIR)/
 
 # === Install unmanaged variant ===
 install-udsactor-unmanaged: install-udsactor-common
 	# Install unmanaged config
 	cp $(OUTPUTDIR)/udsactor-unmanaged-config $(SBINDIR)/udsactor-config
-
-	# Install unmanaged desktop entry
-	cp desktop/udsactor_config-unmanaged.desktop $(APPSDIR)/udsactor_config.desktop
-	cp desktop/udsactor_client.desktop $(AUTOSTARTDIR)/
-
-package-rpm:
-	@echo "→ Generating RPM spec files for version $(VERSION)"
-	cat udsactor-template.spec | \
-		sed -e s/"version 0.0.0"/"version $(VERSION)"/g | \
-		sed -e s/"release 1"/"release $(RELEASE)"/g > udsactor-$(VERSION).spec
-
-	cat udsactor-unmanaged-template.spec | \
-		sed -e s/"version 0.0.0"/"version $(VERSION)"/g | \
-		sed -e s/"release 1"/"release $(RELEASE)"/g > udsactor-unmanaged-$(VERSION).spec
-
-	@echo "→ Building RPM packages"
-	rm -rf rpm
-	for folder in SOURCES BUILD RPMS SPECS SRPMS; do \
-		mkdir -p rpm/$$folder; \
-	done
-
-	for pkg in udsactor-*$(VERSION).spec; do \
-		rpmbuild -v -bb --clean --target noarch $$pkg; \
-	done
-
-	rpm --addsign ../*.rpm
-
-package-deb:
-	dpkg-buildpackage -b
 
 
 # === Clean build artifacts ===

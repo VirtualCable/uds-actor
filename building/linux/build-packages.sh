@@ -1,39 +1,55 @@
 #!/bin/bash
 
-VERSION=`cat ../../VERSION`
+VERSION=$( [ -f ../../../VERSION ] && cat ../../../VERSION || echo "devel" )
 RELEASE=1
 
-top=`pwd`
+top=$(pwd)
 
 # Debian based
 dpkg-buildpackage -b
 
-cat udsactor-template.spec | 
-  sed -e s/"version 0.0.0"/"version ${VERSION}"/g |
-  sed -e s/"release 1"/"release ${RELEASE}"/g > udsactor-$VERSION.spec
-cat udsactor-unmanaged-template.spec | 
-  sed -e s/"version 0.0.0"/"version ${VERSION}"/g |
-  sed -e s/"release 1"/"release ${RELEASE}"/g > udsactor-unmanaged-$VERSION.spec
-  
-# Now fix dependencies for opensuse
-# Note that, although on opensuse the library is "libXss1" on newer,
-# the LibXscrnSaver is a "capability" and gets libXss1 installed
-# So right now, we only need 1 uds actor for both platforms.
-# cat udsactor-template.spec | 
-#   sed -e s/"version 0.0.0"/"version ${VERSION}"/g |
-#   sed -e s/"name udsactor"/"name udsactor-opensuse"/g |
-#   sed -e s/"libXScrnSaver"/"libXss1"/g > udsactor-opensuse-$VERSION.spec
+for DISTRO in Fedora41 openSUSE15; do
+    # managed an unmanaged
+    for kind in managed unmanaged; do
+      # convert distro for pkg name, "" if Fedora41, "suse" if openSUSE15
+      case "$DISTRO" in
+          Fedora41)
+              PKG_DISTRO=""
+              ;;
+          openSUSE15)
+              PKG_DISTRO="-suse"
+              ;;
+      esac
+      case "$kind" in
+          managed)
+              PKGNAME="udsactor"
+              ;;
+          unmanaged)
+              PKGNAME="udsactor-unmanaged"
+              ;;
+      esac
+      PKGNAME_BASE=${PKGNAME}${PKG_DISTRO}
+      PKGNAME=${PKGNAME}${PKG_DISTRO}-${VERSION}.spec
+      #
+      # Generate spec file
+      cat udsactor-template.spec | \
+          sed -e "s/version 0.0.0/version ${VERSION}/g" \
+              -e "s/release 1/release ${RELEASE}/g" \
+              -e "s/DISTRO=rh/DISTRO=${DISTRO}/g" \
+              -e "s/%define name PKGNAME/%define name ${PKGNAME_BASE}/g" \
+          > ${PKGNAME}
 
-#for pkg in udsactor-$VERSION.spec udsactor-opensuse-$VERSION.spec; do
-for pkg in udsactor-*$VERSION.spec; do
-    
-    rm -rf rpm
-    for folder in SOURCES BUILD RPMS SPECS SRPMS; do
-        mkdir -p rpm/$folder
+
+      # Prepare RPM structure
+      rm -rf rpm
+      for folder in SOURCES BUILD RPMS SPECS SRPMS; do
+          mkdir -p rpm/$folder
+      done
+
+      # Build RPM
+      rpmbuild -v -bb --clean --target x86_64 ${PKGNAME} 2>&1
     done
-    
-    rpmbuild -v -bb --clean --target noarch $pkg 2>&1
 done
 
-rpm --addsign ../*rpm
-#rm udsactor-$VERSION
+# Sign RPMs
+rpm --addsign ../*.rpm

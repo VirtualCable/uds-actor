@@ -64,6 +64,8 @@ def build_for_distro(distro: str, crate_path: PathLike, debug: bool) -> None:
     for exe in executables:
         print(f"→ Generated {output_dir / exe.name}")
         (output_dir / exe.name).write_bytes(exe.read_bytes())
+        # Strip binaries to reduce size (with local stripping tool)
+        subprocess.run(["strip", output_dir / exe.name], check=True)
 
     # Final clean
     docker_run(crate_path, image_tag, ["cargo", "clean"])
