@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
-
+use serde::{Deserialize, Serialize};
 
 /// Actor types
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -44,10 +43,10 @@ pub enum ActorOsAction {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ActorOsConfiguration {
     #[serde(default)]
-    pub action: ActorOsAction,  // Default is None
+    pub action: ActorOsAction, // Default is None
     #[serde(default)]
-    pub name: String,           // Default is empty
-    pub custom: Option<serde_json::Value>,  // custom data depends on action
+    pub name: String, // Default is empty
+    pub custom: Option<serde_json::Value>, // custom data depends on action
 }
 
 impl Deref for ActorOsConfiguration {
@@ -174,6 +173,7 @@ mod tests {
     #[test]
     fn test_registry_save_load_delete_config() {
         log::setup_logging("debug", crate::log::LogType::Tests);
+        unsafe { std::env::set_var("UDS_ACTOR_TEST", "1") };
 
         let test_cfg = get_test_config();
         let mut config = new_config_storage();
