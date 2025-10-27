@@ -26,9 +26,17 @@ mkdir -p "$OUTPUT_DIR"
 echo "Creating universal binaries..."
 for BINARY in udsactor-client udsactor-service udsactor-unmanaged-config gui-helper; do
     lipo -create \
-        "$WORKSPACE_ROOT/target/x86_64-apple-darwin/release/$BINARY" \
-        "$WORKSPACE_ROOT/target/aarch64-apple-darwin/release/$BINARY" \
-        -output "$OUTPUT_DIR/$BINARY"
+    "$WORKSPACE_ROOT/target/x86_64-apple-darwin/release/$BINARY" \
+    "$WORKSPACE_ROOT/target/aarch64-apple-darwin/release/$BINARY" \
+    -output "$OUTPUT_DIR/$BINARY"
+    
+    if [[ -n "$UDSACTOR_PROCESS_BINARY" ]]; then
+        echo "Processing $BIN with external hook..."
+        "$UDSACTOR_PROCESS_BINARY" "$BIN"
+    else
+        echo "No binary processing hook defined for $BIN"
+    fi
+    
     echo "Created universal binary for $BINARY at $OUTPUT_DIR/$BINARY"
 done
 
@@ -65,9 +73,16 @@ cp "$SCRIPT_DIR/license.txt" "$BUILD_ROOT/usr/local/share/doc/udsactor/license.t
 echo "Building .pkg..."
 pkgname="UDSActor-${VERSION}.pkg"
 productbuild \
-  --root "$BUILD_ROOT" / \
-  --scripts "$BUILD_ROOT/scripts" \
-  "$pkgname"
+--root "$BUILD_ROOT" / \
+--scripts "$BUILD_ROOT/scripts" \
+"$pkgname"
+
+if [[ -n "$UDSACTOR_SIGN_PKG" ]]; then
+    productsign --sign "$UDSACTOR_SIGN_PKG" "$PKG" "$PKG_SIGNED"
+    echo "Signed package: $PKG_SIGNED"
+else
+    echo "No package signing identity defined"
+fi
 
 # Clean up
 rm -rf "$BUILD_ROOT"
