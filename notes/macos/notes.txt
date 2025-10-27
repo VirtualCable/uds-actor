@@ -1,0 +1,9 @@
+service file (net.virtualcable.udsactor.server.plist) goes in /Library/LaunchDaemons
+
+# for installing the UDS Actor service
+sudo cp org.openuds.udsactor-service.plist /Library/LaunchDaemons/
+sudo launchctl load /Library/LaunchDaemons/org.openuds.udsactor-service.plist
+
+# for installing the UDS Actor client
+cp org.openuds.udsactor-client.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/org.openuds.udsactor-client.plist
