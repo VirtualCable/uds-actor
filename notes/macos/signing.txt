@@ -1,0 +1,7 @@
+productsign \
+  --sign "Developer ID Installer: Virtualcable S.L.U." \
+  "UDSActor-${VERSION}.pkg" \
+  "UDSActor-${VERSION}-signed.pkg"
+
+
+codesign --sign "Developer ID Application: Virtualcable S.L.U." /path/to/binary

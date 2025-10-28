@@ -22,6 +22,10 @@ impl TestSetup {
         Fut: std::future::Future<Output = Result<()>> + Send + 'static,
     {
         log::setup_logging("debug", shared::log::LogType::Tests);
+        // set UDS_ACTOR_TEST to make config use /tmp/udsactor_test_config.cfg
+        unsafe {
+            std::env::set_var("UDS_ACTOR_TEST", "1");
+        }
         let mocked_platform = mock_platform().await;
         let platform = mocked_platform.platform.clone();
         let calls = mocked_platform.calls.clone();
