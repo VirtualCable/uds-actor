@@ -70,26 +70,48 @@ pub fn register(name: &str, display_name: &str, description: &str) -> Result<()>
                 Ok(())
             } else {
                 CloseServiceHandle(scm)?;
-                Err(anyhow::anyhow!("Failed to create service: {}", windows::core::Error::from_thread()))
+                Err(anyhow::anyhow!(
+                    "Failed to create service: {}",
+                    windows::core::Error::from_thread()
+                ))
             }
         } else {
-            Err(anyhow::anyhow!("Failed to open service manager: {}", windows::core::Error::from_thread()))
+            Err(anyhow::anyhow!(
+                "Failed to open service manager: {}",
+                windows::core::Error::from_thread()
+            ))
         }
     }
 }
 
 pub fn unregister(name: &str) -> Result<()> {
     let name = widestring::U16CString::from_str_truncate(name);
+
     unsafe {
-        if let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS) {
-            if let Ok(service) = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_ALL_ACCESS) {
-                DeleteService(service)?;
-                CloseServiceHandle(service)?;
+        let scm = OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS)?;
+        let service = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_ALL_ACCESS)?;
+
+        let mut status: SERVICE_STATUS = std::mem::zeroed();
+        ControlService(service, SERVICE_CONTROL_STOP, &mut status)?;
+
+        loop {
+            let mut buf = [0u8; std::mem::size_of::<SERVICE_STATUS_PROCESS>()];
+            let mut needed = 0u32;
+
+            QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, Some(&mut buf), &mut needed)?;
+
+            let query: SERVICE_STATUS_PROCESS = std::ptr::read(buf.as_ptr() as *const _);
+            if query.dwCurrentState == SERVICE_STOPPED {
+                break;
             }
-            CloseServiceHandle(scm)?;
-        } else {
-            return Err(anyhow::anyhow!("Failed to open service manager: {}", windows::core::Error::from_thread()));
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
+
+        DeleteService(service)?;
+
+        CloseServiceHandle(service)?;
+        CloseServiceHandle(scm)?;
     }
+
     Ok(())
 }
