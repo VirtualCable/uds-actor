@@ -83,11 +83,19 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
         // Rotate if needed
         let _ = self.rotate_if_needed();
         // Always open in append mode, creating it if it doesn't exist
+        // If self.path cannot be opened, try with one in temp dir
         OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .unwrap_or_else(|e| panic!("Failed to open log file {:?}: {}", self.path, e))
+            .unwrap_or_else(|_e| {
+                let temp_path = std::env::temp_dir().join("udsactor-fallback.log");
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&temp_path)
+                    .unwrap_or_else(|e| panic!("Failed to open log file {:?}: {}", temp_path, e))
+            })
     }
 }
 
