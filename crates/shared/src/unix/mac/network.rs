@@ -30,7 +30,7 @@ use libc::{self};
 
 use anyhow::Result;
 
-use crate::operations::NetworkInterface;
+use crate::system::NetworkInterface;
 
 use libc::{
     AF_INET, AF_LINK, IFF_LOOPBACK, IFF_RUNNING, IFF_UP, freeifaddrs, getifaddrs, ifaddrs,

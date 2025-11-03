@@ -47,7 +47,7 @@ pub(super) fn get_computer_name() -> Result<String> {
     }
 }
 
-pub(super) fn join_domain(_options: &crate::operations::JoinDomainOptions) -> Result<()> {
+pub(super) fn join_domain(_options: &crate::system::JoinDomainOptions) -> Result<()> {
     // Currently, no join domain implementation for macOS
     log::warn!("join_domain is not implemented for macOS");
     Ok(())

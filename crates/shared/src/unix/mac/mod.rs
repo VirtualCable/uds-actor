@@ -39,7 +39,7 @@ mod network;
 mod session;
 pub mod installer;
 
-pub fn new_system() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(MacSystem::new())
 }
 
@@ -63,7 +63,7 @@ impl MacSystem {
 }
 
 // TODO: Implement remaining methods
-impl crate::operations::Operations for MacSystem {
+impl crate::system::System for MacSystem {
     fn check_permissions(&self) -> Result<()> {
         log::debug!("MacSystem::check_permissions called");
         if unsafe { libc::geteuid() != 0 } {
@@ -88,7 +88,7 @@ impl crate::operations::Operations for MacSystem {
         Ok(())
     }
 
-    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
+    fn join_domain(&self, options: &crate::system::JoinDomainOptions) -> Result<()> {
         computer::join_domain(options)
     }
 
@@ -145,7 +145,7 @@ impl crate::operations::Operations for MacSystem {
         session::logout()
     }
 
-    fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterface>> {
+    fn get_network_info(&self) -> Result<Vec<crate::system::NetworkInterface>> {
         log::debug!("MacSystem::get_network_info called");
         network::get_network_info()
     }
