@@ -35,7 +35,7 @@ pub mod ws;
 pub mod broker;
 pub mod config;
 pub mod service;
-pub mod operations;
+pub mod system;
 pub mod consts;
 pub mod utils;
 pub mod installer;

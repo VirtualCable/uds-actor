@@ -15,7 +15,7 @@ pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
     let subnet = platform.config().read().await.restrict_net.clone();
     let stop = platform.get_stop();
     loop {
-        if !network_interfaces_in_subnet(platform.operations(), subnet.as_deref())
+        if !network_interfaces_in_subnet(platform.system(), subnet.as_deref())
             .await?
             .is_empty()
         {
@@ -31,7 +31,7 @@ pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
 
     // Also, wait for any installation in progress to complete
     loop {
-        if !platform.operations().is_some_installation_in_progress()? {
+        if !platform.system().is_some_installation_in_progress()? {
             break;
         }
         // wait_timeout returns Err if timeout elapsed
@@ -53,7 +53,7 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 
     let broker_api = platform.broker_api(); // Avoid drop borrow
     let mut broker_api_guard = broker_api.write().await;
-    let interfaces = platform.operations().get_network_info()?;
+    let interfaces = platform.system().get_network_info()?;
     // Initialize
     let master_token = cfg_guard.master_token.clone().unwrap_or_default();
     broker_api_guard.set_token(&master_token);
@@ -131,7 +131,7 @@ pub async fn interfaces_watch_task(
 ) -> Result<()> {
     // Store existing network interface, to watch for changes
     let known_interfaces =
-        network_interfaces_in_subnet(platform.operations(), subnet.as_deref()).await?;
+        network_interfaces_in_subnet(platform.system(), subnet.as_deref()).await?;
 
     log::info!(
         "Starting network interfaces watch task, monitoring {} interfaces",
@@ -141,7 +141,7 @@ pub async fn interfaces_watch_task(
     let stop = platform.get_stop();
     loop {
         if let Ok(interfaces) = network_interfaces_changed(
-            platform.operations(),
+            platform.system(),
             known_interfaces.as_slice(),
             subnet.as_deref(),
         )

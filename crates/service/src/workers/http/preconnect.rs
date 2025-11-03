@@ -16,7 +16,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
         // Process the Preconnect. If protocol is rdp, ensure the user can rdp
         let msg = env.msg;
         if msg.protocol.to_lowercase() == "rdp" {
-            if let Err(e) = platform.operations().ensure_user_can_rdp(&msg.user) {
+            if let Err(e) = platform.system().ensure_user_can_rdp(&msg.user) {
                 log::error!("Failed to ensure user can RDP: {}", e);
             } else {
                 log::info!("Ensured user can RDP: {}", msg.user);

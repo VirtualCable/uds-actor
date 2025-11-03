@@ -47,7 +47,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
             log::warn!("Received LogoutRequest but no user is logged in");
             continue;
         }
-        let interfaces = platform.operations().get_network_info()?;
+        let interfaces = platform.system().get_network_info()?;
         if let Err(err) = broker_api
             .write()
             .await

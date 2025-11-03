@@ -48,7 +48,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
         log::debug!("Received LoginRequest with id {:?}", env.id);
         let broker_api = platform.broker_api();
 
-        let interfaces = platform.operations().get_network_info()?;
+        let interfaces = platform.system().get_network_info()?;
         if let Ok(response) = broker_api
             .write()
             .await

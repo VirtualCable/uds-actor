@@ -2,7 +2,7 @@
 use crate::{
     broker::api,
     log,
-    operations::{NetworkInterface, Operations},
+    system::{NetworkInterface, System},
     tls::CertificateInfo,
 };
 use std::sync::{Arc, RwLock};
@@ -85,7 +85,7 @@ impl Default for OperationsMock {
     }
 }
 
-impl Operations for OperationsMock {
+impl System for OperationsMock {
     fn check_permissions(&self) -> anyhow::Result<()> {
         self.calls.push("operations::check_permissions()");
         Ok(())
@@ -108,7 +108,7 @@ impl Operations for OperationsMock {
         Ok(())
     }
 
-    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> anyhow::Result<()> {
+    fn join_domain(&self, options: &crate::system::JoinDomainOptions) -> anyhow::Result<()> {
         self.calls
             .push(format!("operations::join_domain({:?})", options));
         crate::log::info!("Joining domain: {:?}", options);
@@ -314,7 +314,7 @@ impl api::BrokerApi for BrokerApiMock {
     }
     async fn initialize(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
     ) -> Result<api::types::InitializationResponse, api::types::RestError> {
         self.calls
             .push(format!("broker_api::initialize({:?})", interfaces));
@@ -327,7 +327,7 @@ impl api::BrokerApi for BrokerApiMock {
     }
     async fn unmanaged_ready(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         port: u16,
     ) -> Result<CertificateInfo, api::types::RestError> {
         self.calls.push(format!(
@@ -347,7 +347,7 @@ impl api::BrokerApi for BrokerApiMock {
     }
     async fn login(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
     ) -> Result<api::types::LoginResponse, api::types::RestError> {
@@ -365,7 +365,7 @@ impl api::BrokerApi for BrokerApiMock {
     }
     async fn logout(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
         session_id: &str,

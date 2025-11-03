@@ -15,7 +15,7 @@ pub async fn worker(platform: platform::Platform) -> Result<()> {
     {
         log::info!("Received logoff request, performing logoff");
         platform.stop().set();
-        platform.operations().logoff()?;
+        platform.system().logoff()?;
     }
 
     Ok(())

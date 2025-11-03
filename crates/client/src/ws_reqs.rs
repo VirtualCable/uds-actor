@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use shared::{
-    operations,
+    system,
     sync::OnceSignal,
     ws::{
         client::WsClient,
@@ -17,13 +17,13 @@ pub trait WsReqs: Send + Sync {
 }
 
 pub struct WsRequester {
-    operations: Arc<dyn operations::Operations>,
+    operations: Arc<dyn system::System>,
     ws_client: WsClient,
     stop: OnceSignal,
 }
 
 impl WsRequester {
-    pub fn new(operations: Arc<dyn operations::Operations>, ws_client: WsClient, stop: OnceSignal) -> Self {
+    pub fn new(operations: Arc<dyn system::System>, ws_client: WsClient, stop: OnceSignal) -> Self {
         Self { operations, ws_client, stop }
     }
 }

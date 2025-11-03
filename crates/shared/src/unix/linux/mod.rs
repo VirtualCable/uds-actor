@@ -41,13 +41,13 @@ mod session;
 pub mod installer;
 
 
-pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
-    std::sync::Arc::new(LinuxOperations::new())
+pub fn new_system() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+    std::sync::Arc::new(LinuxSystem::new())
 }
 
-pub struct LinuxOperations;
+pub struct LinuxSystem;
 
-impl LinuxOperations {
+impl LinuxSystem {
     pub fn new() -> Self {
         Self {}
     }
@@ -64,7 +64,7 @@ impl LinuxOperations {
     }
 }
 
-impl crate::operations::Operations for LinuxOperations {
+impl crate::operations::Operations for LinuxSystem {
     fn check_permissions(&self) -> Result<()> {
         if unsafe { libc::geteuid() != 0 } {
             Err(anyhow::anyhow!("Insufficient permissions"))

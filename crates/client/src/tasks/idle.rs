@@ -39,7 +39,7 @@ pub async fn task(
         return Ok(None);
     }
 
-    let operations = platform.operations();
+    let operations = platform.system();
     let session_manager = platform.session_manager();
 
     // Initialize idle timer if platform supports it

@@ -192,8 +192,8 @@ pub struct InterfaceInfo {
     pub ip: String,
 }
 
-impl From<crate::operations::NetworkInterface> for InterfaceInfo {
-    fn from(iface: crate::operations::NetworkInterface) -> Self {
+impl From<crate::system::NetworkInterface> for InterfaceInfo {
+    fn from(iface: crate::system::NetworkInterface) -> Self {
         InterfaceInfo {
             mac: iface.mac,
             ip: iface.ip_addr,

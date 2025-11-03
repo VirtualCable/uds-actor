@@ -68,7 +68,7 @@ impl crate::ws_reqs::WsReqs for WsReqsMock {
 
 pub async fn mock_platform(
     manager: Option<std::sync::Arc<dyn crate::session::SessionManagement>>,
-    operations: Option<std::sync::Arc<dyn shared::operations::Operations>>,
+    operations: Option<std::sync::Arc<dyn shared::system::System>>,
     ws_requester: Option<std::sync::Arc<dyn crate::ws_reqs::WsReqs>>,
     stop_signal: Option<OnceSignal>,
     port: u16,

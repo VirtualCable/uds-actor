@@ -13,7 +13,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
     // force time sync on managed startup
-    if let Err(e) = platform.operations().force_time_sync() {
+    if let Err(e) = platform.system().force_time_sync() {
         log::warn!("Failed to force time sync on startup: {}", e);
     }
 
@@ -44,7 +44,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                 if crate::computer::rename_computer(&platform, os_data.name.as_str()).await? {
                     // Reboot to apply changes
                     log::info!("Rebooting system to apply rename");
-                    platform.operations().reboot(None)?;
+                    platform.system().reboot(None)?;
                     return Ok(()); // We can exit here, system is rebooting
                 }
                 // Already has the correct name, skips reboot
@@ -63,7 +63,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                 {
                     // Reboot to apply changes
                     log::info!("Rebooting system to apply domain join");
-                    platform.operations().reboot(None)?;
+                    platform.system().reboot(None)?;
                     return Ok(()); // We can exit here, system is rebooting
                 }
                 // Already has the correct name and domain, skips reboot
@@ -81,7 +81,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     // Is not expected to receive any calls before server is started (and will not)
     let broker = platform.broker_api();
     let ip = platform
-        .operations()
+        .system()
         .get_network_info()?
         .first()
         .cloned()

@@ -58,14 +58,14 @@ async fn setup_server_and_api(
 }
 
 // Helper to create an id with some interfaces
-fn create_test_id() -> Vec<crate::operations::NetworkInterface> {
+fn create_test_id() -> Vec<crate::system::NetworkInterface> {
     vec![
-        crate::operations::NetworkInterface {
+        crate::system::NetworkInterface {
             name: "eth0".to_string(),
             mac: "00:11:22:33:44:55".to_string(),
             ip_addr: "192.168.1.1".to_string(),
         },
-        crate::operations::NetworkInterface {
+        crate::system::NetworkInterface {
             name: "wlan0".to_string(),
             mac: "66:77:88:99:AA:BB".to_string(),
             ip_addr: "192.168.1.2".to_string(),

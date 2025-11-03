@@ -5,7 +5,7 @@ use fltk::prelude::*;
 use shared::{
     broker::api::{block, types},
     config, log,
-    operations::NetworkInterface,
+    system::NetworkInterface,
 };
 
 use crate::{config_fltk::ConfigGui, regcfg};
@@ -85,7 +85,7 @@ pub fn uds_server_changed(
 pub fn btn_register_clicked(
     cfg_window: &ConfigGui,
     auths: Arc<Mutex<Vec<shared::broker::api::types::Authenticator>>>,
-    operations: Arc<dyn shared::operations::Operations>,
+    operations: Arc<dyn shared::system::System>,
     interface: &NetworkInterface,
 ) {
     let hostname = cfg_window.input_uds_server.value().trim().to_string();

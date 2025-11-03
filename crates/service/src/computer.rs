@@ -29,7 +29,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::fmt::Display;
 
 use anyhow::Result;
-use shared::operations;
+use shared::system;
 
 use crate::common;
 use crate::platform;
@@ -42,7 +42,7 @@ use crate::log;
 pub async fn rename_computer(platform: &platform::Platform, name: &str) -> Result<bool> {
     log::info!("Renaming system to '{}'", name);
     // If the name is already the current name, skip
-    let op = platform.operations();
+    let op = platform.system();
 
     let current_name = op.get_computer_name()?;
     if current_name.eq_ignore_ascii_case(name) {
@@ -69,11 +69,11 @@ pub async fn join_domain(
             "No custom data provided for join domain action"
         ));
     }
-    let operations = platform.operations();
+    let operations = platform.system();
 
     // Parse custom data, extract possible required fields
     let custom = custom.unwrap();
-    let join_options = operations::JoinDomainOptions {
+    let join_options = system::JoinDomainOptions {
         domain: custom
             .get("domain")
             .and_then(|v| v.as_str())

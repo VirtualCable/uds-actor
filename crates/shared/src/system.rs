@@ -86,7 +86,7 @@ pub struct JoinDomainOptions {
     pub automatic_id_mapping: Option<bool>,
 }
 
-pub trait Operations: Send + Sync {
+pub trait System: Send + Sync {
     /// Check if the current user has the necessary permissions to perform administrative tasks.
     fn check_permissions(&self) -> Result<()>;
 
@@ -188,10 +188,10 @@ pub trait Operations: Send + Sync {
 
 // Re-export the Windows concrete implementation when building for Windows.
 #[cfg(target_os = "windows")]
-pub use crate::windows::operations::new_operations;
+pub use crate::windows::system::new_system;
 
 #[cfg(target_family = "unix")]
-pub use crate::unix::operations::new_operations;
+pub use crate::unix::system::new_system;
 
 #[cfg(test)]
 mod tests {

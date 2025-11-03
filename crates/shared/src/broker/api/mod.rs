@@ -66,14 +66,14 @@ pub trait BrokerApi: Send + Sync {
 
     async fn initialize(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError>;
 
     async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, types::RestError>;
 
     async fn unmanaged_ready(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         port: u16,
     ) -> Result<CertificateInfo, types::RestError>;
 
@@ -85,14 +85,14 @@ pub trait BrokerApi: Send + Sync {
 
     async fn login(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
     ) -> Result<types::LoginResponse, types::RestError>;
 
     async fn logout(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
         session_id: &str,
@@ -358,7 +358,7 @@ impl BrokerApi for UdsBrokerApi {
 
     async fn initialize(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
     ) -> Result<types::InitializationResponse, types::RestError> {
         let payload = types::InitializationRequest {
             actor_type: self.actor_type(),
@@ -387,7 +387,7 @@ impl BrokerApi for UdsBrokerApi {
 
     async fn unmanaged_ready(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         port: u16,
     ) -> Result<CertificateInfo, types::RestError> {
         let payload = types::UnmanagedReadyRequest {
@@ -421,7 +421,7 @@ impl BrokerApi for UdsBrokerApi {
 
     async fn login(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
     ) -> Result<types::LoginResponse, types::RestError> {
@@ -440,7 +440,7 @@ impl BrokerApi for UdsBrokerApi {
 
     async fn logout(
         &self,
-        interfaces: &[crate::operations::NetworkInterface],
+        interfaces: &[crate::system::NetworkInterface],
         username: &str,
         session_type: &str,
         session_id: &str,

@@ -14,7 +14,7 @@ use shared::log;
 fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
-    let operations = shared::operations::new_operations();
+    let operations = shared::system::new_system();
 
     // On debug builds, skip the admin check
     #[cfg(not(debug_assertions))]

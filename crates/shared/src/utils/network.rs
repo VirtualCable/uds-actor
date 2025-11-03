@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use anyhow::Result;
 
-use crate::operations::{NetworkInterface, Operations};
+use crate::system::{NetworkInterface, System};
 
 pub async fn network_interfaces_in_subnet(
-    operations: Arc<dyn Operations>,
+    operations: Arc<dyn System>,
     subnet: Option<&str>,
 ) -> Result<Vec<NetworkInterface>> {
     let nets = operations.get_network_info()?;
@@ -18,7 +18,7 @@ pub async fn network_interfaces_in_subnet(
 }
 
 pub async fn network_interfaces_changed(
-    operations: Arc<dyn Operations>,
+    operations: Arc<dyn System>,
     known: &[NetworkInterface],
     subnet: Option<&str>,
 ) -> Result<Vec<NetworkInterface>> {

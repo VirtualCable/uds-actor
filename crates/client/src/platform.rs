@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use shared::{
-    operations,
+    system,
     sync::OnceSignal,
     ws::client::{WsClient, websocket_client_tasks},
 };
@@ -12,7 +12,7 @@ use crate::{gui, session::SessionManagement, ws_reqs::{WsReqs, WsRequester}};
 #[derive(Clone)]
 pub struct Platform {
     session_manager: Arc<dyn SessionManagement>,
-    operations: Arc<dyn operations::Operations>,
+    system: Arc<dyn system::System>,
     ws_client: WsClient,
     ws_requester: Arc<dyn WsReqs>,
     stop: OnceSignal,
@@ -24,7 +24,7 @@ impl Platform {
         let ws_client = websocket_client_tasks(port, 32).await?;
         let stop = OnceSignal::new();
         let session_manager = crate::session::new_session_manager(stop.clone()).await;
-        let operations = shared::operations::new_operations();
+        let operations = shared::system::new_system();
         // Requester needs a few things
         let ws_requester = Arc::new(WsRequester::new(
             operations.clone(),
@@ -34,7 +34,7 @@ impl Platform {
 
         Ok(Self {
             session_manager,
-            operations,
+            system: operations,
             ws_client,
             ws_requester,
             stop,
@@ -45,8 +45,8 @@ impl Platform {
         self.session_manager.clone()
     }
 
-    pub fn operations(&self) -> Arc<dyn shared::operations::Operations> {
-        self.operations.clone()
+    pub fn system(&self) -> Arc<dyn shared::system::System> {
+        self.system.clone()
     }
 
     pub fn ws_client(&self) -> WsClient {
@@ -74,7 +74,7 @@ impl Platform {
     #[cfg(test)]
     pub async fn new_with_params(
         session_manager: Option<Arc<dyn SessionManagement>>,
-        operations: Option<Arc<dyn shared::operations::Operations>>,
+        operations: Option<Arc<dyn shared::system::System>>,
         ws: Option<WsClient>,
         ws_requester: Option<Arc<dyn WsReqs>>,
         stop: Option<OnceSignal>,
@@ -87,7 +87,7 @@ impl Platform {
         } else {
             crate::session::new_session_manager(stop.clone()).await
         };
-        let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
+        let operations = operations.unwrap_or_else(|| shared::system::new_system());
         let ws_client = if let Some(ws) = ws {
             ws
         } else {
@@ -106,7 +106,7 @@ impl Platform {
 
         Ok(Self {
             session_manager,
-            operations,
+            system: operations,
             ws_client,
             ws_requester,
             stop,

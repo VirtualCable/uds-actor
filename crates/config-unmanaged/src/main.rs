@@ -15,7 +15,7 @@ fn main() {
     // On debug builds, skip the admin check
     #[cfg(not(debug_assertions))]
     {
-        let operations = shared::operations::new_operations();
+        let operations = shared::system::new_system();
         if operations.check_permissions().is_err() {
             fltk::dialog::alert_default("This program must be run with administrator privileges");
             std::process::exit(1);

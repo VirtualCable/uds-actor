@@ -14,7 +14,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
     // On unmanaged, we get all network interfaces
-    let known_interfaces = platform.operations().get_network_info()?;
+    let known_interfaces = platform.system().get_network_info()?;
 
     // Notify the broker that we are ready and get the TLS certs
     let cert_info = broker

@@ -6,7 +6,7 @@ use crate::log::{LogType, info, setup_logging};
 #[ignore = "Manual test, requires admin privileges"]
 fn test_check_permissions() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.check_permissions();
     // We are not admin, should be false
     assert!(result.is_err());
@@ -15,7 +15,7 @@ fn test_check_permissions() {
 #[test]
 fn test_get_computer_name() {
     let env_name = std::env::var("COMPUTERNAME").unwrap();
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_computer_name();
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), env_name);
@@ -24,7 +24,7 @@ fn test_get_computer_name() {
 #[test]
 fn test_get_domain_name() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_domain_name();
     assert!(result.is_ok());
     // Domain name can be empty if not joined to a domain
@@ -40,7 +40,7 @@ fn test_get_domain_name() {
 #[test]
 fn test_get_os_version() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_os_version();
     assert!(result.is_ok());
     let version = result.unwrap();
@@ -56,7 +56,7 @@ fn test_get_os_version() {
 #[ignore = "Manual test, requires user interaction (stay ilde :) )"]
 fn test_idle_timer() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.init_idle_timer(32);
     assert!(result.is_ok());
     // Wait a bit
@@ -75,7 +75,7 @@ fn test_idle_timer() {
 fn get_current_user() {
     setup_logging("debug", LogType::Tests);
     let env_user = std::env::var("USERNAME").unwrap();
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_current_user();
     assert!(result.is_ok());
     let user = result.unwrap();
@@ -86,7 +86,7 @@ fn get_current_user() {
 #[test]
 fn test_get_session_type() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_session_type();
     assert!(result.is_ok());
     let session_type = result.unwrap();
@@ -97,7 +97,7 @@ fn test_get_session_type() {
 #[test]
 fn test_get_network_info() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.get_network_info();
     assert!(result.is_ok());
     let interfaces = result.unwrap();
@@ -116,7 +116,7 @@ fn test_get_network_info() {
 fn test_force_time_sync() {
     setup_logging("debug", LogType::Tests);
     // Check if we are admin
-    let ops = new_operations();
+    let ops = new_system();
     let perm = ops.check_permissions().is_ok();
     let result = ops.force_time_sync();
     info!("force_time_sync result: {}", result.is_ok());
@@ -127,7 +127,7 @@ fn test_force_time_sync() {
 #[test]
 fn test_protect_file_for_owner_only() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     // Create a temp file on temp dir
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join("uds_actor_test_file.txt");
@@ -144,7 +144,7 @@ fn test_protect_file_for_owner_only() {
 #[ignore = "Manual test, requires admin privileges"]
 fn test_ensure_user_can_rdp() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     // Use current user for test
     let user = std::env::var("USERNAME").unwrap();
     let result = ops.ensure_user_can_rdp(&user);
@@ -156,7 +156,7 @@ fn test_ensure_user_can_rdp() {
 #[test]
 fn test_is_some_installation_in_progress() {
     setup_logging("debug", LogType::Tests);
-    let ops = new_operations();
+    let ops = new_system();
     let result = ops.is_some_installation_in_progress();
     assert!(result.is_ok());
     let in_progress = result.unwrap();

@@ -26,14 +26,14 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub mod config;
 
-// If linux, include operations
+// If linux, include system
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::installer;
 
 #[cfg(target_os = "linux")]
-pub use linux as operations;
+pub use linux as system;
 
 // TODO: macos implementation
 #[cfg(target_os = "macos")]
@@ -41,4 +41,4 @@ pub mod mac;
 #[cfg(target_os = "macos")]
 pub use mac::installer;
 #[cfg(target_os = "macos")]
-pub use mac as operations;
+pub use mac as system;

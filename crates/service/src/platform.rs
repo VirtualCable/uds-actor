@@ -13,7 +13,7 @@ pub struct UserInfo {
 #[derive(Clone)]
 pub struct Platform {
     config: Arc<RwLock<shared::config::ActorConfiguration>>,
-    operations: Arc<dyn shared::operations::Operations>, // Different for Windows, Linux, Mac, ...
+    system: Arc<dyn shared::system::System>, // Different for Windows, Linux, Mac, ...
     broker_api: Arc<RwLock<dyn shared::broker::api::BrokerApi>>,
 
     stop: OnceSignal,
@@ -29,13 +29,13 @@ impl Platform {
         // If no config, panic, we need config
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
 
-        let operations = shared::operations::new_operations();
+        let system = shared::system::new_system();
         // Release compilation will fail, because testing is not allowed in release builds, so if we forget this
         let broker_api = shared::broker::api::UdsBrokerApi::new(cfg, false, None);
 
         Self {
             config,
-            operations,
+            system,
             broker_api: Arc::new(tokio::sync::RwLock::new(broker_api)),
             stop,
             user_info: Arc::new(RwLock::new(None)),
@@ -43,8 +43,8 @@ impl Platform {
         }
     }
 
-    pub fn operations(&self) -> Arc<dyn shared::operations::Operations> {
-        self.operations.clone()
+    pub fn system(&self) -> Arc<dyn shared::system::System> {
+        self.system.clone()
     }
 
     pub fn broker_api(&self) -> Arc<tokio::sync::RwLock<dyn shared::broker::api::BrokerApi>> {
@@ -76,7 +76,7 @@ impl Platform {
     #[cfg(test)]
     pub fn new_with_params(
         config: Option<shared::config::ActorConfiguration>,
-        operations: Option<Arc<dyn shared::operations::Operations>>,
+        operations: Option<Arc<dyn shared::system::System>>,
         broker_api: Option<Arc<tokio::sync::RwLock<dyn shared::broker::api::BrokerApi>>>,
     ) -> Self {
         let cfg = if let Some(cfg) = config {
@@ -86,7 +86,7 @@ impl Platform {
             cfg.config(true).unwrap()
         };
         let config = Arc::new(tokio::sync::RwLock::new(cfg.clone()));
-        let operations = operations.unwrap_or_else(|| shared::operations::new_operations());
+        let operations = operations.unwrap_or_else(|| shared::system::new_system());
         let broker_api = broker_api.unwrap_or_else(|| {
             Arc::new(tokio::sync::RwLock::new(
                 shared::broker::api::UdsBrokerApi::new(cfg, false, None),
@@ -94,7 +94,7 @@ impl Platform {
         });
 
         Self {
-            operations,
+            system: operations,
             broker_api,
             config,
             stop: OnceSignal::new(),

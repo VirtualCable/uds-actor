@@ -43,7 +43,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
         log::debug!("Received LogoutRequest with id {:?}", env.id);
         let user_info = platform.get_user_info().write().await.take();
         if let Some(user) = user_info {
-            let interfaces = platform.operations().get_network_info()?;
+            let interfaces = platform.system().get_network_info()?;
             if let Err(err) = broker_api
                 .write()
                 .await

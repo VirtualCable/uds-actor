@@ -74,7 +74,7 @@ use windows::{
 
 use crate::{
     log,
-    operations::{NetworkInterface, Operations},
+    system::{NetworkInterface, System},
 };
 
 unsafe fn utf16_ptr_to_string(ptr: *const u16) -> Result<String> {
@@ -86,7 +86,7 @@ unsafe fn utf16_ptr_to_string(ptr: *const u16) -> Result<String> {
     Ok(u16cstr.to_string_lossy())
 }
 
-pub fn new_operations() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(WindowsOperations::new())
 }
 
@@ -120,7 +120,7 @@ impl WindowsOperations {
     }
 }
 
-impl Operations for WindowsOperations {
+impl System for WindowsOperations {
     fn check_permissions(&self) -> Result<()> {
         // Use IsUserAnAdmin from shell32
         use windows::Win32::UI::Shell::IsUserAnAdmin;
@@ -197,7 +197,7 @@ impl Operations for WindowsOperations {
         Ok(())
     }
 
-    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
+    fn join_domain(&self, options: &crate::system::JoinDomainOptions) -> Result<()> {
         log::debug!(
             "WindowsOperations::join_domain called: options={:?}",
             options

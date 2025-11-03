@@ -69,7 +69,7 @@ async fn test_managed_rename_should_rename() -> Result<()> {
 #[serial_test::serial(server)]
 async fn test_managed_rename_should_not_rename() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
-    let computer_name = test_setup.platform.operations().get_computer_name()?;
+    let computer_name = test_setup.platform.system().get_computer_name()?;
     // Setup the retun value for initialize
     test_setup.broker_api.write().await.init_response =
         shared::broker::api::types::InitializationResponse {
@@ -134,8 +134,8 @@ async fn test_managed_join_domain_should_join() -> Result<()> {
 async fn test_managed_join_domain_should_not_join() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
     // Note that 
-    let domain_name = test_setup.platform.operations().get_domain_name()?;
-    let computer_name = test_setup.platform.operations().get_computer_name()?;
+    let domain_name = test_setup.platform.system().get_domain_name()?;
+    let computer_name = test_setup.platform.system().get_computer_name()?;
     // Setup the retun value for initialize
     test_setup.broker_api.write().await.init_response =
         shared::broker::api::types::InitializationResponse {
