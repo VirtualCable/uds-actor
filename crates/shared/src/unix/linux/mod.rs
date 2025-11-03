@@ -41,7 +41,7 @@ mod session;
 pub mod installer;
 
 
-pub fn new_system() -> std::sync::Arc<dyn crate::operations::Operations + Send + Sync> {
+pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(LinuxSystem::new())
 }
 
@@ -64,7 +64,7 @@ impl LinuxSystem {
     }
 }
 
-impl crate::operations::Operations for LinuxSystem {
+impl crate::system::System for LinuxSystem {
     fn check_permissions(&self) -> Result<()> {
         if unsafe { libc::geteuid() != 0 } {
             Err(anyhow::anyhow!("Insufficient permissions"))
@@ -88,7 +88,7 @@ impl crate::operations::Operations for LinuxSystem {
         )
     }
 
-    fn join_domain(&self, options: &crate::operations::JoinDomainOptions) -> Result<()> {
+    fn join_domain(&self, options: &crate::system::JoinDomainOptions) -> Result<()> {
         computer::join_domain(options)
     }
 
@@ -140,7 +140,7 @@ impl crate::operations::Operations for LinuxSystem {
         session::logout()
     }
 
-    fn get_network_info(&self) -> Result<Vec<crate::operations::NetworkInterface>> {
+    fn get_network_info(&self) -> Result<Vec<crate::system::NetworkInterface>> {
         network::get_network_info()
     }
 

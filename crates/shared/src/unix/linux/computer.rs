@@ -54,7 +54,7 @@ pub(super) fn get_computer_name() -> Result<String> {
     Ok(short.to_string())
 }
 
-pub(super) fn join_domain(options: &crate::operations::JoinDomainOptions) -> Result<()> {
+pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<()> {
     log::debug!("Joining domain with options: {:?}", options);
 
     let domain = options.domain.clone();

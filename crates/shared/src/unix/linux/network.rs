@@ -34,7 +34,7 @@ use libc::{self, sockaddr};
 
 use anyhow::Result;
 
-use crate::{log, operations::NetworkInterface};
+use crate::{log, system::NetworkInterface};
 
 /// Returns iterator (Vec) of InterfaceInfo for “valid” interfaces.
 pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
