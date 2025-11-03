@@ -4,7 +4,7 @@ bottle==0.12.18
 certifi==2025.10.5
 chardet==3.0.4
 charset-normalizer==2.0.12
-idna==2.9
+idna==3.7
 more-itertools==10.8.0
 packaging==25.0
 pluggy==0.13.1
