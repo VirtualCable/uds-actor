@@ -11,7 +11,7 @@ pluggy==0.13.1
 prettytable==0.7.2
 py==1.11.0
 PyHamcrest==2.0.2
-pymongo==3.11.0
+pymongo==4.6.3
 PyQt5==5.15.11
 PyQt5-Qt5==5.15.2
 PyQt5_sip==12.17.1
