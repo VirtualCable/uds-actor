@@ -1,6 +1,6 @@
 argcomplete==1.12.3
 attrs==25.4.0
-bottle==0.12.18
+bottle==0.12.20
 certifi==2025.10.5
 chardet==3.0.4
 charset-normalizer==2.0.12
