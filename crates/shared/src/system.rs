@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_multiple_interfaces_in_subnet() {
-        let ifaces = vec![
+        let ifaces = [
             NetworkInterface {
                 name: "eth0".to_string(),
                 mac: "00:11:22:33:44:55".to_string(),
