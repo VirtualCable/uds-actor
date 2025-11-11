@@ -1,3 +1,5 @@
 /macros/target
 /client/target
 /target
+*_enterprise*
+udsactor*
