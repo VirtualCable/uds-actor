@@ -3,6 +3,9 @@ name = "udsactor-config"
 version = "0.1.0"
 edition = "2024"
 
+authors = ["Adolfo Gómez <dkmaster@dkmon.com>"]
+license = "BSD-3-Clause"
+
 [dependencies]
 shared = { path = "../shared" }
 anyhow = "1.0.100"
