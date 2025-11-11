@@ -9,12 +9,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
+
+      # required to fetch internal or private CodeQL packs
+      packages: read
+
+      # only required for workflows in private repositories
+      actions: read
+      contents: read      
     strategy:
       matrix:
-        language: [ 'rust' ]
+        include:
+          - language: actions
+            build-mode: none
+          - language: rust
+            build-mode: none        
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
