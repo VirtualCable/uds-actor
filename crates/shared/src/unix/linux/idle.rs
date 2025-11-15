@@ -62,7 +62,7 @@ struct IdleState {
 }
 
 thread_local! {
-    static IDLE_STATE: RefCell<Option<IdleState>> = RefCell::new(None);
+    static IDLE_STATE: RefCell<Option<IdleState>> = const { RefCell::new(None) };
 }
 
 // Silent X IO error handler to avoid crashes (because on session close
@@ -108,7 +108,7 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
                 b"XDefaultRootWindow",
                 unsafe extern "C" fn(*mut c_void) -> c_ulong
             );
-            let x_free= load_fn!(xlib, b"XFree", unsafe extern "C" fn(*mut c_void) -> c_int);
+            let x_free = load_fn!(xlib, b"XFree", unsafe extern "C" fn(*mut c_void) -> c_int);
             let xss_alloc_info = load_fn!(
                 xss,
                 b"XScreenSaverAllocInfo",
@@ -177,7 +177,7 @@ pub(super) fn init_idle(seconds: u64) -> Result<()> {
         // Set the screensaver timeout to desired seconds
         std::process::Command::new("xset")
             .arg("s")
-            .arg(&seconds.to_string())
+            .arg(seconds.to_string())
             .status()
             .ok();
         // Reset the screensaver
@@ -207,10 +207,11 @@ pub(super) fn get_idle() -> Result<std::time::Duration> {
         unsafe {
             let root = (state.x_default_root_window)(state.display);
             (state.xss_screensaver_query_info)(state.display, root, state.info);
-            if (*state.info).state == 1 {  // 1 = ScreenSaverActive
-                return Ok(std::time::Duration::from_secs(3600 * 24 * 365 * 1000));  // A very large idle time
+            if (*state.info).state == 1 {
+                // 1 = ScreenSaverActive
+                return Ok(std::time::Duration::from_secs(3600 * 24 * 365 * 1000)); // A very large idle time
             }
-            Ok(std::time::Duration::from_millis((*state.info).idle as u64))
+            Ok(std::time::Duration::from_millis((*state.info).idle))
         }
     })
 }
