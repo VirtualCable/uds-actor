@@ -29,6 +29,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
+    backtrace::Backtrace,
     panic,
     path::PathBuf,
     sync::OnceLock,
@@ -121,16 +122,37 @@ impl std::fmt::Display for LogType {
 // Our log system wil also hook panics to log them
 pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
-        // Also, open a file on temp dir to log panic, in case logging system is broken
         let temp_log = std::env::temp_dir().join("udsactor-panic.log");
         let mut f = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&temp_log)
             .unwrap();
-        let _ = writeln!(f, "Panic occurred: {:?}", info);
-        // Now log it using our logging system
-        error!("Guru Meditation (😕): {:?}", info);
+
+        // Extraer payload del panic
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Non-string panic payload".to_string()
+        };
+
+        // Localización
+        let loc = if let Some(location) = info.location() {
+            format!("{}:{}", location.file(), location.line())
+        } else {
+            "unknown location".to_string()
+        };
+
+        // Backtrace
+        let bt = Backtrace::capture();
+
+        writeln!(f, "Panic occurred at {}: {}", loc, msg).ok();
+        writeln!(f, "Backtrace:\n{:?}", bt).ok();
+
+        error!("Guru Meditation (😕): {} at {}", msg, loc);
+        error!("Backtrace:\n{:?}", bt);
     }));
 }
 
