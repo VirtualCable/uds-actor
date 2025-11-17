@@ -51,15 +51,15 @@ static CACHED_SESSION_ID: std::sync::LazyLock<String> =
     std::sync::LazyLock::new(|| _current_session_id().unwrap_or_default());
 
 pub fn current_session_id() -> Result<String> {
-    Ok((&*CACHED_SESSION_ID).clone())
+    Ok(CACHED_SESSION_ID.clone())
 }
 
 /// Intenta obtener el session id actual de varias formas (sync)
 fn _current_session_id() -> Result<String> {
-    if let Ok(id) = env::var("XDG_SESSION_ID") {
-        if !id.is_empty() {
-            return Ok(id);
-        }
+    if let Ok(id) = env::var("XDG_SESSION_ID")
+        && !id.is_empty()
+    {
+        return Ok(id);
     }
 
     let output = Command::new("loginctl")

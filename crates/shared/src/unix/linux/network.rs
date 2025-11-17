@@ -44,14 +44,15 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
     for ifname in names {
         let ip = get_ipv4_addr(&ifname);
         let mac = get_mac_addr(&ifname);
-        if let (Some(ip_address), Some(mac)) = (ip, mac) {
-            if mac != "00:00:00:00:00:00" && !ip_address.starts_with("169.254") {
-                out.push(NetworkInterface {
-                    name: ifname,
-                    ip_addr: ip_address,
-                    mac,
-                });
-            }
+        if let (Some(ip_address), Some(mac)) = (ip, mac)
+            && mac != "00:00:00:00:00:00"
+            && !ip_address.starts_with("169.254")
+        {
+            out.push(NetworkInterface {
+                name: ifname,
+                ip_addr: ip_address,
+                mac,
+            });
         }
     }
     Ok(out)
@@ -104,11 +105,12 @@ fn list_interfaces() -> io::Result<Vec<String>> {
         let chunk = &namestr[i..i + offset];
         // split at first NUL
         let nul_pos = chunk.iter().position(|&b| b == 0).unwrap_or(chunk.len());
-        if nul_pos > 0 {
-            if let Ok(name) = std::str::from_utf8(&chunk[..nul_pos]) {
-                names.push(name.to_string());
-            }
+        if nul_pos > 0
+            && let Ok(name) = std::str::from_utf8(&chunk[..nul_pos])
+        {
+            names.push(name.to_string());
         }
+
         i += length;
     }
 

@@ -34,7 +34,9 @@ mod debian;
 mod opensuse;
 mod redhat;
 
-static RENAMERS: OnceLock<HashMap<&'static str, fn(&str) -> Result<()>>> = OnceLock::new();
+type RenamerFunc = fn(&str) -> Result<()>;
+
+static RENAMERS: OnceLock<HashMap<&'static str, RenamerFunc>> = OnceLock::new();
 
 pub(super) fn renamer(new_name: &str, os_name: &str) -> Result<()> {
     let renamer = RENAMERS.get_or_init(|| {

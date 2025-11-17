@@ -47,7 +47,7 @@ pub(super) fn rename(new_name: &str) -> Result<()> {
     if let Ok(file) = File::open("/etc/hosts") {
         let lines: Vec<String> = io::BufReader::new(file)
             .lines()
-            .filter_map(Result::ok)
+            .map_while(Result::ok)
             .collect();
 
         let mut hosts = File::create("/etc/hosts")?;
@@ -62,7 +62,7 @@ pub(super) fn rename(new_name: &str) -> Result<()> {
     if let Ok(file) = File::open("/etc/sysconfig/network") {
         let lines: Vec<String> = io::BufReader::new(file)
             .lines()
-            .filter_map(Result::ok)
+            .map_while(Result::ok)
             .collect();
 
         let mut net = File::create("/etc/sysconfig/network")?;

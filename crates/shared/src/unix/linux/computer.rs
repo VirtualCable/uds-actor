@@ -68,17 +68,17 @@ pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<
     let automatic_id_mapping = options.automatic_id_mapping.unwrap_or(false);
 
     // FreeIPA: adjust hostname
-    if server_software == "ipa" {
-        if let Ok(hostname) = get_computer_name() {
-            let fqdn = format!("{}.{}", hostname.to_lowercase(), domain);
-            log::debug!("Setting hostname for FreeIPA: {}", fqdn);
-            if let Err(e) = Command::new("hostnamectl")
-                .arg("set-hostname")
-                .arg(&fqdn)
-                .status()
-            {
-                log::error!("Error setting hostname for freeipa: {e}");
-            }
+    if server_software == "ipa"
+        && let Ok(hostname) = get_computer_name()
+    {
+        let fqdn = format!("{}.{}", hostname.to_lowercase(), domain);
+        log::debug!("Setting hostname for FreeIPA: {}", fqdn);
+        if let Err(e) = Command::new("hostnamectl")
+            .arg("set-hostname")
+            .arg(&fqdn)
+            .status()
+        {
+            log::error!("Error setting hostname for freeipa: {e}");
         }
     }
 
@@ -95,11 +95,13 @@ pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<
     if !membership_software.is_empty() && membership_software != "automatically" {
         cmd.arg(format!("--membership-software={}", membership_software));
     }
-    if let Some(ou) = ou.as_ref() {
-        if !ou.is_empty() && server_software != "ipa" {
-            cmd.arg(format!("--computer-ou={}", ou));
-        }
+    if let Some(ou) = ou.as_ref()
+        && !ou.is_empty()
+        && server_software != "ipa"
+    {
+        cmd.arg(format!("--computer-ou={}", ou));
     }
+
     if ssl {
         cmd.arg("--use-ldaps");
     }
