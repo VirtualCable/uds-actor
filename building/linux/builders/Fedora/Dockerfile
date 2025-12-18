@@ -1,4 +1,4 @@
-FROM fedora:41
+FROM fedora:42
 
 RUN dnf install -y \
     curl gcc make pkgconf-pkg-config cmake openssl-devel mesa-libGL-devel mesa-libGLU-devel \

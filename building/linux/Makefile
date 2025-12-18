@@ -6,7 +6,7 @@
 VERSION := $(shell [ -f ../../../VERSION ] && cat ../../../VERSION || echo "devel")
 RELEASE := 1
 
-# Distro to build for (Debian12, Fedora41, openSUSE15)
+# Distro to build for (Debian12, Fedora, openSUSE)
 DISTRO ?= Debian12
 DESTDIR ?= ./package/$(DISTRO)
 
@@ -58,7 +58,7 @@ install-udsactor-common: $(OUTPUTDIR)/udsactor-client
 
 
 	# Install systemd service for RH-based distros
-ifneq (,$(filter $(DISTRO),Fedora41 openSUSE15))
+ifneq (,$(filter $(DISTRO),Fedora openSUSE))
 	mkdir -p $(SYSTEMDDIR)
 	cp debian/udsactor.service $(SYSTEMDDIR)/
 endif
