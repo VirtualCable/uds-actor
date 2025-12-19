@@ -4,10 +4,35 @@ VERSION=$( [ -f ../../../VERSION ] && cat ../../../VERSION || echo "devel" )
 RELEASE=1
 
 top=$(pwd)
+# Resolve %top/../..
+crate=$(realpath ${top}/../..)
 
-# Debian based
-dpkg-buildpackage -b
+for debian_version in 12 13; do
+    # Compile first the binary using rustbuilder.py
+    echo "=== Building udsactor binaries using rustbuilder.py ==="
+    cd ${top}
+    python3 rustbuilder.py Debian${debian_version}
 
+    docker_image="rust-builder-udsactor:Debian${debian_version}"
+    # Debian based build inside docker
+
+    echo "=== Building for Debian ${debian_version} using ${docker_image} ==="
+
+    docker run --rm \
+    -e IN_DOCKER=1 \
+    -e DISTRO=Debian${debian_version} \
+    -v $crate:/crate \
+    -w /crate/building/linux \
+    $docker_image \
+    dpkg-buildpackage -b -us -uc
+
+    # Move to ../bin/debian${debian_version}
+    outdir="${top}/../bin/debian${debian_version}"
+    mkdir -p ${outdir}
+    rm -f ${outdir}/udsactor*.deb
+    mv ${top}/../udsactor*.deb ${outdir}/
+done
+exit 0
 for DISTRO in Fedora openSUSE; do
     # managed an unmanaged
     for kind in managed unmanaged; do

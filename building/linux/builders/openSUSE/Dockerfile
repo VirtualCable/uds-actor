@@ -8,6 +8,7 @@ RUN zypper refresh && zypper install -y \
     pango-devel cairo-devel glib2-devel \
     gcc-c++ libstdc++-devel \
     tar gzip bzip2 xz zip unzip \
+    rpm-build rpmdevtools \
     && zypper clean
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
