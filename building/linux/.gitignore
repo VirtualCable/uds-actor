@@ -1,7 +1,7 @@
-udsactor-*[1-9].*.spec
 *-stamp
 builders/**/output
 builders/**/build.stamp
+rpm-*/
 
 debian/udsactor/
 debian/udsactor-unmanaged/

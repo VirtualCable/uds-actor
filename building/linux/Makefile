@@ -87,3 +87,4 @@ install-udsactor-unmanaged: install-udsactor-common
 # === Clean build artifacts ===
 clean:
 	rm -rf $(DESTDIR)
+	rm -rf builders/$(DISTRO)/output/*

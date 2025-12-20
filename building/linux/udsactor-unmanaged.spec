@@ -1,44 +1,49 @@
-%define _topdir %(echo $PWD)/rpm
-%define name PKGNAME
-%define version 0.0.0
-%define release 1
-%define buildroot %{_topdir}/%{name}-%{version}-%{release}-root
-%define _binary_payload w9.xzdio
-
-BuildRoot: %{buildroot}
-Name: %{name}
+Name: udsactor-unmanaged
 Version: %{version}
 Release: %{release}
-Summary: Actor for Universal Desktop Services (UDS) Broker
-License: BSD3
-Group: Admin
-Requires: libXScrnSaver xset
-Vendor: Virtual Cable S.L.U.
-URL: http://www.udsenterprise.com
-Provides: udsactor
+Summary: Actor unmanaged for Universal Desktop Services (UDS) Broker
+License: BSD-3-Clause
+URL: https://www.udsenterprise.com
 
-%define _rpmdir %{_topdir}/../../
-%define _rpmfilename %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm
+AutoReq: yes
+AutoProv: yes
+
+# No debuginfo package
+%global debug_package %{nil}
+
+# Avoid RPM trying to use SOURCES/BUILD incorrectly
+%global _builddir %{_topdir}
+%global _sourcedir %{_topdir}
+
+# Runtime dependencies
+Requires: libXScrnSaver, xset
+
+%changelog
+* Fri Dec 19 2025 Adolfo <info@udsenterprise.com> - %{version}-%{release}
+- Initial release
+
+%description
+Actor unmanaged for UDS Broker environments.
+
+%prep
+# Nothing
+
+%build
+# Nothing (built externally)
 
 %install
-curdir=`pwd`
-cd %{_topdir}/..
-make DESTDIR=$RPM_BUILD_ROOT DISTRO=rh install-udsactor
-cd $curdir
-
-%clean
-rm -rf $RPM_BUILD_ROOT
-curdir=`pwd`
-cd %{_topdir}/..
-make DESTDIR=$RPM_BUILD_ROOT DISTRO=rh clean
-cd $curdir
+cp -a %{DESTDIR}/* %{buildroot}/
 
 %post
-systemctl enable udsactor.service > /dev/null 2>&1 || true
+if [ -x /usr/bin/systemctl ]; then
+    systemctl enable udsactor.service >/dev/null 2>&1 || true
+fi
 
 %preun
-systemctl disable udsactor.service > /dev/null 2>&1 || true
-systemctl stop udsactor.service > /dev/null 2>&1 || true
+if [ -x /usr/bin/systemctl ]; then
+    systemctl disable udsactor.service >/dev/null 2>&1 || true
+    systemctl stop udsactor.service >/dev/null 2>&1 || true
+fi
 
 %postun
 if [ $1 -eq 0 ]; then
@@ -46,17 +51,6 @@ if [ $1 -eq 0 ]; then
     rm -f /var/log/udsactor.log
 fi
 
-%description
-This package provides the required components to allow this machine to work in an environment managed by UDS Broker.
-
 %files
-%defattr(-,root,root)
-/usr/bin/udsactor-client
-/usr/bin/gui-helper
-/usr/sbin/udsactor-service
-/usr/sbin/udsactor-config
-/etc/systemd/system/udsactor.service
-/etc/xdg/autostart/udsactor_client.desktop
-/usr/share/applications/udsactor_config.desktop
-/usr/share/udsactor/uds-icon.png
-/usr/share/polkit-1/actions/org.openuds.pkexec.udsactor_config.policy
+/usr
+/etc
