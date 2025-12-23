@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 import typing
+import sys
 
 SCRIPT_DIR: typing.Final[Path] = Path(__file__).resolve().parent
 WORKSPACE_ROOT: typing.Final[Path] = SCRIPT_DIR.parent.parent.resolve()
@@ -50,19 +51,19 @@ def build_arch(arch: str) -> None:
 
 # Hook for every binary after creation
 def process_binary_hook(binary_path: Path) -> None:
-    hook = os.environ.get("UDSACTOR_PROCESS_BINARY")
+    hook = os.environ.get("UDS_PROCESS_BINARY")
     if hook:
         print(f"[HOOK] Processing {binary_path.name} with {hook}")
-        run([hook, str(binary_path)])
+        run([hook, str(binary_path.resolve())])
     else:
         print(f"[HOOK] No binary hook defined for {binary_path.name}")
 
 # Hook for the final package after creation
 def process_pkg_hook(pkg_path: Path) -> None:
-    hook = os.environ.get("UDSACTOR_PROCESS_PKG")
+    hook = os.environ.get("UDS_PROCESS_PACKAGE")
     if hook:
         print(f"[HOOK] Processing package {pkg_path.name} with {hook}")
-        run([hook, str(pkg_path)])
+        run([hook, str(pkg_path.resolve())])
     else:
         print(f"[HOOK] No package hook defined for {pkg_path.name}")
 
@@ -155,10 +156,16 @@ def main():
     build_arch("aarch64-apple-darwin")
     create_universal_binaries()
     prepare_build_root()
-    pkg = build_pkg()
+    pkg_name = build_pkg()
 
-    print(f"=== Done. Package created: {pkg} ===")
-
+    print(f"=== Done. Package created: {pkg_name} ===")
+    
+    # If an argument is given, move the package to that location
+    if len(sys.argv) > 1:
+        destination = Path(sys.argv[1]).resolve()
+        print(f"Moving package to {destination}")
+        # If already exists, remove
+        shutil.copy(pkg_name, destination)
 
 if __name__ == "__main__":
     main()
