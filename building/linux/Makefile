@@ -6,9 +6,10 @@
 VERSION := $(shell [ -f ../../../VERSION ] && cat ../../../VERSION || echo "devel")
 RELEASE := 1
 
-# Distro to build for (Debian12, Fedora41, openSUSE15)
+# Distro to build for (Debian12, Fedora, openSUSE)
 DISTRO ?= Debian12
 DESTDIR ?= ./package/$(DISTRO)
+IN_DOCKER ?= 0
 
 # Output directory from rustbuilder
 OUTPUTDIR := builders/$(DISTRO)/output
@@ -32,8 +33,10 @@ help:
 
 
 # === Build binaries using rustbuilder.py ===
-$(OUTPUTDIR)/udsactor-client: rustbuilder.py
+$(OUTPUTDIR)/udsactor-client: rustbuilder.py builders/$(DISTRO)/Dockerfile
+ifeq ($(IN_DOCKER),0)
 	python3 rustbuilder.py $(DISTRO)
+endif
 	@test -f $(OUTPUTDIR)/udsactor-client || (echo "Missing udsactor-client binary" && exit 1)
 
 
@@ -58,7 +61,7 @@ install-udsactor-common: $(OUTPUTDIR)/udsactor-client
 
 
 	# Install systemd service for RH-based distros
-ifneq (,$(filter $(DISTRO),Fedora41 openSUSE15))
+ifneq (,$(filter $(DISTRO),Fedora openSUSE))
 	mkdir -p $(SYSTEMDDIR)
 	cp debian/udsactor.service $(SYSTEMDDIR)/
 endif
@@ -84,3 +87,4 @@ install-udsactor-unmanaged: install-udsactor-common
 # === Clean build artifacts ===
 clean:
 	rm -rf $(DESTDIR)
+	rm -rf builders/$(DISTRO)/output/*

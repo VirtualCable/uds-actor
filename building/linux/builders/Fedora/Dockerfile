@@ -1,9 +1,10 @@
-FROM fedora:41
+FROM fedora:42
 
 RUN dnf install -y \
     curl gcc make pkgconf-pkg-config cmake openssl-devel mesa-libGL-devel mesa-libGLU-devel \
     libXft-devel libXext-devel libXinerama-devel libXcursor-devel libXfixes-devel \
     pango-devel cairo-devel glib2-devel gcc-c++ libstdc++-devel libstdc++-static \
+    rpm-build rpmdevtools strip redhat-rpm-config \
     && dnf clean all
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y

@@ -35,11 +35,10 @@ use crate::log;
 
 mod computer;
 mod idle;
+pub mod installer;
 mod network;
 mod renamer;
 mod session;
-pub mod installer;
-
 
 pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(LinuxSystem::new())
@@ -55,8 +54,8 @@ impl LinuxSystem {
     pub fn get_linux_version(&self) -> Option<String> {
         if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
             for line in content.lines() {
-                if line.starts_with("ID=") {
-                    return Some(line[3..].trim_matches('"').to_string());
+                if let Some(v) = line.strip_prefix("ID=") {
+                    return Some(v.trim_matches('"').to_string());
                 }
             }
         }
@@ -151,7 +150,6 @@ impl crate::system::System for LinuxSystem {
     fn get_idle_duration(&self) -> Result<std::time::Duration> {
         idle::get_idle()
     }
-        
 
     fn get_current_user(&self) -> Result<String> {
         Ok(whoami::username())
@@ -169,7 +167,7 @@ impl crate::system::System for LinuxSystem {
 
     fn protect_file_for_owner_only(&self, _path: &str) -> Result<()> {
         unsafe {
-            let res = if libc::chmod(
+            if libc::chmod(
                 std::ffi::CString::new(_path)?.as_ptr(),
                 0o600, // Owner read/write only
             ) == 0
@@ -177,8 +175,7 @@ impl crate::system::System for LinuxSystem {
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("chmod failed"))
-            };
-            res
+            }
         }
     }
 
@@ -190,5 +187,11 @@ impl crate::system::System for LinuxSystem {
     fn is_some_installation_in_progress(&self) -> Result<bool> {
         // On linux, we don't need to check for installation in progress
         Ok(false)
+    }
+}
+
+impl Default for LinuxSystem {
+    fn default() -> Self {
+        Self::new()
     }
 }
