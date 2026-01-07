@@ -7,7 +7,6 @@ import os
 import sys
 import subprocess
 import pathlib
-import typing
 import argparse
 
 # === Type aliases ===
@@ -20,7 +19,7 @@ def get_target_path(crate_path: PathLike, debug: bool) -> pathlib.Path:
     return crate_path / "target" / ("debug" if debug else "release")
 
 
-def get_builders() -> typing.List[str]:
+def get_builders() -> list[str]:
     """Get the list of available builders (distros)."""
     builders_dir = pathlib.Path("builders")
     return [d.name for d in builders_dir.iterdir() if d.is_dir()]
@@ -79,10 +78,26 @@ def docker_image_exists(image: str) -> bool:
     return result.returncode == 0
 
 
-def docker_run(crate_path: pathlib.Path, image: str, command: typing.List[str]) -> None:
+def docker_run(crate_path: pathlib.Path, image: str, command: list[str]) -> None:
     """Run a command inside Docker."""
+    uid = os.getuid()
+    gid = os.getgid()
+
     subprocess.run(
-        ["docker", "run", "--rm", "-v", f"{crate_path}:/crate", "-w", "/crate", image] + command, check=True
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            f"{uid}:{gid}",
+            "-v",
+            f"{crate_path}:/crate",
+            "-w",
+            "/crate",
+            image,
+        ]
+        + command,
+        check=True,
     )
 
 

@@ -89,7 +89,7 @@ for distro in Fedora openSUSE; do
         # Move to ../bin/${distro}
         mkdir -p ${OUTDIR}  # Ensure output dir exists
         cp ${TOP}/rpm-${distro_lower}/RPMS/x86_64/udsactor${kind}*.rpm ${OUTDIR}/
-        rpm --addsign ${OUTDIR}/udsactor${kind}*.rpm
+        # rpm --addsign ${OUTDIR}/udsactor${kind}*.rpm
     done
 done
 
