@@ -6,13 +6,24 @@ from pathlib import Path
 import typing
 import sys
 
+def read_version(version_file: Path) -> str:
+    # First, if environment variable UDS_VERSION is set, use it
+    env_version = os.environ.get("UDS_VERSION")
+    if env_version:
+        return env_version.strip()
+    # Otherwise, read from the VERSION file
+    if version_file.exists():
+        return version_file.read_text().strip()
+    return "DEVEL"
+
+
 SCRIPT_DIR: typing.Final[Path] = Path(__file__).resolve().parent
 WORKSPACE_ROOT: typing.Final[Path] = SCRIPT_DIR.parent.parent.resolve()
 OUTPUT_DIR: typing.Final[Path] = SCRIPT_DIR / "package"
 BUILD_ROOT: typing.Final[Path] = SCRIPT_DIR / "build-root"
 
 VERSION_FILE: typing.Final[Path] = WORKSPACE_ROOT.parent / "VERSION"
-VERSION: typing.Final[str] = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "DEVEL"
+VERSION: typing.Final[str] = read_version(VERSION_FILE)
 BINARIES: typing.Final[list[str]] = [
     "udsactor-client",
     "udsactor-service",
