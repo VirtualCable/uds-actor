@@ -13,8 +13,7 @@ use crate::platform;
 
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
-    // Screenshot request come from broker, goes to wsclient, wait for response and send back to broker
-    // for this, we use trackers for request/response matching
+    // This worker listens for UUidRequest and responds with own_token from config as UUidResponse
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<UUidRequest>(&mut rx, Some(platform.get_stop())).await

@@ -9,7 +9,6 @@ use crate::{computer, platform};
 
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
-    // Note that logoff is a simple notification. No response expected (in fact, will return "ok" immediately)
     let mut rx = server_info.from_ws.subscribe();
     while let Some(env) = wait_message_arrival::<PreConnect>(&mut rx, Some(platform.get_stop())).await {
         log::debug!("Received PreConnect: {:?}", env.msg);
