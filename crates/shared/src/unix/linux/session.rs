@@ -64,7 +64,7 @@ fn _current_session_id() -> Result<String> {
 
     let output = Command::new("loginctl")
         .arg("show-user")
-        .arg(whoami::username())
+        .arg(whoami::username()?)
         .arg("--property=Display")
         .output()?;
 

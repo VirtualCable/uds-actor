@@ -11,112 +11,69 @@ path = "src/lib.rs"
 
 # Windows dependencies
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.1", features = [
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Foundation",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Threading",
-    "Win32_Graphics_Gdi",
-    "Win32_Security",
-    "Win32_UI_Shell",
-    "Win32_System_SystemInformation",
-    "Win32_System_Shutdown",
-    "Win32_System_Registry",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_System_WindowsProgramming",
-    # We need all three for network adapter enumeration
-    "Win32_NetworkManagement_IpHelper",
-    "Win32_Networking_WinSock",
-    "Win32_NetworkManagement_Ndis",
-    "Win32_NetworkManagement_NetManagement",
-    "Win32_Storage_FileSystem",
-    "Win32_Security_Authorization",
-    "Win32_System_Services",
-    "Win32_System_EventLog",
-    "Win32_System_EventNotificationService",
-    "Win32_System_Com_Events",
-    "Win32_System_Com",  # For SENS
-    "Win32_System_Ole",
-    "Win32_System_Variant",
-] }
-windows-core = "0.62.2"
+windows = { workspace = true }
+windows-core = { workspace = true }
 
-widestring = "1.2.0"
+widestring = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-zbus = {version ="5.11.0", features = ["tokio"] }
-whoami = "1.6.1"
-libc = "0.2.177"
-libloading = "0.9.0"
-toml = "0.9.7"
+zbus = { workspace = true }
+whoami = { workspace = true }
+libc = { workspace = true }
+libloading = { workspace = true }
+toml = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2.177"
-toml = "0.9.7"
-whoami = "1.6.1"
-user-idle = "0.6.0"
+libc = { workspace = true }
+toml = { workspace = true }
+whoami = { workspace = true }
+user-idle = { workspace = true }
 
 [dependencies]
 # Logging
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = [
-    "env-filter",
-    "local-time",
-] }
-tracing-log = "0.2.0"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-log = { workspace = true }
 
-anyhow = "1.0.100"
-chrono = { version = "0.4.42" }
+anyhow = { workspace = true }
+chrono = { workspace = true }
 
-reqwest = { version = "0.12.23", features = [
-    "json",
-    "rustls-tls",
-    "system-proxy",
-] }
-ipnetwork = "0.21.1"
+reqwest = { workspace = true }
+ipnetwork = { workspace = true }
 
 # For maintain compat with 4.0, we need to decrypt the pem key
 # so we use pkcs8 an pem crates
-pkcs8 = { version = "0.10.2", features = ["encryption"] }
-pem = "3.0.6"
-rustls-pemfile = "2.2.0"
+pkcs8 = { workspace = true }
+pem = { workspace = true }
+rustls-pemfile = { workspace = true }
 
-rustls = "0.23.35"
-async-trait = "0.1.89"
-tokio = { version = "1.48.0", features = [
-    "macros",
-    "rt",
-    "time",
-    "sync",
-    "signal",
-] }
-rustls-native-certs = "0.8.1"
-tokio-rustls = "0.26.4"
+rustls = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+rustls-native-certs = { workspace = true }
+tokio-rustls = { workspace = true }
 
-axum = { version = "0.8.4", features = ["json", "tokio", "ws"] }
-tower-http = { version = "0.6.6", features = ["trace"] }
-axum-server = { version = "0.7.2", features = ["tls-rustls"] }
-socket2 = "0.6.0"  # To disable dual stack on listening, make IPv4 and IPv6 listeners separately
+axum = { workspace = true }
+tower-http = { workspace = true }
+axum-server = { workspace = true }
+socket2 = { workspace = true }     # To disable dual stack on listening, make IPv4 and IPv6 listeners separately
 
 # Web services
-tokio-tungstenite = { version = "0.28.0", features = [
-    "rustls-tls-native-roots",
-] }
-futures-util = "0.3.31"
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
 
 # json & related
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-base64 = "0.22.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
 
-rand = "0.9.2"
+rand = { workspace = true }
 
 [dev-dependencies]
-mockito = "1.7.0"
-tower = "0.5.2"
-hyper = "1.7.0"
-local-ip-address = "0.6.5"
+mockito = { workspace = true }
+tower = { workspace = true }
+hyper = { workspace = true }
+local-ip-address = { workspace = true }
 
 [build-dependencies]
-chrono = "0.4.42"
+chrono = { workspace = true }

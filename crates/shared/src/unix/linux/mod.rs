@@ -152,7 +152,7 @@ impl crate::system::System for LinuxSystem {
     }
 
     fn get_current_user(&self) -> Result<String> {
-        Ok(whoami::username())
+        Ok(whoami::username()?)
     }
 
     fn get_session_type(&self) -> Result<String> {

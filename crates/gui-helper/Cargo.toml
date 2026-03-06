@@ -8,7 +8,7 @@ license = "BSD-3-Clause"
 
 [dependencies]
 # Gui
-fltk = { version = "1.5.19", features = ["fltk-bundled"] }
+fltk = { workspace = true }
 
 
 [build-dependencies]

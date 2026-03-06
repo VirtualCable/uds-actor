@@ -8,12 +8,12 @@ license = "BSD-3-Clause"
 
 [dependencies]
 shared = { path = "../shared" }
-anyhow = "1.0.100"
+anyhow = { workspace = true }
 
 # Gui
-fltk = { version = "1.5.19", features = ["fltk-bundled"] }
+fltk = { workspace = true }
 
-reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
+reqwest = { workspace = true }
 
 [build-dependencies]
 builder = { path = "../builder" }

@@ -115,7 +115,7 @@ async fn check_secret_middleware(
             }
         }
         Some(&"ws") if addr.ip().is_loopback() => {
-            // Allow /ws from anywhere
+            // Allow /ws from localhost without secret, since it's only used for WebSocket upgrade and we have additional checks there
         }
         Some(_) => {
             log::warn!("Invalid path: {:?}", segments);
@@ -278,7 +278,7 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
         .route("/ws", get(ws_handler))
         .route_layer(middleware::from_fn(check_secret_middleware));
 
-    // TODO: Remove this testing code
+    // Create A DEBUG build with request/response logging, but not in release to avoid overhead and potential sensitive data in logs
     #[cfg(debug_assertions)]
     use tower_http::trace::TraceLayer;
 
@@ -330,11 +330,11 @@ async fn server(config: &ServerStartInfo) -> Result<()> {
 
     let svc = app.into_make_service_with_connect_info::<SocketAddr>();
 
-    let server_v4 = axum_server::from_tcp_rustls(listener_v4, tls_config.clone())
+    let server_v4 = axum_server::from_tcp_rustls(listener_v4, tls_config.clone())?
         .handle(handle.clone())
         .serve(svc.clone());
 
-    let server_v6 = axum_server::from_tcp_rustls(listener_v6, tls_config)
+    let server_v6 = axum_server::from_tcp_rustls(listener_v6, tls_config)?
         .handle(handle)
         .serve(svc);
 
