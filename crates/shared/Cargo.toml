@@ -45,12 +45,12 @@ ipnetwork = { workspace = true }
 # so we use pkcs8 an pem crates
 pkcs8 = { workspace = true }
 pem = { workspace = true }
-rustls-pemfile = { workspace = true }
 
 rustls = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 rustls-native-certs = { workspace = true }
+rustls-pki-types = { workspace = true }
 tokio-rustls = { workspace = true }
 
 axum = { workspace = true }

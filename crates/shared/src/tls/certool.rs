@@ -10,7 +10,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
 use pkcs8::EncryptedPrivateKeyInfo;
 use pkcs8::der::Decode;
-use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys}; // necesario para from_der()
+use rustls_pki_types::pem::PemObject;
 
 use super::{CertificateInfo, ciphers};
 
@@ -18,11 +18,9 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
     // Infor for error logging
     let err_cert_info = cert_info.clone();
 
-    // Extract certificate chain
-    let cert_pem: Vec<u8> = cert_info.certificate.into();
-    let mut cert_reader = cert_pem.as_slice();
     let cert_chain: Vec<CertificateDer<'static>> =
-        certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
+        CertificateDer::pem_slice_iter(cert_info.certificate.as_bytes())
+            .collect::<Result<Vec<_>, _>>()?;
 
     let key_pem: Vec<u8> = cert_info.key.into();
     // Extract private key, (possibly decrypting it first if password is Some)
@@ -55,19 +53,9 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
 }
 
 fn parse_unencrypted_key(key_pem: &[u8]) -> Result<PrivateKeyDer<'static>> {
-    // PKCS#8 unencrypted
-    let mut reader = key_pem;
-    if let Some(k) = pkcs8_private_keys(&mut reader).next().transpose()? {
-        return Ok(PrivateKeyDer::Pkcs8(k));
-    }
-
-    // RSA PKCS#1
-    let mut reader = key_pem;
-    if let Some(k) = rsa_private_keys(&mut reader).next().transpose()? {
-        return Ok(PrivateKeyDer::Pkcs1(k));
-    }
-
-    Err(anyhow::anyhow!("No valid private key found"))
+    // This will parse PKCS#1, PKCS#8 and SEC1 keys.
+    PrivateKeyDer::from_pem_slice(key_pem)
+        .map_err(|e| anyhow::anyhow!("Failed to parse unencrypted private key: {}. If the key is encrypted, please provide a password.", e))
 }
 
 #[cfg(test)]

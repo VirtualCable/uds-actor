@@ -83,7 +83,6 @@ shlex = "1.3.0"
 # so we use pkcs8 an pem crates
 pkcs8 = { version = "0.10.2", features = ["encryption"] }
 pem = "3.0.6"
-rustls-pemfile = "2.2.0"
 
 rustls = { version = "0.23.37", features = ["ring"] }
 async-trait = "0.1.89"
@@ -97,6 +96,7 @@ tokio = { version = "1.50.0", features = [
     "signal",
 ] }
 rustls-native-certs = "0.8.3"
+rustls-pki-types = "1.14.0"
 tokio-rustls = "0.26.4"
 
 axum = { version = "0.8.8", features = ["json", "tokio", "ws"] }
