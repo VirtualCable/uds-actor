@@ -1,13 +1,13 @@
-udsactor-*[1-9].*.spec
 *-stamp
 builders/**/output
 builders/**/build.stamp
+rpm-*/
 
 debian/udsactor/
 debian/udsactor-unmanaged/
 debian/files
 debian/*.debhelper
 debian/*.substvars
-__pycache__/
 output/
 package/
+__pycache__/
