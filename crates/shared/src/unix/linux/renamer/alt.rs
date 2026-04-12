@@ -30,7 +30,6 @@ use std::process::Command;
 
 use anyhow::Result;
 
-
 pub(super) const KNOWN_NAMES: &[&str] = &["altlinux", "alt", "basealt"];
 
 pub(super) fn rename(new_name: &str) -> Result<()> {

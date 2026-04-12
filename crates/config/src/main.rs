@@ -26,8 +26,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::{Arc, Mutex};
 use slint::ComponentHandle;
+use std::sync::{Arc, Mutex};
 
 mod callbacks;
 mod regcfg;
@@ -116,24 +116,27 @@ fn main() {
     let ui_handle = ui.as_weak();
     ui.on_browse_preconnect_clicked(move || {
         if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file() {
-                ui.set_preconnect_cmd(path.to_string_lossy().to_string().into());
+            && let Some(path) = rfd::FileDialog::new().pick_file()
+        {
+            ui.set_preconnect_cmd(path.to_string_lossy().to_string().into());
         }
     });
 
     let ui_handle = ui.as_weak();
     ui.on_browse_runonce_clicked(move || {
         if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file() {
-                ui.set_runonce_cmd(path.to_string_lossy().to_string().into());
+            && let Some(path) = rfd::FileDialog::new().pick_file()
+        {
+            ui.set_runonce_cmd(path.to_string_lossy().to_string().into());
         }
     });
 
     let ui_handle = ui.as_weak();
     ui.on_browse_postconfig_clicked(move || {
         if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file() {
-                ui.set_postconfig_cmd(path.to_string_lossy().to_string().into());
+            && let Some(path) = rfd::FileDialog::new().pick_file()
+        {
+            ui.set_postconfig_cmd(path.to_string_lossy().to_string().into());
         }
     });
 
@@ -153,7 +156,7 @@ fn main() {
 
     // Fill the fields from existing config
     regcfg::fill_window_fields(&ui);
-    
+
     // Trigger initial auth query
     callbacks::uds_server_changed(&ui, auths.clone());
 

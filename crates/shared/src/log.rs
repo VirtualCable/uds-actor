@@ -27,9 +27,9 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::{
+    backtrace::Backtrace,
     fs::{self, OpenOptions},
     io::{self, Write},
-    backtrace::Backtrace,
     panic,
     path::PathBuf,
     sync::OnceLock,

@@ -120,8 +120,7 @@ impl WindowsEvent {
         }
     }
 
-    pub async fn wait_async(&self)
-    {
+    pub async fn wait_async(&self) {
         let ev = self.clone();
         crate::log::debug!("Entering wait_async()");
         tokio::task::spawn_blocking(move || ev.wait())
@@ -129,8 +128,7 @@ impl WindowsEvent {
             .expect("Join error in wait_async()");
     }
 
-    pub async fn wait_timeout_async(&self, timeout: Duration) -> Result<()>
-    {
+    pub async fn wait_timeout_async(&self, timeout: Duration) -> Result<()> {
         let ev = self.clone();
         tokio::task::spawn_blocking(move || ev.wait_timeout(timeout))
             .await

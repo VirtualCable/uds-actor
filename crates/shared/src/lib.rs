@@ -28,17 +28,17 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 #[cfg(all(windows, target_env = "gnu"))]
 compile_error!("This crate requires the MSVC toolchain on Windows.");
 
-pub mod log;
-pub mod sync;
-pub mod tls;
-pub mod ws;
 pub mod broker;
 pub mod config;
-pub mod service;
-pub mod system;
 pub mod consts;
-pub mod utils;
 pub mod installer;
+pub mod log;
+pub mod service;
+pub mod sync;
+pub mod system;
+pub mod tls;
+pub mod utils;
+pub mod ws;
 
 #[cfg(target_os = "windows")]
 pub mod windows;

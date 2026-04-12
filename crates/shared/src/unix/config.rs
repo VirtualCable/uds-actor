@@ -15,6 +15,9 @@ pub struct UnixConfig {
 fn get_config_file() -> String {
     if std::env::var("UDS_ACTOR_TEST").is_ok() {
         "/tmp/udsactor_test_config.cfg".to_string()
+    } else if cfg!(debug_assertions) {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        format!("{}/.config/udsactor/udsactor.cfg", home)
     } else {
         format!("{}/udsactor.cfg", CONFIG_PATH)
     }

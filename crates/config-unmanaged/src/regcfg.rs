@@ -1,5 +1,5 @@
-use shared::{broker::api::types, config, log};
 use crate::AppWindow;
+use shared::{broker::api::types, config, log};
 
 pub fn fill_window_fields(ui: &AppWindow) {
     // Fill the fields from existing config
@@ -8,9 +8,9 @@ pub fn fill_window_fields(ui: &AppWindow) {
     let res = config_storage.config(false);
     if let Ok(actor_cfg) = res {
         log::debug!("Existing config found: {:?}", actor_cfg);
-        
+
         ui.set_verify_ssl(actor_cfg.verify_ssl);
-        
+
         if !actor_cfg.broker_url.is_empty() {
             // Remove https:// and /uds/rest/ if present
             let url = actor_cfg
@@ -19,13 +19,13 @@ pub fn fill_window_fields(ui: &AppWindow) {
                 .trim_end_matches("/uds/rest/");
             ui.set_server_host(url.into());
         }
-        
+
         ui.set_service_token(
             actor_cfg
                 .master_token
                 .as_ref()
                 .map_or("", |s| s.as_str())
-                .into()
+                .into(),
         );
 
         ui.set_net_restriction(actor_cfg.restrict_net.clone().unwrap_or_default().into());
@@ -35,7 +35,7 @@ pub fn fill_window_fields(ui: &AppWindow) {
 
         // If we have a valid token, enable the test button
         ui.set_test_enabled(!actor_cfg.token().is_empty());
-        
+
         if let Some(ciphers) = actor_cfg.config.ssl_ciphers {
             ui.set_ssl_ciphers(slint::SharedString::from(ciphers));
         }

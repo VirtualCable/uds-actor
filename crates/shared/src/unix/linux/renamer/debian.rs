@@ -41,9 +41,7 @@ pub(super) fn rename(new_name: &str) -> Result<()> {
         .arg("set-hostname")
         .arg(new_name)
         .status()?;
-    let _ = Command::new("/bin/hostname")
-        .arg(new_name)
-        .status()?;
+    let _ = Command::new("/bin/hostname").arg(new_name).status()?;
 
     if let Ok(file) = File::open("/etc/hosts") {
         let lines: Vec<String> = io::BufReader::new(file)
@@ -55,7 +53,7 @@ pub(super) fn rename(new_name: &str) -> Result<()> {
         writeln!(hosts, "127.0.1.1\t{}", new_name)?;
         for l in lines {
             if l.starts_with("127.0.1.1") {
-                continue; 
+                continue;
             }
             writeln!(hosts, "{}", l)?;
         }

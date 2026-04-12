@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::log;
+use anyhow::Result;
 
 pub fn register(_name: &str, _display_name: &str, _description: &str) -> Result<()> {
     log::info!("Registration not implemented");

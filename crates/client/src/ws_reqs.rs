@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use shared::{
-    system,
     sync::OnceSignal,
+    system,
     ws::{
         client::WsClient,
         types::{LoginRequest, LoginResponse, LogoutRequest, RpcEnvelope, RpcMessage},
@@ -24,7 +24,11 @@ pub struct WsRequester {
 
 impl WsRequester {
     pub fn new(operations: Arc<dyn system::System>, ws_client: WsClient, stop: OnceSignal) -> Self {
-        Self { operations, ws_client, stop }
+        Self {
+            operations,
+            ws_client,
+            stop,
+        }
     }
 }
 

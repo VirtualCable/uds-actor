@@ -69,7 +69,9 @@ impl SessionManagement for WindowsSessionManager {
     }
 }
 
-pub async fn new_session_manager(stop: OnceSignal) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+pub async fn new_session_manager(
+    stop: OnceSignal,
+) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
     std::sync::Arc::new(WindowsSessionManager::new(stop).await)
 }
 
@@ -85,8 +87,9 @@ mod tests {
         let stop = session_close.get_stop();
         let _fake_closer = tokio::spawn({
             async move {
-            session_close.get_stop().wait().await;
-        }});
+                session_close.get_stop().wait().await;
+            }
+        });
         // wait a bit to simulate work
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         event.signal();
@@ -104,8 +107,9 @@ mod tests {
         let stop = session_close.get_stop();
         let _fake_closer = tokio::spawn({
             async move {
-            session_close.get_stop().wait().await;
-        }});
+                session_close.get_stop().wait().await;
+            }
+        });
         // wait a bit to simulate work
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         stop.set();

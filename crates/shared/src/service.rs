@@ -53,7 +53,8 @@ pub trait AsyncServiceTrait: Send + Sync + 'static {
 }
 
 // Type alias for the main async function signature
-type MainAsyncFn = fn(OnceSignal, Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+type MainAsyncFn =
+    fn(OnceSignal, Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 pub struct AsyncService {
     // Add async fn to call as main_async
@@ -123,7 +124,10 @@ impl AsyncServiceTrait for AsyncService {
             .unwrap();
 
         rt.block_on(async move {
-            let mut main_task = tokio::spawn((self.main_async)(self.stop.clone(), self.restart_flag.clone()));
+            let mut main_task = tokio::spawn((self.main_async)(
+                self.stop.clone(),
+                self.restart_flag.clone(),
+            ));
             let signals_task = tokio::spawn(AsyncService::signals(stop.clone()));
             tokio::select! {
                 res = &mut main_task => {
@@ -178,7 +182,10 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn async_main(stop: OnceSignal, _restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    fn async_main(
+        stop: OnceSignal,
+        _restart_flag: Arc<AtomicBool>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(async move {
             // main logic
             stop.wait().await;
@@ -187,7 +194,10 @@ mod tests {
         })
     }
 
-    fn async_main_restart(stop: OnceSignal, restart_flag: Arc<AtomicBool>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    fn async_main_restart(
+        stop: OnceSignal,
+        restart_flag: Arc<AtomicBool>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(async move {
             // main logic
             restart_flag.store(true, Ordering::Relaxed);

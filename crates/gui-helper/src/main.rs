@@ -26,8 +26,8 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
-use std::rc::Rc;
 use slint::Timer;
+use std::rc::Rc;
 
 const SIGNAL_FILE: &str = "uds-actor-gui-close-all";
 
@@ -73,10 +73,10 @@ fn main() {
 
 fn show_messagebox(title: &str, message: &str) {
     let ui = AppWindow::new().unwrap();
-    
+
     ui.set_title_text(title.into());
     ui.set_message_text(message.into());
-    
+
     let ui_handle = ui.as_weak();
     ui.on_ok_clicked(move || {
         if let Some(ui) = ui_handle.upgrade() {
@@ -86,15 +86,19 @@ fn show_messagebox(title: &str, message: &str) {
 
     let timer = Rc::new(Timer::default());
     let ui_handle2 = ui.as_weak();
-    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(500), move || {
-        let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
-        if signal_file.exists() {
-            let _ = std::fs::remove_file(&signal_file);
-            if let Some(ui) = ui_handle2.upgrade() {
-                ui.hide().unwrap();
+    timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_millis(500),
+        move || {
+            let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
+            if signal_file.exists() {
+                let _ = std::fs::remove_file(&signal_file);
+                if let Some(ui) = ui_handle2.upgrade() {
+                    ui.hide().unwrap();
+                }
             }
-        }
-    });
+        },
+    );
 
     ui.run().unwrap();
 }

@@ -5,9 +5,9 @@ use crate::platform;
 pub mod logoff;
 pub mod message;
 pub mod preconnect;
-pub mod uniqueid;
-pub mod script;
 pub mod screenshot;
+pub mod script;
+pub mod uniqueid;
 
 use crate::spawn_workers;
 

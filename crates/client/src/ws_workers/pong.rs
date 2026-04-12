@@ -32,11 +32,9 @@ mod tests {
         let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
-            let res = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                super::worker(platform),
-            )
-            .await;
+            let res =
+                tokio::time::timeout(std::time::Duration::from_secs(10), super::worker(platform))
+                    .await;
             log::info!("Alive worker finished with result: {:?}", res);
         });
 
@@ -47,5 +45,4 @@ mod tests {
         // Wait for the worker to finish
         let _ = worker_handle.await;
     }
-
 }

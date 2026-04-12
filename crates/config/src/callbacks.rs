@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use slint::ComponentHandle;
+use std::sync::{Arc, Mutex};
 
 use shared::{
     broker::api::{block, types},
@@ -18,10 +18,10 @@ pub fn uds_server_changed(
     if hostname.is_empty() {
         return;
     }
-    
+
     let verify_ssl = ui.get_verify_ssl();
     let ui_handle = ui.as_weak();
-    
+
     ui.set_loading(true);
     ui.set_status_text("Querying authenticators...".into());
 
@@ -43,17 +43,20 @@ pub fn uds_server_changed(
                 }
 
                 let auth_names: Vec<String> = auths.iter().map(|a| a.name.clone()).collect();
-                
+
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
                         ui.set_status_text("Ready".into());
-                        
+
                         let mut models = vec!["Administration".to_string()];
                         models.extend(auth_names);
-                        
+
                         let model = std::rc::Rc::new(slint::VecModel::from(
-                            models.into_iter().map(|s| s.into()).collect::<Vec<slint::SharedString>>()
+                            models
+                                .into_iter()
+                                .map(|s| s.into())
+                                .collect::<Vec<slint::SharedString>>(),
                         ));
                         ui.set_authenticators(model.into());
                         ui.set_active_authenticator(0);
@@ -66,8 +69,9 @@ pub fn uds_server_changed(
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
                         ui.set_status_text(format!("Error: {}", e).into());
-                        
-                        let model = std::rc::Rc::new(slint::VecModel::from(vec!["Administration".into()]));
+
+                        let model =
+                            std::rc::Rc::new(slint::VecModel::from(vec!["Administration".into()]));
                         ui.set_authenticators(model.into());
                         ui.set_active_authenticator(0);
                     }
@@ -85,7 +89,7 @@ pub fn btn_register_clicked(
 ) {
     let hostname = ui.get_server_host().trim().to_string();
     let auth_idx = ui.get_active_authenticator();
-    
+
     let selected_auth = if auth_idx == 0 {
         "admin".to_string()
     } else {
@@ -96,11 +100,11 @@ pub fn btn_register_clicked(
             "admin".to_string()
         }
     };
-    
+
     let username = ui.get_username().trim().to_string();
     let password = ui.get_password_val().to_string();
     let ciphers = ui.get_ssl_ciphers().trim().to_string();
-    
+
     if hostname.is_empty() || username.is_empty() || password.is_empty() {
         let _ = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
@@ -117,7 +121,7 @@ pub fn btn_register_clicked(
     let ui_handle = ui.as_weak();
     let ops = operations.clone();
     let iface = interface.clone();
-    
+
     std::thread::spawn(move || {
         // Login
         let token_res = shared::broker::api::block::api_login(
@@ -126,23 +130,26 @@ pub fn btn_register_clicked(
             &username,
             &password,
         );
-        
+
         match token_res {
             Ok(token) => {
                 log::debug!("Login successful, got token");
-                
+
                 let username_full = format!("{}@{}", username, selected_auth);
-                let log_level_idx = ui_handle.upgrade().map(|ui| ui.get_active_log_level()).unwrap_or(1);
+                let log_level_idx = ui_handle
+                    .upgrade()
+                    .map(|ui| ui.get_active_log_level())
+                    .unwrap_or(1);
                 let log_level: types::LogLevel = (log_level_idx as u8).min(4).into();
-                
+
                 let os = ops.get_os_version().unwrap_or_default();
                 let computer_name = ops.get_computer_name().unwrap_or_default();
-                
+
                 let (pre_cmd, run_cmd, post_cmd) = if let Some(ui) = ui_handle.upgrade() {
                     (
                         ui.get_preconnect_cmd().trim().to_string(),
                         ui.get_runonce_cmd().trim().to_string(),
-                        ui.get_postconfig_cmd().trim().to_string()
+                        ui.get_postconfig_cmd().trim().to_string(),
                     )
                 } else {
                     (String::new(), String::new(), String::new())
@@ -156,9 +163,21 @@ pub fn btn_register_clicked(
                     ip: &iface.ip_addr,
                     mac: &iface.mac,
                     commands: types::RegisterCommands {
-                        pre_command: if pre_cmd.is_empty() { None } else { Some(pre_cmd.clone()) },
-                        runonce_command: if run_cmd.is_empty() { None } else { Some(run_cmd.clone()) },
-                        post_command: if post_cmd.is_empty() { None } else { Some(post_cmd.clone()) },
+                        pre_command: if pre_cmd.is_empty() {
+                            None
+                        } else {
+                            Some(pre_cmd.clone())
+                        },
+                        runonce_command: if run_cmd.is_empty() {
+                            None
+                        } else {
+                            Some(run_cmd.clone())
+                        },
+                        post_command: if post_cmd.is_empty() {
+                            None
+                        } else {
+                            Some(post_cmd.clone())
+                        },
                     },
                     log_level: log_level.into(),
                     os: &os,
@@ -167,7 +186,7 @@ pub fn btn_register_clicked(
                 match shared::broker::api::block::register(actor_cfg.clone(), &reg_auth, &token) {
                     Ok(master_token) => {
                         log::debug!("Registration successful");
-                        
+
                         let final_cfg = config::ActorConfiguration {
                             broker_url: format!("https://{}/uds/rest/", hostname),
                             verify_ssl: actor_cfg.verify_ssl,
@@ -180,7 +199,11 @@ pub fn btn_register_clicked(
                             post_command: reg_auth.commands.post_command,
                             log_level: log_level.into(),
                             config: config::ActorDataConfiguration {
-                                ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers) },
+                                ssl_ciphers: if ciphers.is_empty() {
+                                    None
+                                } else {
+                                    Some(ciphers)
+                                },
                                 ..Default::default()
                             },
                             data: None,
@@ -188,12 +211,14 @@ pub fn btn_register_clicked(
 
                         let mut config_storage = config::new_config_storage();
                         let res = config_storage.save_config(&final_cfg);
-                        
+
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_handle.upgrade() {
                                 ui.set_loading(false);
                                 if let Err(e) = res {
-                                    ui.set_status_text(format!("Failed to save config: {}", e).into());
+                                    ui.set_status_text(
+                                        format!("Failed to save config: {}", e).into(),
+                                    );
                                     let _ = rfd::MessageDialog::new()
                                         .set_level(rfd::MessageLevel::Error)
                                         .set_title("Save Error")
@@ -236,7 +261,9 @@ pub fn btn_register_clicked(
                         let _ = rfd::MessageDialog::new()
                             .set_level(rfd::MessageLevel::Error)
                             .set_title("Login Error")
-                            .set_description("Login failed. Check credentials and server connectivity.")
+                            .set_description(
+                                "Login failed. Check credentials and server connectivity.",
+                            )
                             .show();
                     }
                 });
@@ -256,7 +283,7 @@ pub fn btn_test_clicked(ui: &AppWindow) {
             .show();
         return;
     }
-    
+
     let actor_cfg = cfg.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
         let _ = rfd::MessageDialog::new()
@@ -272,7 +299,10 @@ pub fn btn_test_clicked(ui: &AppWindow) {
     let ui_handle = ui.as_weak();
 
     std::thread::spawn(move || {
-        match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(1500))) {
+        match shared::broker::api::block::test(
+            actor_cfg,
+            Some(std::time::Duration::from_millis(1500)),
+        ) {
             Ok(msg) => {
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {

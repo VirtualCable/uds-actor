@@ -2,9 +2,9 @@ use rustls::crypto::CryptoProvider;
 
 use crate::log;
 
+pub mod certool;
 pub mod ciphers;
 pub mod noverify;
-pub mod certool;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct CertificateInfo {
@@ -13,7 +13,6 @@ pub struct CertificateInfo {
     pub password: Option<String>,
     pub ciphers: Option<String>,
 }
-
 
 // Ensure only one initialization happens
 static INIT: std::sync::Once = std::sync::Once::new();

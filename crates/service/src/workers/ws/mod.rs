@@ -32,11 +32,11 @@ use crate::platform;
 
 mod ping;
 
+mod close;
 mod logger;
 mod login_managed;
 mod login_unmanaged;
 mod logout;
-mod close;
 
 use crate::spawn_workers;
 

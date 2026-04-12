@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 
-use crate::{actors::testing::TestSetup};
+use crate::actors::testing::TestSetup;
 
 #[tokio::test]
 #[serial_test::serial(server)]
@@ -89,7 +89,9 @@ async fn test_managed_rename_should_not_rename() -> Result<()> {
     log::info!("Calls: {:?}", test_setup.calls.dump());
     assert!(test_setup.calls.count_calls("operations::force_time_sync") == 1);
     assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
-    test_setup.calls.assert_not_called("operations::rename_computer");
+    test_setup
+        .calls
+        .assert_not_called("operations::rename_computer");
     test_setup.calls.assert_not_called("operations::reboot"); // Should  not reboot after rename
     Ok(())
 }
@@ -133,7 +135,7 @@ async fn test_managed_join_domain_should_join() -> Result<()> {
 #[serial_test::serial(server)]
 async fn test_managed_join_domain_should_not_join() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
-    // Note that 
+    // Note that
     let domain_name = test_setup.platform.system().get_domain_name()?;
     let computer_name = test_setup.platform.system().get_computer_name()?;
     // Setup the retun value for initialize
@@ -160,7 +162,11 @@ async fn test_managed_join_domain_should_not_join() -> Result<()> {
     log::info!("Calls: {:?}", test_setup.calls.dump());
     assert!(test_setup.calls.count_calls("operations::force_time_sync") == 1);
     assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
-    test_setup.calls.assert_not_called("operations::rename_computer");
-    test_setup.calls.assert_not_called("operations::join_domain");
+    test_setup
+        .calls
+        .assert_not_called("operations::rename_computer");
+    test_setup
+        .calls
+        .assert_not_called("operations::join_domain");
     Ok(())
 }

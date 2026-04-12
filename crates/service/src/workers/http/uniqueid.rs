@@ -16,7 +16,8 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     // This worker listens for UUidRequest and responds with own_token from config as UUidResponse
     let tracker = server_info.tracker.clone();
     let mut rx = server_info.from_ws.subscribe();
-    while let Some(env) = wait_message_arrival::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
+    while let Some(env) =
+        wait_message_arrival::<UUidRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received UUidRequest");
         let req_id = if let Some(id) = env.id {
@@ -42,7 +43,8 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                 req_id,
                 shared::ws::types::RpcMessage::UUidResponse(response),
             )
-            .await.ok();  // Consume error silently since request may be already deregistered
+            .await
+            .ok(); // Consume error silently since request may be already deregistered
     }
     Ok(())
 }
@@ -51,7 +53,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
 mod tests {
     use super::*;
     use crate::testing::mock;
-    use std::{time::Duration};
+    use std::time::Duration;
 
     use shared::ws::types::{RpcEnvelope, RpcMessage};
 
@@ -107,7 +109,7 @@ mod tests {
                 if let RpcMessage::UUidResponse(resp) = msg {
                     assert_eq!(resp.0, "own_token");
                 } else {
-                    panic!("Unexpected message type");  
+                    panic!("Unexpected message type");
                 }
             }
         }

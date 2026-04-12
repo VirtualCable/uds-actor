@@ -24,16 +24,16 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-pub mod system;
-pub mod service;
 pub mod config;
-pub mod sens;
 pub mod installer;
+pub mod sens;
+pub mod service;
+pub mod system;
 
 mod event;
-mod safehandle;
 mod msgwindow;
+mod safehandle;
 
+pub use event::WindowsEvent;
 pub use msgwindow::MsgWindow;
 pub use safehandle::SafeHandle;
-pub use event::WindowsEvent;

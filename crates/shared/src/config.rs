@@ -102,6 +102,10 @@ impl ActorConfiguration {
     pub fn log_level(&self) -> crate::broker::api::types::LogLevel {
         self.log_level.into()
     }
+
+    pub fn ssl_ciphers(&self) -> Option<&str> {
+        self.config.ssl_ciphers.as_deref()
+    }
 }
 
 pub trait Configuration: Send + Sync + 'static {

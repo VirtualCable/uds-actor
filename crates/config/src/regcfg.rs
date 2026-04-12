@@ -1,7 +1,11 @@
-use shared::{broker::api::types, config, log};
 use crate::AppWindow;
+use shared::{broker::api::types, config, log};
 
-pub fn broker_api_config(hostname: &str, verify_ssl: bool, ciphers: &str) -> config::ActorConfiguration {
+pub fn broker_api_config(
+    hostname: &str,
+    verify_ssl: bool,
+    ciphers: &str,
+) -> config::ActorConfiguration {
     config::ActorConfiguration {
         broker_url: format!("https://{hostname}/uds/rest/"),
         verify_ssl,
@@ -14,7 +18,11 @@ pub fn broker_api_config(hostname: &str, verify_ssl: bool, ciphers: &str) -> con
         post_command: None,
         log_level: 0,
         config: config::ActorDataConfiguration {
-            ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers.to_string()) },
+            ssl_ciphers: if ciphers.is_empty() {
+                None
+            } else {
+                Some(ciphers.to_string())
+            },
             ..Default::default()
         },
         data: None,
@@ -28,7 +36,7 @@ pub fn fill_window_fields(ui: &AppWindow) {
     let res = config_storage.config(false);
     if let Ok(actor_cfg) = res {
         log::debug!("Existing config found: {:?}", actor_cfg);
-        
+
         // If we have a valid token, enable the test button
         ui.set_test_enabled(!actor_cfg.token().is_empty());
 
@@ -55,7 +63,7 @@ pub fn fill_window_fields(ui: &AppWindow) {
         if let Some(post_cmd) = actor_cfg.post_command {
             ui.set_postconfig_cmd(post_cmd.into());
         }
-        
+
         if let Some(ciphers) = actor_cfg.config.ssl_ciphers {
             ui.set_ssl_ciphers(slint::SharedString::from(ciphers));
         }

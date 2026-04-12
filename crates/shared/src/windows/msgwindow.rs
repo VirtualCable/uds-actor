@@ -79,7 +79,9 @@ impl MsgWindow {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 class_name,
-                PCWSTR(widestring::U16CString::from_str_truncate("Actor Invisible Window").as_ptr()),
+                PCWSTR(
+                    widestring::U16CString::from_str_truncate("Actor Invisible Window").as_ptr(),
+                ),
                 WS_POPUP | WS_DISABLED, //  No borders, no interaction, 100% hidden
                 0,
                 0,
@@ -227,7 +229,7 @@ extern "system" fn launcher_window_proc(
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration, sync::mpsc};
+    use std::{sync::mpsc, thread, time::Duration};
 
     use super::*;
 
@@ -248,7 +250,7 @@ mod tests {
         // timeout thread
         thread::spawn(move || {
             thread::sleep(timeout);
-        let _ = tx.send(None); // if the timeout wins, send None
+            let _ = tx.send(None); // if the timeout wins, send None
         });
 
         match rx.recv() {
@@ -257,7 +259,6 @@ mod tests {
             Err(_) => Err("Error receiving result"),
         }
     }
-
 
     #[test]
     fn test_msg_window_creation() {

@@ -3,7 +3,9 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot};
 
 use crate::{
-    log, sync::OnceSignal, ws::types::{RpcEnvelope, RpcMessage}
+    log,
+    sync::OnceSignal,
+    ws::types::{RpcEnvelope, RpcMessage},
 };
 
 pub mod client;

@@ -51,9 +51,7 @@ pub async fn task(
 
     // Deadline timer, simply wait until deadline is reached inside the session_manager
     // But leave a 5 mins to notify before deadline
-    if stop.wait_timeout(deadline)
-        .await
-        .is_err()
+    if stop.wait_timeout(deadline).await.is_err()
     // Timeout without being signaled
     {
         log::info!("Deadline notification reached, notifying user");

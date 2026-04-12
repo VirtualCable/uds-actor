@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // Shared types for WebSocket messages
 // But reexport here for consistency
-pub use crate::broker::api::types::{LoginResponse, LogLevel};
+pub use crate::broker::api::types::{LogLevel, LoginResponse};
 
 pub type RequestId = u64;
 
@@ -12,7 +12,6 @@ pub struct RpcEnvelope<T> {
     #[serde(flatten)]
     pub msg: T,
 }
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RpcError {
@@ -37,14 +36,14 @@ pub enum RpcMessage {
     UUidResponse(UUidResponse), // UUID as string
 
     // Notifications (no id)
-    Ping(Ping),                // Used to maintain connection alive
-    Pong(Pong),                // Response to Ping, same payload
+    Ping(Ping),                   // Used to maintain connection alive
+    Pong(Pong),                   // Response to Ping, same payload
     LogoffRequest(LogoffRequest), // From broker for client
     PreConnect(PreConnect),       // From broker for server
     LogoutRequest(LogoutRequest), // From client ws for the broker
     LogRequest(LogRequest),       // From client ws for the broker
     MessageRequest(MessageRequest),
-    Close(Close),                  // From client ws to server
+    Close(Close), // From client ws to server
 
     // Error response with
     Error(RpcError),

@@ -3,7 +3,6 @@ use tokio::process::Command;
 
 use shared::log;
 
-
 // We have created a separate gui helper because on linux
 // at session close the X windows (xrdp for example) destroys de X server.
 // fltk fails and do a Fl::fatal, that in turn executes "exit(1)" which makes

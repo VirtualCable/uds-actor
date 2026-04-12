@@ -31,7 +31,7 @@ pub const REST_ACTOR_PATH: &str = "actor/v3/";
 // Must end in /
 pub const UDS_ACTOR_AGENT: &str = concat!(
     "UDS Actor v",
-    env!("CARGO_PKG_VERSION"),  // concat needs literals
+    env!("CARGO_PKG_VERSION"), // concat needs literals
     "/",
-    env!("CARGO_PKG_BUILD")  // concat needs literals
+    env!("CARGO_PKG_BUILD") // concat needs literals
 );

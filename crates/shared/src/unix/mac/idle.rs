@@ -42,8 +42,7 @@ pub(super) fn get_idle() -> f64 {
 }
 
 #[allow(dead_code)]
-pub fn shutdown_idle() {
-}
+pub fn shutdown_idle() {}
 
 #[cfg(test)]
 mod tests {
@@ -52,11 +51,11 @@ mod tests {
     #[test]
     fn test_get_idle() {
         crate::log::setup_logging("debug", crate::log::LogType::Tests);
-        let res =init_idle(300);
+        let res = init_idle(300);
         assert!(res.is_ok());
         let idle = get_idle();
         println!("Idle time: {} seconds", idle);
-        assert!(idle >= 0.0);  // Will be 0.0 right now :)
+        assert!(idle >= 0.0); // Will be 0.0 right now :)
         shutdown_idle();
     }
 }

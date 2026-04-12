@@ -87,7 +87,9 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         if actor_type == shared::config::ActorType::Managed {
             // On managed, master_token must be cleared
             // TODO: clear master_token (remove commented line when tested)
-            log::info!("Clearing master token on managed actor (currently not doing for debugging)");
+            log::info!(
+                "Clearing master token on managed actor (currently not doing for debugging)"
+            );
             // cfg_guard.master_token.take();
         }
         cfg_guard.own_token = response.token;

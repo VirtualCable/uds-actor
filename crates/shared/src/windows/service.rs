@@ -32,7 +32,11 @@ use windows::{
 
 use anyhow::Result;
 
-use crate::{log::{debug, info},service::AsyncServiceTrait, sync::OnceSignal};
+use crate::{
+    log::{debug, info},
+    service::AsyncServiceTrait,
+    sync::OnceSignal,
+};
 
 const SERVICE_NAME: PCWSTR = w!("RustExampleService");
 

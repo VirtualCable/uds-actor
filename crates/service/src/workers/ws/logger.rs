@@ -36,7 +36,7 @@ use shared::{
     ws::{server::ServerContext, types::LogRequest, wait_message_arrival},
 };
 
-use crate::{platform};
+use crate::platform;
 
 /// FloodGuard: simple rate limiter (60 logs / 60s)
 pub struct FloodGuard {
@@ -72,7 +72,9 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     let mut rx = server_info.from_ws.subscribe();
     let flood_guard = Arc::new(Mutex::new(FloodGuard::new()));
 
-    while let Some(env) = wait_message_arrival::<LogRequest>(&mut rx, Some(platform.get_stop())).await {
+    while let Some(env) =
+        wait_message_arrival::<LogRequest>(&mut rx, Some(platform.get_stop())).await
+    {
         let mut guard = flood_guard.lock().await;
         if guard.allow() {
             log::debug!(
@@ -104,8 +106,8 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
 mod tests {
     use super::*;
 
-    use shared::{ws::types::{RpcEnvelope, RpcMessage, LogLevel}};
     use crate::testing::mock;
+    use shared::ws::types::{LogLevel, RpcEnvelope, RpcMessage};
 
     #[tokio::test]
     async fn flood_guard_allows_up_to_60_per_minute() {
@@ -202,6 +204,5 @@ mod tests {
         calls.assert_called("broker_api::log(Info, Test log message)");
         calls.assert_called("broker_api::log(Warn, Test log message)");
         calls.assert_called("broker_api::log(Error, Test log message)");
-
     }
 }

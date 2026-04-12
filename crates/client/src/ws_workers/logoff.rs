@@ -33,16 +33,14 @@ mod tests {
     async fn test_logoff_worker_stops() {
         shared::log::setup_logging("debug", shared::log::LogType::Tests);
         // Mock platform
-        let (platform, _calls, _, _) = mock_platform(None, None, None, None,43910).await;
+        let (platform, _calls, _, _) = mock_platform(None, None, None, None, 43910).await;
 
         let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
-            let res = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                super::worker(platform),
-            )
-            .await;
+            let res =
+                tokio::time::timeout(std::time::Duration::from_secs(10), super::worker(platform))
+                    .await;
             log::info!("Alive worker finished with result: {:?}", res);
         });
 
@@ -63,11 +61,9 @@ mod tests {
 
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
-            let res = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                super::worker(platform),
-            )
-            .await;
+            let res =
+                tokio::time::timeout(std::time::Duration::from_secs(10), super::worker(platform))
+                    .await;
             log::info!("Alive worker finished with result: {:?}", res);
         });
 
@@ -84,7 +80,6 @@ mod tests {
         calls.assert_not_called("operations::logoff()");
         assert!(from_ws.is_empty());
 
-
         // Send logoff request
         let msg = RpcEnvelope::<RpcMessage> {
             id: None,
@@ -96,7 +91,6 @@ mod tests {
         let _ = worker_handle.await;
 
         calls.assert_called("operations::logoff()");
-    // End of tests
-    
+        // End of tests
     }
 }

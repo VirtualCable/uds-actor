@@ -4,7 +4,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use shared::{
     config::{ActorConfiguration, ActorDataConfiguration, ActorType},
-    testing::mock::{Calls, BrokerApiMock, OperationsMock},
+    testing::mock::{BrokerApiMock, Calls, OperationsMock},
     ws::{
         request_tracker::RequestTracker,
         server::ServerContext,
@@ -43,7 +43,11 @@ pub async fn mock_platform() -> MockedPlatform {
         Some(operations),
         Some(broker_api.clone()),
     );
-    MockedPlatform { platform, calls, broker_api }
+    MockedPlatform {
+        platform,
+        calls,
+        broker_api,
+    }
 }
 
 pub async fn mock_server_info() -> ServerContext {
@@ -58,7 +62,8 @@ pub async fn mock_server_info() -> ServerContext {
     }
 }
 
-pub async fn mock_server_info_with_worker_rx() -> (ServerContext, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
+pub async fn mock_server_info_with_worker_rx()
+-> (ServerContext, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
     let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (wsclient_to_workers, wsclient_to_workers_rx) =
         broadcast::channel::<RpcEnvelope<RpcMessage>>(128);

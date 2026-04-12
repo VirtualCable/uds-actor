@@ -68,8 +68,6 @@ fn main() {
     log::setup_logging("info", log::LogType::Service);
     log::info!("***** Starting UDS Actor Service *****");
 
-    tls::init_tls(None);
-
     // Create the async launcher with our main async function
     let launcher = AsyncService::new(executor);
     let restart_flag = launcher.get_restart_flag();
@@ -94,13 +92,18 @@ fn main() {
 // Real "main" async logic of the service
 async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
+    
+    let cfg = platform.config().read().await.clone();
+
     // Setup logging level from config
-    let log_level = platform.config().read().await.log_level();
+    let log_level = cfg.log_level();
     log::set_log_level(log_level.into());
     log::info!("Logging level set to: {:?}", log_level);
 
+    // Initialize TLS with configured ciphers
+    tls::init_tls(cfg.ssl_ciphers());
+
     // Validate config. If no config, this will error out
-    let cfg = platform.config().read().await.clone();
     if !cfg.is_valid() {
         log::error!("Invalid configuration, cannot start service");
         return Err(anyhow::anyhow!(

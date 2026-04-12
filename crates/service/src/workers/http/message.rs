@@ -10,12 +10,16 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.from_ws.subscribe();
-    if let Some(env) = wait_message_arrival::<MessageRequest>(&mut rx, Some(platform.get_stop())).await {
+    if let Some(env) =
+        wait_message_arrival::<MessageRequest>(&mut rx, Some(platform.get_stop())).await
+    {
         log::debug!("Received MessageRequest");
         // Send logoff to wsclient
         let envelope = shared::ws::types::RpcEnvelope {
             id: None,
-            msg: shared::ws::types::RpcMessage::MessageRequest(MessageRequest { message: env.msg.message }),
+            msg: shared::ws::types::RpcMessage::MessageRequest(MessageRequest {
+                message: env.msg.message,
+            }),
         };
         if let Err(e) = server_info.to_ws.send(envelope).await {
             log::error!("Failed to send MessageRequest to wsclient: {}", e);
@@ -25,7 +29,6 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
     }
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -75,7 +78,9 @@ mod tests {
         for _i in 0..3 {
             let req = RpcEnvelope {
                 id: None,
-                msg: RpcMessage::MessageRequest(MessageRequest { message: "test message".into() }),
+                msg: RpcMessage::MessageRequest(MessageRequest {
+                    message: "test message".into(),
+                }),
             };
             if let Err(e) = wsclient_to_workers.send(req) {
                 log::error!("Failed to send MessageRequest: {}", e);
@@ -89,6 +94,5 @@ mod tests {
         let logged_msgs = msg.read().await;
         log::info!("logged_msgs: {:?}", logged_msgs);
         assert!(logged_msgs.len() == 3);
-
     }
 }

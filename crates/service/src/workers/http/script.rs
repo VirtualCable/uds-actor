@@ -10,12 +10,17 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.from_ws.subscribe();
-    if let Some(env) = wait_message_arrival::<ScriptExecRequest>(&mut rx, Some(platform.get_stop())).await {
+    if let Some(env) =
+        wait_message_arrival::<ScriptExecRequest>(&mut rx, Some(platform.get_stop())).await
+    {
         log::debug!("Received ScriptExecRequest");
         // Send logoff to wsclient
         let envelope = shared::ws::types::RpcEnvelope {
             id: None,
-            msg: shared::ws::types::RpcMessage::ScriptExecRequest(ScriptExecRequest { script_type: env.msg.script_type, script: env.msg.script }),
+            msg: shared::ws::types::RpcMessage::ScriptExecRequest(ScriptExecRequest {
+                script_type: env.msg.script_type,
+                script: env.msg.script,
+            }),
         };
         if let Err(e) = server_info.to_ws.send(envelope).await {
             log::error!("Failed to send ScriptExecRequest to wsclient: {}", e);
@@ -74,7 +79,10 @@ mod tests {
         for _i in 0..3 {
             let req = RpcEnvelope {
                 id: None,
-                msg: RpcMessage::ScriptExecRequest(ScriptExecRequest { script_type: "test".into(), script: "test script".into() }),
+                msg: RpcMessage::ScriptExecRequest(ScriptExecRequest {
+                    script_type: "test".into(),
+                    script: "test script".into(),
+                }),
             };
             if let Err(e) = wsclient_to_workers.send(req) {
                 log::error!("Failed to send ScriptExecRequest: {}", e);
@@ -88,6 +96,5 @@ mod tests {
         let logged_msgs = msg.read().await;
         log::info!("logged_msgs: {:?}", logged_msgs);
         assert!(logged_msgs.len() == 3);
-
     }
 }

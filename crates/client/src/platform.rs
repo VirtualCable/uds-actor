@@ -2,12 +2,16 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use shared::{
-    system,
     sync::OnceSignal,
+    system,
     ws::client::{WsClient, websocket_client_tasks},
 };
 
-use crate::{gui, session::SessionManagement, ws_reqs::{WsReqs, WsRequester}};
+use crate::{
+    gui,
+    session::SessionManagement,
+    ws_reqs::{WsReqs, WsRequester},
+};
 
 #[derive(Clone)]
 pub struct Platform {

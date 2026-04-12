@@ -2,10 +2,7 @@ use anyhow::Result;
 
 use shared::{
     log,
-    ws::{
-        types::{ScreenshotRequest},
-        wait_message_arrival,
-    },
+    ws::{types::ScreenshotRequest, wait_message_arrival},
 };
 
 use crate::platform;
@@ -13,10 +10,14 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(platform: platform::Platform) -> Result<()> {
     let mut rx = platform.ws_client().from_ws.subscribe();
-    while let Some(env) = wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.stop())).await
+    while let Some(env) =
+        wait_message_arrival::<ScreenshotRequest>(&mut rx, Some(platform.stop())).await
     {
         // Currently, no screenshot supported
-        log::warn!("Received screenshot request, but screenshot worker is not implemented: {:?}", env);
+        log::warn!(
+            "Received screenshot request, but screenshot worker is not implemented: {:?}",
+            env
+        );
     }
 
     Ok(())
@@ -37,11 +38,9 @@ mod tests {
         let stop = platform.stop();
         // Run alive worker
         let worker_handle = tokio::spawn(async move {
-            let res = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                super::worker(platform),
-            )
-            .await;
+            let res =
+                tokio::time::timeout(std::time::Duration::from_secs(10), super::worker(platform))
+                    .await;
             log::info!("Alive worker finished with result: {:?}", res);
         });
 
@@ -52,5 +51,4 @@ mod tests {
         // Wait for the worker to finish
         let _ = worker_handle.await;
     }
-
 }

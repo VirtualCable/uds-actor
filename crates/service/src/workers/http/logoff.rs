@@ -91,6 +91,5 @@ mod tests {
         let logged_msgs = msg.read().await;
         log::info!("logged_msgs: {:?}", logged_msgs);
         assert!(logged_msgs.len() == 3);
-
     }
 }

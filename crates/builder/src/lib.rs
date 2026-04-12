@@ -1,5 +1,5 @@
 // uds-build/src/lib.rs
-use chrono::{Datelike, Utc, NaiveDate};
+use chrono::{Datelike, NaiveDate, Utc};
 use winres::WindowsResource;
 
 pub struct BuildInfo<'a> {
@@ -41,7 +41,10 @@ pub fn build_windows(build_info: BuildInfo) {
     res.set_language(0x0409);
 
     res.set("FileVersion", &format!("{major}.{minor}.{patch}.{build}"));
-    res.set("ProductVersion", &format!("{major}.{minor}.{patch}.{build}"));
+    res.set(
+        "ProductVersion",
+        &format!("{major}.{minor}.{patch}.{build}"),
+    );
     res.set("ProductName", build_info.product_name);
     res.set("FileDescription", build_info.description);
     res.set(

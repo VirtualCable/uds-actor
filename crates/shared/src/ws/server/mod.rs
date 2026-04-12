@@ -54,6 +54,7 @@ struct ServerStartInfo {
     pub tracker: RequestTracker,
     pub stop: OnceSignal,
     pub secret: String,
+    pub ciphers: Option<String>,
 }
 
 #[derive(Clone)]
@@ -266,8 +267,14 @@ pub async fn websocket_loop(
 async fn server(config: &ServerStartInfo) -> Result<()> {
     log::debug!("Initializing server {}", config.port);
     let state = ServerState::from(config);
-
-    let tls_config = certool::rustls_config_from_pem(config.cert_info.clone())?;
+    
+    let mut cert_info = config.cert_info.clone();
+    // If certificate info from broker doesn't have ciphers, use the ones from our config
+    if cert_info.ciphers.is_none() {
+        cert_info.ciphers = config.ciphers.clone();
+    }
+    
+    let tls_config = certool::rustls_config_from_pem(cert_info)?;
     log::debug!("TLS configuration loaded");
 
     let handle = axum_server::Handle::new();
@@ -349,6 +356,7 @@ pub async fn start_server(
     stop: OnceSignal,
     secret: String,
     port: Option<u16>,
+    ciphers: Option<String>,
 ) -> Result<(ServerContext, tokio::task::JoinHandle<()>)> {
     // Create channels
     let (to_ws, from_workers) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
@@ -364,6 +372,7 @@ pub async fn start_server(
         tracker: tracker.clone(),
         stop: stop.clone(),
         secret,
+        ciphers,
     };
 
     // Launch the server task

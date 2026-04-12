@@ -25,9 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use std::sync::Arc;
-use windows::{
-    Win32::Foundation::{CloseHandle, HANDLE},
-};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 
 #[derive(Debug)]
 struct HandleInner {
@@ -112,7 +110,11 @@ impl AsRef<HANDLE> for SafeHandle {
 
 impl std::fmt::Display for SafeHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SafeHandle({:p}, {})", self.inner.handle.0, self.inner.owned)
+        write!(
+            f,
+            "SafeHandle({:p}, {})",
+            self.inner.handle.0, self.inner.owned
+        )
     }
 }
 

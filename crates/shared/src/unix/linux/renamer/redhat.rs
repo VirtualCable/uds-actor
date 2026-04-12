@@ -41,9 +41,7 @@ pub(super) fn rename(new_name: &str) -> Result<()> {
         .arg("set-hostname")
         .arg(new_name)
         .status()?;
-    let _ = Command::new("/bin/hostname")
-        .arg(new_name)
-        .status()?;
+    let _ = Command::new("/bin/hostname").arg(new_name).status()?;
 
     if let Ok(file) = File::open("/etc/hosts") {
         let lines: Vec<String> = io::BufReader::new(file)

@@ -29,13 +29,11 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 fn main() {
     slint_build::compile("src/config.slint").unwrap();
     #[cfg(windows)]
-    builder::build_windows( 
-        builder::BuildInfo {
-            product_name: "UDS Actor Config Unmanaged",
-            description: "UDS Actor Config Unmanaged",
-            icon: None,
-            bmp: None,
-            requires_admin: !cfg!(debug_assertions),
-        }
-    );
+    builder::build_windows(builder::BuildInfo {
+        product_name: "UDS Actor Config Unmanaged",
+        description: "UDS Actor Config Unmanaged",
+        icon: None,
+        bmp: None,
+        requires_admin: !cfg!(debug_assertions),
+    });
 }

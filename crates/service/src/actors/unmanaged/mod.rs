@@ -2,11 +2,11 @@ use anyhow::Result;
 
 use shared::{log, ws::server};
 
-use crate::{platform, workers, common};
+use crate::{common, platform, workers};
 
 pub async fn run(platform: platform::Platform) -> Result<()> {
     log::info!("Unmanaged service starting");
-    
+
     // Ensure we have all requisites to start
     common::wait_for_readyness(&platform).await?;
 
@@ -38,8 +38,10 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             .get_secret()
             .unwrap()
             .to_string(),
-        None,  // Default port
-    ).await?;
+        Some(shared::consts::UDS_PORT),
+        platform.config().read().await.ssl_ciphers().map(|s| s.to_string()),
+    )
+    .await?;
 
     log::info!("Http server started");
 

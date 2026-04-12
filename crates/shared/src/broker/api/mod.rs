@@ -136,9 +136,7 @@ impl UdsBrokerApi {
         }
 
         // panic if client cannot be built, as this is a programming error (invalid URL, etc)
-        let client = builder
-            .build()
-            .unwrap();
+        let client = builder.build().unwrap();
 
         // Generate a secret using random rand crate
         let rng = rand::rng();

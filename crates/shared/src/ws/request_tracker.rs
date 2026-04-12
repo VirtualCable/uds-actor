@@ -1,6 +1,13 @@
-use std::{collections::HashMap, sync::{atomic::{AtomicU64, Ordering}, Arc}, time::Instant};
-use tokio::sync::{Mutex, oneshot};
 use anyhow::Result;
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Instant,
+};
+use tokio::sync::{Mutex, oneshot};
 
 use crate::{
     log,

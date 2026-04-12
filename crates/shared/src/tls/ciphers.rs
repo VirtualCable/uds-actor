@@ -36,7 +36,7 @@ fn openssl_to_rustls_cipher_name(cipher: &str) -> Option<SupportedCipherSuite> {
         "ECDHE-ECDSA-CHACHA20-POLY1305-SHA256" => "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
         "ECDHE-RSA-CHACHA20-POLY1305-SHA256" => "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
         // Not found
-        _ =>  return None,
+        _ => return None,
     };
     // Only return the rustls cipher name if it is in the list of rustls::crypto::aws_lc_rs::ALL_CIPHER_SUITES
 
@@ -142,9 +142,6 @@ mod tests {
         let provider = provider(Some(""));
         let ciphers_len = SECURE_CIPHERS.split(':').count();
 
-        assert_eq!(
-            provider.cipher_suites.len(),
-            ciphers_len
-        );
+        assert_eq!(provider.cipher_suites.len(), ciphers_len);
     }
 }

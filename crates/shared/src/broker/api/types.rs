@@ -67,8 +67,6 @@ pub struct RegisterRequest<'a> {
     pub mac: &'a str,
     pub commands: RegisterCommands,
     // Compat witho server 4.x, compats directly on root
-
-
     pub log_level: u32,
     pub os: &'a str,
 }
@@ -132,7 +130,7 @@ pub struct TestRequest<'a> {
 pub struct ApiLoginResponse {
     pub result: String, // Info
     pub error: Option<String>,
-    pub token: String,  // If unssuccessful, Token will be None and decoding will fail
+    pub token: String, // If unssuccessful, Token will be None and decoding will fail
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -208,13 +206,13 @@ impl From<crate::system::NetworkInterface> for InterfaceInfo {
 // So we can use it now on 4.x. Will rename the fields to the new ones asap
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Authenticator {
-    #[serde(rename = "auth_id")]  // On future releases, this will be "id"
+    #[serde(rename = "auth_id")] // On future releases, this will be "id"
     pub id: String,
-    #[serde(rename = "auth_label")]  // On future releases, this will be "label"
+    #[serde(rename = "auth_label")] // On future releases, this will be "label"
     pub label: String,
-    #[serde(rename = "auth")]  // On future releases, this will be "name"
+    #[serde(rename = "auth")] // On future releases, this will be "name"
     pub name: String,
-    #[serde(rename = "type")]  // "type" is a reserved word, so we use "auth_type" in struct
+    #[serde(rename = "type")] // "type" is a reserved word, so we use "auth_type" in struct
     pub auth_type: String,
     pub priority: i32,
     pub custom: bool,
@@ -232,7 +230,6 @@ pub struct ClientInfo {
     pub url: String,
     pub session_id: String,
 }
-
 
 // Log levels, must match server ones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

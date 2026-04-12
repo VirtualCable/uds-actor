@@ -1,5 +1,5 @@
 use anyhow::Result;
-use futures_util::{StreamExt, SinkExt};
+use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{Connector, tungstenite::protocol::Message};
 
@@ -38,7 +38,7 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
                 e
             })?;
 
-    let (mut write, mut read) = ws_stream.split();        
+    let (mut write, mut read) = ws_stream.split();
 
     // Receiver task, from websocket to broadcast
     tokio::spawn({
@@ -63,9 +63,10 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
                     Ok(Message::Close(_)) => {
                         close_sent = true;
                         RpcEnvelope {
-                        id: None,
-                        msg: RpcMessage::Close(Close),
-                    }},
+                            id: None,
+                            msg: RpcMessage::Close(Close),
+                        }
+                    }
                     Ok(Message::Ping(data)) => RpcEnvelope {
                         id: None,
                         msg: RpcMessage::Ping(crate::ws::types::Ping(data.to_vec())),
@@ -106,8 +107,5 @@ pub async fn websocket_client_tasks(port: u16, capacity: usize) -> Result<WsClie
         }
     });
 
-    Ok(WsClient {
-        from_ws,
-        to_ws,
-    })
+    Ok(WsClient { from_ws, to_ws })
 }

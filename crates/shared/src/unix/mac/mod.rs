@@ -35,9 +35,9 @@ use crate::log;
 
 mod computer;
 mod idle;
+pub mod installer;
 mod network;
 mod session;
-pub mod installer;
 
 pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(MacSystem::new())
@@ -182,10 +182,7 @@ impl crate::system::System for MacSystem {
     }
 
     fn protect_file_for_owner_only(&self, path: &str) -> Result<()> {
-        log::debug!(
-            "MacSystem::protect_file_for_owner_only called: {}",
-            path
-        );
+        log::debug!("MacSystem::protect_file_for_owner_only called: {}", path);
         Ok(())
     }
 

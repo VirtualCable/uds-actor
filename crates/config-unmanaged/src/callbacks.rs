@@ -1,6 +1,6 @@
-use slint::ComponentHandle;
-use shared::{broker::api::types, config, log};
 use crate::AppWindow;
+use shared::{broker::api::types, config, log};
+use slint::ComponentHandle;
 
 /// Callback for the "Save" button
 pub fn bnt_save_clicked(ui: &AppWindow) {
@@ -32,7 +32,11 @@ pub fn bnt_save_clicked(ui: &AppWindow) {
         post_command: None,
         log_level: log_level.into(),
         config: config::ActorDataConfiguration {
-            ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers) },
+            ssl_ciphers: if ciphers.is_empty() {
+                None
+            } else {
+                Some(ciphers)
+            },
             ..Default::default()
         },
         data: None,
@@ -69,7 +73,7 @@ pub fn btn_test_clicked(ui: &AppWindow) {
             .show();
         return;
     }
-    
+
     let actor_cfg = cfg_res.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
         let _ = rfd::MessageDialog::new()
@@ -85,7 +89,10 @@ pub fn btn_test_clicked(ui: &AppWindow) {
     let ui_handle = ui.as_weak();
 
     std::thread::spawn(move || {
-        match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(1500))) {
+        match shared::broker::api::block::test(
+            actor_cfg,
+            Some(std::time::Duration::from_millis(1500)),
+        ) {
             Ok(msg) => {
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {

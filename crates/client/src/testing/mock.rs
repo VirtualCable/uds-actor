@@ -92,9 +92,8 @@ pub async fn mock_platform(
         mpsc::channel::<shared::ws::types::RpcEnvelope<shared::ws::types::RpcMessage>>(32);
     let ws_client = WsClient { from_ws, to_ws };
 
-    let ws_requester = ws_requester.unwrap_or_else(|| {
-        std::sync::Arc::new(WsReqsMock::new(calls.clone()))
-    });
+    let ws_requester =
+        ws_requester.unwrap_or_else(|| std::sync::Arc::new(WsReqsMock::new(calls.clone())));
 
     (
         crate::platform::Platform::new_with_params(

@@ -29,7 +29,9 @@ impl SessionManagement for UnixSessionManager {
     }
 }
 
-pub async fn new_session_manager(stop: OnceSignal) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
+pub async fn new_session_manager(
+    stop: OnceSignal,
+) -> std::sync::Arc<dyn SessionManagement + Send + Sync> {
     std::sync::Arc::new(UnixSessionManager::new(stop).await)
 }
 

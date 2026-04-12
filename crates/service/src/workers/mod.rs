@@ -26,7 +26,7 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
-use shared::{ws::server::ServerContext};
+use shared::ws::server::ServerContext;
 
 use crate::platform;
 

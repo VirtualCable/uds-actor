@@ -110,7 +110,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             .get_secret()
             .unwrap()
             .to_string(),
-        None, // Default port
+        Some(shared::consts::UDS_PORT),
+        platform.config().read().await.ssl_ciphers().map(|s| s.to_string()),
     )
     .await?;
 

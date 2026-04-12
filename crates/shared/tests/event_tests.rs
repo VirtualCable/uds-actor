@@ -106,11 +106,17 @@ async fn event_wait_timeout_async() {
     let ev = WindowsEvent::new();
 
     // Not signaled, should timeout
-    let signaled = ev.wait_timeout_async(Duration::from_millis(100)).await.is_ok();
+    let signaled = ev
+        .wait_timeout_async(Duration::from_millis(100))
+        .await
+        .is_ok();
     assert!(!signaled);
 
     // Now we signal it and it should wake up
     ev.signal();
-    let signaled = ev.wait_timeout_async(Duration::from_millis(100)).await.is_ok();
+    let signaled = ev
+        .wait_timeout_async(Duration::from_millis(100))
+        .await
+        .is_ok();
     assert!(signaled);
 }

@@ -99,11 +99,8 @@ pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
     // Now, we need to merge IP and MAC info for the same interface
     let mut merged_result: Vec<NetworkInterface> = Vec::new();
     for iface in result {
-        if let Some(existing) = merged_result
-            .iter_mut()
-            .find(|i| i.name == iface.name)
-        {
-            if !iface.ip_addr.is_empty() {          
+        if let Some(existing) = merged_result.iter_mut().find(|i| i.name == iface.name) {
+            if !iface.ip_addr.is_empty() {
                 existing.ip_addr = iface.ip_addr;
             }
             if !iface.mac.is_empty() {

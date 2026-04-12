@@ -3,11 +3,11 @@ use shared::log;
 
 mod macros;
 
-mod logoff;
-mod screenshot;
 mod alive;
-mod pong;
 mod close;
+mod logoff;
+mod pong;
+mod screenshot;
 
 use crate::spawn_workers;
 
