@@ -1,79 +1,118 @@
-use fltk::prelude::*;
-
+use slint::ComponentHandle;
 use shared::{broker::api::types, config, log};
+use crate::AppWindow;
 
-use crate::config_unmanaged_fltk::ConfigGui;
-
-/// Callback for the "Register" button
-/// - Validate fields
-/// - Login to API
-/// - Register the actor
-pub fn bnt_save_clicked(cfg_window: &ConfigGui) {
-    let uds_server = cfg_window.input_uds_server.value().trim().to_string();
-
-    let token = cfg_window.input_token.value().trim().to_string();
-    let net = cfg_window.input_net.value().trim().to_string(); // Can be enpty
-    let log_level: types::LogLevel = (cfg_window.choice_log_level.value() as u8).min(4).into();
+/// Callback for the "Save" button
+pub fn bnt_save_clicked(ui: &AppWindow) {
+    let uds_server = ui.get_server_host().trim().to_string();
+    let token = ui.get_service_token().trim().to_string();
+    let net = ui.get_net_restriction().trim().to_string();
+    let log_level_idx = ui.get_active_log_level();
+    let log_level: types::LogLevel = (log_level_idx as u8).min(4).into();
+    let ciphers = ui.get_ssl_ciphers().trim().to_string();
 
     if uds_server.is_empty() {
-        fltk::dialog::alert_default("Hostname is required");
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Validation Error")
+            .set_description("Hostname is required")
+            .show();
         return;
     }
 
     let final_cfg = config::ActorConfiguration {
         broker_url: format!("https://{}/uds/rest/", uds_server),
-        verify_ssl: cfg_window.choice_ssl_validation.value() == 1,
+        verify_ssl: ui.get_verify_ssl(),
         actor_type: config::ActorType::Unmanaged,
-        master_token: Some(token),
+        master_token: if token.is_empty() { None } else { Some(token) },
         own_token: None,
-        restrict_net: Some(net),
+        restrict_net: if net.is_empty() { None } else { Some(net) },
         pre_command: None,
         runonce_command: None,
         post_command: None,
         log_level: log_level.into(),
-        config: config::ActorDataConfiguration::default(),
+        config: config::ActorDataConfiguration {
+            ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers) },
+            ..Default::default()
+        },
         data: None,
     };
 
     let mut config_storage = config::new_config_storage();
     if let Err(e) = config_storage.save_config(&final_cfg) {
-        fltk::dialog::alert_default(&format!("Failed to save config: {}", e));
         log::error!("Failed to save config: {}", e);
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Save Error")
+            .set_description(format!("Failed to save config: {}", e))
+            .show();
     } else {
-        fltk::dialog::message_default("Configuration saved successfully!\n");
-        let mut btn_test = cfg_window.button_test.clone();
-        btn_test.activate(); // Enable test button
         log::debug!("Config saved successfully");
+        ui.set_test_enabled(true);
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Info)
+            .set_title("Success")
+            .set_description("Configuration saved successfully!")
+            .show();
     }
 }
 
-pub fn btn_test_clicked(cfg_window: &ConfigGui) {
+pub fn btn_test_clicked(ui: &AppWindow) {
     log::debug!("Test connection button clicked");
-    let cfg = config::new_config_storage().load_config();
-    if let Err(err) = cfg {
-        fltk::dialog::alert_default(&format!("Failed to load existing config: {}", err));
+    let cfg_res = config::new_config_storage().load_config();
+    if let Err(err) = cfg_res {
         log::error!("Failed to load existing config: {}", err);
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Config Error")
+            .set_description(format!("Failed to load existing config: {}", err))
+            .show();
         return;
     }
-    // Must have uds_server & token
-    let actor_cfg = cfg.unwrap();
+    
+    let actor_cfg = cfg_res.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
-        fltk::dialog::alert_default("Nothing to test: Only actors with tokens can be tested");
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("No Token")
+            .set_description("Nothing to test: Only actors with tokens can be tested")
+            .show();
         return;
     }
 
-    match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(800))) {
-        Ok(msg) => {
-            fltk::dialog::message_default(&format!("Connection successful:\n{}", msg));
-            log::debug!("Connection test successful: {}", msg);
-        }
-        Err(e) => {
-            fltk::dialog::alert_default(&format!("Connection failed:\n{}", e));
-            log::error!("Connection test failed: {}", e);
-            // Disable again if it fails
-            let mut btn_test = cfg_window.button_test.clone();
-            btn_test.deactivate();
+    ui.set_loading(true);
+    ui.set_status_text("Testing connection...".into());
+    let ui_handle = ui.as_weak();
 
+    std::thread::spawn(move || {
+        match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(1500))) {
+            Ok(msg) => {
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text("Connection successful".into());
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Info)
+                            .set_title("Test Success")
+                            .set_description(format!("Connection successful:\n{}", msg))
+                            .show();
+                    }
+                });
+            }
+            Err(e) => {
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text(format!("Connection failed: {}", e).into());
+                        ui.set_test_enabled(false);
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Test Failure")
+                            .set_description(format!("Connection failed:\n{}", e))
+                            .show();
+                    }
+                });
+            }
         }
-    }
+    });
 }

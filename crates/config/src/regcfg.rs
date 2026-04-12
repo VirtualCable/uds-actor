@@ -1,10 +1,7 @@
-use fltk::prelude::*;
-
 use shared::{broker::api::types, config, log};
+use crate::AppWindow;
 
-use crate::config_fltk::ConfigGui;
-
-pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfiguration {
+pub fn broker_api_config(hostname: &str, verify_ssl: bool, ciphers: &str) -> config::ActorConfiguration {
     config::ActorConfiguration {
         broker_url: format!("https://{hostname}/uds/rest/"),
         verify_ssl,
@@ -16,54 +13,51 @@ pub fn broker_api_config(hostname: &str, verify_ssl: bool) -> config::ActorConfi
         runonce_command: None,
         post_command: None,
         log_level: 0,
-        config: config::ActorDataConfiguration::default(),
+        config: config::ActorDataConfiguration {
+            ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers.to_string()) },
+            ..Default::default()
+        },
         data: None,
     }
 }
 
-pub fn fill_window_fields(cfg_window: &mut ConfigGui) {
+pub fn fill_window_fields(ui: &AppWindow) {
     // Fill the fields from existing config
     log::debug!("Filling window fields from existing config");
     let mut config_storage = config::new_config_storage();
-    let config = config_storage.config(false);
-    if let Ok(actor_cfg) = config {
+    let res = config_storage.config(false);
+    if let Ok(actor_cfg) = res {
         log::debug!("Existing config found: {:?}", actor_cfg);
+        
         // If we have a valid token, enable the test button
-        if actor_cfg.token().is_empty() {
-            cfg_window.button_test.deactivate();
-        } else {
-            cfg_window.button_test.activate();
-        }
+        ui.set_test_enabled(!actor_cfg.token().is_empty());
 
-        if actor_cfg.verify_ssl {
-            cfg_window.choice_ssl_validation.set_value(1);
-        } else {
-            cfg_window.choice_ssl_validation.set_value(0);
-        }
-        cfg_window.choice_ssl_validation.redraw();
+        ui.set_verify_ssl(actor_cfg.verify_ssl);
+
         if !actor_cfg.broker_url.is_empty() {
             // Remove https:// and /uds/rest/ if present
             let url = actor_cfg
                 .broker_url
                 .trim_start_matches("https://")
                 .trim_end_matches("/uds/rest/");
-            cfg_window.input_uds_server.set_value(url);
+            ui.set_server_host(url.into());
         }
 
         let log_level: types::LogLevel = actor_cfg.log_level.into();
+        ui.set_active_log_level(u8::from(log_level) as i32);
 
-        cfg_window
-            .choice_log_level
-            .set_value(u8::from(log_level) as i32);
-        cfg_window.choice_log_level.redraw();
         if let Some(pre_cmd) = actor_cfg.pre_command {
-            cfg_window.input_preconnect_cmd.set_value(&pre_cmd);
+            ui.set_preconnect_cmd(pre_cmd.into());
         }
         if let Some(runonce_cmd) = actor_cfg.runonce_command {
-            cfg_window.input_runonce_cmd.set_value(&runonce_cmd);
+            ui.set_runonce_cmd(runonce_cmd.into());
         }
         if let Some(post_cmd) = actor_cfg.post_command {
-            cfg_window.input_postconfig_cmd.set_value(&post_cmd);
+            ui.set_postconfig_cmd(post_cmd.into());
+        }
+        
+        if let Some(ciphers) = actor_cfg.config.ssl_ciphers {
+            ui.set_ssl_ciphers(slint::SharedString::from(ciphers));
         }
     } else {
         log::debug!("No existing config found, using defaults");

@@ -11,9 +11,11 @@ shared = { path = "../shared" }
 anyhow = { workspace = true }
 
 # Gui
-fltk = { workspace = true }
+slint = { workspace = true }
+rfd = { workspace = true }
 
 reqwest = { workspace = true }
 
 [build-dependencies]
 builder = { path = "../builder" }
+slint-build = { workspace = true }

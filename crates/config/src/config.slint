@@ -1,0 +1,281 @@
+import { Button, LineEdit, ComboBox, GroupBox, VerticalBox, HorizontalBox, TabWidget, TextEdit } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "UDS Actor Configuration";
+    icon: @image-url("../../../assets/img/uds-128.png");
+    min-width: 500px;
+    min-height: 520px;
+    
+    callback register_clicked();
+    callback test_clicked();
+    callback host_changed(string);
+    callback authenticator_changed(string, int);
+    callback ssl_changed(bool);
+    callback log_level_changed(string, int);
+    callback close_clicked();
+    
+    callback browse_preconnect_clicked();
+    callback browse_runonce_clicked();
+    callback browse_postconfig_clicked();
+    
+    pure callback validate_ciphers(string) -> bool;
+
+    in-out property <string> server_host: "";
+    in-out property <bool> verify_ssl: true;
+    in-out property <string> username: "";
+    in-out property <string> password_val: "";
+    in-out property <[string]> authenticators: ["Administration"];
+    in-out property <int> active_authenticator: 0;
+    in-out property <[string]> log_levels: ["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"];
+    in-out property <int> active_log_level: 1;
+    
+    in-out property <string> preconnect_cmd: "";
+    in-out property <string> runonce_cmd: "";
+    in-out property <string> postconfig_cmd: "";
+    
+    in-out property <string> ssl_ciphers: "";
+    
+    in-out property <string> status_text: "Ready";
+    in-out property <bool> test_enabled: false;
+    in-out property <bool> loading: false;
+
+    // Track host focus to trigger refresh on focus-out
+    private property <bool> host_focused: host_input.has-focus;
+    changed host_focused => {
+        if (!root.host_focused) {
+            root.host_changed(host_input.text);
+        }
+    }
+
+    VerticalBox {
+        alignment: start; 
+        padding: 24px;
+        spacing: 12px;
+
+        HorizontalLayout {
+            height: 80px;
+            alignment: center;
+            spacing: 15px;
+            
+            Rectangle {
+                width: 48px; height: 48px;
+                Image {
+                    source: @image-url("../../../assets/img/uds-128.png");
+                    width: 48px;
+                    height: 48px;
+                    y: (Math.sin((animation-tick() / (root.loading ? 150ms : 400ms)) * 1rad) * (root.loading ? 6px : 3px));
+                    transform-rotation: (Math.cos((animation-tick() / (root.loading ? 200ms : 600ms)) * 1rad) * (root.loading ? 5deg : 2deg));
+                }
+            }
+            
+            Text {
+                text: "UDS Actor";
+                font-size: 22px;
+                font-weight: 700;
+                color: #0055aa;
+                vertical-alignment: center;
+            }
+        }
+
+        TabWidget {
+            Tab {
+                title: "General";
+                VerticalLayout {
+                    padding-top: 10px;
+                    spacing: 10px;
+                    
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "SSL Validation:"; width: 140px; vertical-alignment: center; }
+                        ComboBox {
+                            model: ["Ignore certificate", "Verify certificate"];
+                            current-index: root.verify_ssl ? 1 : 0;
+                            selected(val) => { 
+                                root.verify_ssl = (val == "Verify certificate");
+                                root.ssl_changed(root.verify_ssl);
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "UDS Broker Host:"; width: 140px; vertical-alignment: center; }
+                        host_input := LineEdit {
+                            text: root.server_host;
+                            placeholder-text: "broker.example.com";
+                            edited(val) => { root.server_host = val; } 
+                            accepted(val) => { root.host_changed(val); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Authenticator:"; width: 140px; vertical-alignment: center; }
+                        ComboBox {
+                            model: root.authenticators;
+                            current-index: root.active_authenticator;
+                            selected(val) => { 
+                                root.authenticator_changed(val, self.current-index);
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Username:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.username;
+                            edited(val) => { root.username = val; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Password:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.password_val;
+                            input-type: password;
+                            edited(val) => { root.password_val = val; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Log level:"; width: 140px; vertical-alignment: center; }
+                        ComboBox {
+                            model: root.log_levels;
+                            current-index: root.active_log_level;
+                            selected(val) => {
+                                root.log_level_changed(val, self.current-index);
+                            }
+                        }
+                    }
+                }
+            }
+            Tab {
+                title: "Commands";
+                VerticalLayout {
+                    padding-top: 10px;
+                    spacing: 10px;
+                    
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Preconnect cmd:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.preconnect_cmd;
+                            edited(val) => { root.preconnect_cmd = val; }
+                        }
+                        Button {
+                            text: "Browse";
+                            width: 80px;
+                            clicked => { root.browse_preconnect_clicked(); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Runonce cmd:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.runonce_cmd;
+                            edited(val) => { root.runonce_cmd = val; }
+                        }
+                        Button {
+                            text: "Browse";
+                            width: 80px;
+                            clicked => { root.browse_runonce_clicked(); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Postconfig cmd:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.postconfig_cmd;
+                            edited(val) => { root.postconfig_cmd = val; }
+                        }
+                        Button {
+                            text: "Browse";
+                            width: 80px;
+                            clicked => { root.browse_postconfig_clicked(); }
+                        }
+                    }
+                }
+            }
+            Tab {
+                title: "Advanced";
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 10px;
+                    spacing: 10px;
+                    Text { 
+                        text: "Custom SSL Cipher Suites:"; 
+                        font-weight: 600;
+                    }
+                    TextEdit {
+                        text: root.ssl_ciphers;
+                        min-height: 140px;
+                        edited(val) => { root.ssl_ciphers = val; }
+                    }
+                    Text {
+                        text: "Leave empty to use secure defaults. Separated by colon (:).";
+                        font-size: 11px;
+                        color: #666;
+                        wrap: word-wrap;
+                    }
+                    if (!root.validate_ciphers(root.ssl_ciphers)): Text {
+                        text: "Warning: Some ciphers might be invalid or unsupported.";
+                        color: #aa0000;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: root.status_text;
+            font-size: 13px;
+            color: root.loading ? #0055aa : #666;
+            horizontal-alignment: center;
+            height: 40px;
+            vertical-alignment: center;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 20px;
+            height: 42px;
+            
+            Button {
+                text: "Register";
+                primary: true;
+                width: 150px;
+                height: 34px;
+                enabled: !root.loading;
+                clicked => { root.register_clicked(); }
+            }
+            Button {
+                text: "Test";
+                width: 100px;
+                height: 34px;
+                enabled: root.test_enabled && !root.loading;
+                clicked => { root.test_clicked(); }
+            }
+            Button {
+                text: "Close";
+                width: 100px;
+                height: 34px;
+                clicked => { root.close_clicked(); }
+            }
+        }
+    }
+}

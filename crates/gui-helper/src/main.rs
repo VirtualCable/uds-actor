@@ -26,9 +26,12 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
-use fltk::{app, button::Button, draw, enums::Font, frame::Frame, prelude::*, window::Window};
+use std::rc::Rc;
+use slint::Timer;
 
 const SIGNAL_FILE: &str = "uds-actor-gui-close-all";
+
+slint::include_modules!();
 
 /*
 This binary exists to solve a very specific problem:
@@ -40,7 +43,7 @@ your entire app dies — no cleanup, no mercy.
 We need to keep the main app alive to log the event and clean up properly.
 
 So instead, we isolate the GUI in a separate process — this one.
-It shows message dialogs, and nothing else. If FLTK crashes, only this process dies.
+It shows message dialogs, and nothing else.
 The main app stays alive, logs the event, and can clean up properly.
 
 Communication is minimal:
@@ -69,111 +72,31 @@ fn main() {
 }
 
 fn show_messagebox(title: &str, message: &str) {
-    let app = app::App::default();
-
-    // Split message
-    let lines = split_message(message, 64);
-
-    // Fixe font and size
-    let font = Font::Helvetica;
-    let font_size = 14;
-    draw::set_font(font, font_size);
-
-    // Line height
-    let char_height = draw::measure("A", false).1 + 4;
-
-    // maximum width of the lines
-    let max_width = lines
-        .iter()
-        .map(|l| draw::measure(l, false).0)
-        .max()
-        .unwrap_or(200);
-
-    let width = (max_width + 32).max(240);
-    let height = (lines.len() as i32 * char_height) + 100;
-
-    let mut window = Window::new(100, 100, width, height, title).center_screen();
-
-    // Add a frame for each line
-    for (i, line) in lines.iter().enumerate() {
-        let mut frame = Frame::new(
-            10,
-            10 + (i as i32 * char_height),
-            width - 20,
-            char_height,
-            line.as_str(),
-        );
-        frame.set_label_size(font_size);
-        frame.set_label_font(font);
-    }
-
-    let mut btn = Button::new(width / 2 - 40, height - 50, 80, 30, "Ok");
-
-    // Register button callback to close window
-    btn.set_callback({
-        let mut win = window.clone();
-        move |_| {
-            win.hide();
+    let ui = AppWindow::new().unwrap();
+    
+    ui.set_title_text(title.into());
+    ui.set_message_text(message.into());
+    
+    let ui_handle = ui.as_weak();
+    ui.on_ok_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            ui.hide().unwrap();
         }
     });
 
-    // Register a timeout callback to check for signal file
-    app::add_timeout3(0.5, {
-        let window = window.clone();
-        move |_| {
-            check_signal_file(window.clone());
+    let timer = Rc::new(Timer::default());
+    let ui_handle2 = ui.as_weak();
+    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(500), move || {
+        let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
+        if signal_file.exists() {
+            let _ = std::fs::remove_file(&signal_file);
+            if let Some(ui) = ui_handle2.upgrade() {
+                ui.hide().unwrap();
+            }
         }
     });
 
-    window.end();
-    window.show();
-
-    app.run().unwrap();
-}
-
-fn split_message(msg: &str, max_len: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-
-    // First split by explicit newlines
-    for paragraph in msg.split('\n') {
-        let mut current = paragraph.trim();
-
-        while !current.is_empty() {
-            if current.len() <= max_len {
-                lines.push(current.to_string());
-                break;
-            }
-            // find last whitespace before max_len
-            let split_at = current[..max_len]
-                .rfind(char::is_whitespace)
-                .unwrap_or(max_len);
-            let (line, rest) = current.split_at(split_at);
-            lines.push(line.trim().to_string());
-            current = rest.trim();
-        }
-
-        // If the paragraph was empty, preserve the blank line
-        if paragraph.is_empty() {
-            lines.push(String::new());
-        }
-    }
-
-    lines
-}
-
-fn check_signal_file(mut win: Window) {
-    let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
-    if signal_file.exists() {
-        let _ = std::fs::remove_file(&signal_file);
-        win.hide();
-    } else {
-        app::add_timeout3(0.5, {
-            let win = win.clone();
-            move |_| {
-                check_signal_file(win.clone());
-            }
-        });
-    }
+    ui.run().unwrap();
 }
 
 #[cfg(test)]

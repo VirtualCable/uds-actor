@@ -27,6 +27,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 fn main() {
+    slint_build::compile("src/config.slint").unwrap();
     #[cfg(windows)]
     builder::build_windows(
         builder::BuildInfo {

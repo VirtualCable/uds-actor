@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
-
-use fltk::prelude::*;
+use slint::ComponentHandle;
 
 use shared::{
     broker::api::{block, types},
@@ -8,225 +7,298 @@ use shared::{
     system::NetworkInterface,
 };
 
-use crate::{config_fltk::ConfigGui, regcfg};
+use crate::AppWindow;
+use crate::regcfg;
 
 pub fn uds_server_changed(
-    cfg_window: &ConfigGui,
+    ui: &AppWindow,
     saved_auths: Arc<Mutex<Vec<shared::broker::api::types::Authenticator>>>,
 ) {
-    // If udsserver is empty, do nothing
-    if cfg_window.input_uds_server.value().trim().is_empty() {
+    let hostname = ui.get_server_host().trim().to_string();
+    if hostname.is_empty() {
         return;
     }
-    let mut cfg_window = cfg_window.clone();
-    let hostname = cfg_window.input_uds_server.value().trim().to_string();
-    let ssl_validation = cfg_window.choice_ssl_validation.value() == 1;
+    
+    let verify_ssl = ui.get_verify_ssl();
+    let ui_handle = ui.as_weak();
+    
+    ui.set_loading(true);
+    ui.set_status_text("Querying authenticators...".into());
+
     std::thread::spawn(move || {
-        let actor_cfg = regcfg::broker_api_config(&hostname, ssl_validation);
+        let actor_cfg = regcfg::broker_api_config(&hostname, verify_ssl, "");
         match block::enumerate_authenticators(
             actor_cfg,
-            Some(std::time::Duration::from_millis(800)),
+            Some(std::time::Duration::from_millis(1500)),
         ) {
             Ok(mut auths) => {
-                if let Err(err) = fltk::app::lock() {
-                    log::error!("Failed to acquire FLTK lock: {}", err);
-                    return;
-                }
                 // Sort auths by name before storing
                 auths.sort_by(|a, b| a.name.cmp(&b.name));
 
                 // Store the authenticators in our Arc<Mutex<>>
-                saved_auths.lock().unwrap().clear();
-                saved_auths.lock().unwrap().extend(auths.clone());
-
-                cfg_window
-                    .input_uds_server
-                    .set_color(fltk::enums::Color::White);
-                log::debug!(
-                    "Authenticator enumeration successful, found {} authenticators",
-                    auths.len()
-                );
-                let mut auth_names: Vec<String> = auths.iter().map(|a| a.name.clone()).collect();
-                auth_names.sort();
-                auth_names.dedup();
-
-                // Add "Administration" as the first choice, and select it
-                cfg_window.choice_authenticator.add_choice("Administration");
-                cfg_window.choice_authenticator.set_value(0);
-                // Add all other authenticators
-                for (i, name) in auth_names.iter().enumerate() {
-                    cfg_window.choice_authenticator.add_choice(name);
-                    if name == "Administration" {
-                        cfg_window.choice_authenticator.set_value(i as i32);
-                    }
+                {
+                    let mut lock = saved_auths.lock().unwrap();
+                    lock.clear();
+                    lock.extend(auths.clone());
                 }
-                fltk::app::awake();
-                fltk::app::unlock();
+
+                let auth_names: Vec<String> = auths.iter().map(|a| a.name.clone()).collect();
+                
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text("Ready".into());
+                        
+                        let mut models = vec!["Administration".to_string()];
+                        models.extend(auth_names);
+                        
+                        let model = std::rc::Rc::new(slint::VecModel::from(
+                            models.into_iter().map(|s| s.into()).collect::<Vec<slint::SharedString>>()
+                        ));
+                        ui.set_authenticators(model.into());
+                        ui.set_active_authenticator(0);
+                    }
+                });
             }
             Err(e) => {
-                cfg_window
-                    .input_uds_server
-                    .set_color(fltk::enums::Color::from_rgb(255, 100, 100)); // Light red
                 log::warn!("Authenticator enumeration failed: {}", e);
-                cfg_window.choice_authenticator.clear();
-                cfg_window.choice_authenticator.add_choice("Administration");
-                cfg_window.choice_authenticator.set_value(0);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text(format!("Error: {}", e).into());
+                        
+                        let model = std::rc::Rc::new(slint::VecModel::from(vec!["Administration".into()]));
+                        ui.set_authenticators(model.into());
+                        ui.set_active_authenticator(0);
+                    }
+                });
             }
         };
-        cfg_window.input_uds_server.redraw();
-        cfg_window.choice_authenticator.redraw();
     });
 }
 
-/// Callback for the "Register" button
-/// - Validate fields
-/// - Login to API
-/// - Register the actor
 pub fn btn_register_clicked(
-    cfg_window: &ConfigGui,
+    ui: &AppWindow,
     auths: Arc<Mutex<Vec<shared::broker::api::types::Authenticator>>>,
     operations: Arc<dyn shared::system::System>,
     interface: &NetworkInterface,
 ) {
-    let hostname = cfg_window.input_uds_server.value().trim().to_string();
-    let selected_auth = if cfg_window.choice_authenticator.value() == 0 {
+    let hostname = ui.get_server_host().trim().to_string();
+    let auth_idx = ui.get_active_authenticator();
+    
+    let selected_auth = if auth_idx == 0 {
         "admin".to_string()
     } else {
-        let auths = auths.lock().unwrap();
-        if let Some(auth) = auths.get(cfg_window.choice_authenticator.value() as usize - 1) {
+        let auths_lock = auths.lock().unwrap();
+        if let Some(auth) = auths_lock.get(auth_idx as usize - 1) {
             auth.name.clone()
         } else {
             "admin".to_string()
         }
     };
-    let username = cfg_window.input_username.value().trim().to_string();
-    let password = cfg_window.input_password.value().to_string();
+    
+    let username = ui.get_username().trim().to_string();
+    let password = ui.get_password_val().to_string();
+    let ciphers = ui.get_ssl_ciphers().trim().to_string();
+    
     if hostname.is_empty() || username.is_empty() || password.is_empty() {
-        fltk::dialog::alert_default("Hostname, username and password are required");
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Validation Error")
+            .set_description("Hostname, username and password are required")
+            .show();
         return;
     }
-    // Test that we can login to api
-    let actor_cfg =
-        regcfg::broker_api_config(&hostname, cfg_window.choice_ssl_validation.value() == 1);
-    let token = match shared::broker::api::block::api_login(
-        actor_cfg.clone(),
-        &selected_auth,
-        &username,
-        &password,
-    ) {
-        Ok(token) => {
-            log::debug!("Login successful, got token: {}", token);
-            token
-        }
-        Err(_) => {
-            fltk::dialog::alert_default("Login failed");
-            return;
-        }
-    };
 
-    // Username on registry has @authname at the end
-    let username = username + "@" + &selected_auth;
+    ui.set_loading(true);
+    ui.set_status_text("Registering...".into());
 
-    let log_level: types::LogLevel = (cfg_window.choice_log_level.value() as u8).min(4).into();
+    let actor_cfg = regcfg::broker_api_config(&hostname, ui.get_verify_ssl(), &ciphers);
+    let ui_handle = ui.as_weak();
+    let ops = operations.clone();
+    let iface = interface.clone();
+    
+    std::thread::spawn(move || {
+        // Login
+        let token_res = shared::broker::api::block::api_login(
+            actor_cfg.clone(),
+            &selected_auth,
+            &username,
+            &password,
+        );
+        
+        match token_res {
+            Ok(token) => {
+                log::debug!("Login successful, got token");
+                
+                let username_full = format!("{}@{}", username, selected_auth);
+                let log_level_idx = ui_handle.upgrade().map(|ui| ui.get_active_log_level()).unwrap_or(1);
+                let log_level: types::LogLevel = (log_level_idx as u8).min(4).into();
+                
+                let os = ops.get_os_version().unwrap_or_default();
+                let computer_name = ops.get_computer_name().unwrap_or_default();
+                
+                let (pre_cmd, run_cmd, post_cmd) = if let Some(ui) = ui_handle.upgrade() {
+                    (
+                        ui.get_preconnect_cmd().trim().to_string(),
+                        ui.get_runonce_cmd().trim().to_string(),
+                        ui.get_postconfig_cmd().trim().to_string()
+                    )
+                } else {
+                    (String::new(), String::new(), String::new())
+                };
 
-    let os = operations.get_os_version().unwrap_or_default();
-    let computer_name = operations.get_computer_name().unwrap_or_default();
-    // Get selected index of choice_authenticator
-    let reg_auth = types::RegisterRequest {
-        version: shared::consts::VERSION,
-        build: shared::consts::BUILD,
-        hostname: computer_name.as_str(),
-        username: username.as_str(),
-        ip: interface.ip_addr.as_str(),
-        mac: interface.mac.as_str(),
-        commands: types::RegisterCommands {
-            pre_command: if cfg_window.input_preconnect_cmd.value().is_empty() {
-                None
-            } else {
-                Some(cfg_window.input_preconnect_cmd.value())
-            },
-            runonce_command: if cfg_window.input_runonce_cmd.value().is_empty() {
-                None
-            } else {
-                Some(cfg_window.input_runonce_cmd.value())
-            },
-            post_command: if cfg_window.input_postconfig_cmd.value().is_empty() {
-                None
-            } else {
-                Some(cfg_window.input_postconfig_cmd.value())
-            },
-        },
-        log_level: log_level.into(),
-        os: &os,
-    };
+                let reg_auth = types::RegisterRequest {
+                    version: shared::consts::VERSION,
+                    build: shared::consts::BUILD,
+                    hostname: &computer_name,
+                    username: &username_full,
+                    ip: &iface.ip_addr,
+                    mac: &iface.mac,
+                    commands: types::RegisterCommands {
+                        pre_command: if pre_cmd.is_empty() { None } else { Some(pre_cmd.clone()) },
+                        runonce_command: if run_cmd.is_empty() { None } else { Some(run_cmd.clone()) },
+                        post_command: if post_cmd.is_empty() { None } else { Some(post_cmd.clone()) },
+                    },
+                    log_level: log_level.into(),
+                    os: &os,
+                };
 
-    log::debug!(
-        "Registering with hostname: {}, username: {}, ip: {}, mac: {}",
-        reg_auth.hostname,
-        reg_auth.username,
-        reg_auth.ip,
-        reg_auth.mac
-    );
+                match shared::broker::api::block::register(actor_cfg.clone(), &reg_auth, &token) {
+                    Ok(master_token) => {
+                        log::debug!("Registration successful");
+                        
+                        let final_cfg = config::ActorConfiguration {
+                            broker_url: format!("https://{}/uds/rest/", hostname),
+                            verify_ssl: actor_cfg.verify_ssl,
+                            actor_type: config::ActorType::Managed,
+                            master_token: Some(master_token),
+                            own_token: None,
+                            restrict_net: None,
+                            pre_command: reg_auth.commands.pre_command,
+                            runonce_command: reg_auth.commands.runonce_command,
+                            post_command: reg_auth.commands.post_command,
+                            log_level: log_level.into(),
+                            config: config::ActorDataConfiguration {
+                                ssl_ciphers: if ciphers.is_empty() { None } else { Some(ciphers) },
+                                ..Default::default()
+                            },
+                            data: None,
+                        };
 
-    match shared::broker::api::block::register(actor_cfg, &reg_auth, &token) {
-        Ok(master_token) => {
-            log::debug!("Registration successful, got token: {}", master_token);
-            // Save config to file
-            let final_cfg = config::ActorConfiguration {
-                broker_url: format!("https://{}/uds/rest/", hostname),
-                verify_ssl: cfg_window.choice_ssl_validation.value() == 1,
-                actor_type: config::ActorType::Managed,
-                master_token: Some(master_token),
-                own_token: None,
-                restrict_net: None,
-                pre_command: reg_auth.commands.pre_command,
-                runonce_command: reg_auth.commands.runonce_command,
-                post_command: reg_auth.commands.post_command,
-                log_level: log_level.into(),
-                config: config::ActorDataConfiguration::default(),
-                data: None,
-            };
-            let mut config_storage = config::new_config_storage();
-            if let Err(e) = config_storage.save_config(&final_cfg) {
-                fltk::dialog::alert_default(&format!("Failed to save config: {}", e));
-                log::error!("Failed to save config: {}", e);
-            } else {
-                fltk::dialog::message_default("Registration successful!\n");
-                let mut btn_test = cfg_window.button_test.clone();
-                btn_test.activate(); // Enable test button
-                log::debug!("Config saved successfully");
+                        let mut config_storage = config::new_config_storage();
+                        let res = config_storage.save_config(&final_cfg);
+                        
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_handle.upgrade() {
+                                ui.set_loading(false);
+                                if let Err(e) = res {
+                                    ui.set_status_text(format!("Failed to save config: {}", e).into());
+                                    let _ = rfd::MessageDialog::new()
+                                        .set_level(rfd::MessageLevel::Error)
+                                        .set_title("Save Error")
+                                        .set_description(format!("Failed to save config: {}", e))
+                                        .show();
+                                } else {
+                                    ui.set_status_text("Registration successful".into());
+                                    ui.set_test_enabled(true);
+                                    let _ = rfd::MessageDialog::new()
+                                        .set_level(rfd::MessageLevel::Info)
+                                        .set_title("Success")
+                                        .set_description("Registration successful!")
+                                        .show();
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Registration failed: {}", e);
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_handle.upgrade() {
+                                ui.set_loading(false);
+                                ui.set_status_text(format!("Registration failed: {}", e).into());
+                                let _ = rfd::MessageDialog::new()
+                                    .set_level(rfd::MessageLevel::Error)
+                                    .set_title("Registration Error")
+                                    .set_description(format!("Registration failed: {}", e))
+                                    .show();
+                            }
+                        });
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Login failed: {}", e);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text(format!("Login failed: {}", e).into());
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Login Error")
+                            .set_description("Login failed. Check credentials and server connectivity.")
+                            .show();
+                    }
+                });
             }
         }
-        Err(e) => {
-            fltk::dialog::alert_default(&format!("Registration failed: {}", e));
-            log::error!("Registration failed: {}", e);
-        }
-    }
+    });
 }
 
-pub fn btn_test_clicked() {
+pub fn btn_test_clicked(ui: &AppWindow) {
     log::debug!("Test connection button clicked");
     let cfg = config::new_config_storage().load_config();
     if let Err(err) = cfg {
-        fltk::dialog::alert_default(&format!("Failed to load existing config: {}", err));
-        log::error!("Failed to load existing config: {}", err);
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Config Error")
+            .set_description(format!("Failed to load existing config: {}", err))
+            .show();
         return;
     }
-    // Must have uds_server & token
+    
     let actor_cfg = cfg.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
-        fltk::dialog::alert_default("Register with UDS before testing connection");
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("Action Required")
+            .set_description("Please register with UDS before testing the connection")
+            .show();
         return;
     }
 
-    match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(800))) {
-        Ok(msg) => {
-            fltk::dialog::message_default(&format!("Connection successful:\n{}", msg));
-            log::debug!("Connection test successful: {}", msg);
+    ui.set_loading(true);
+    ui.set_status_text("Testing connection...".into());
+    let ui_handle = ui.as_weak();
+
+    std::thread::spawn(move || {
+        match shared::broker::api::block::test(actor_cfg, Some(std::time::Duration::from_millis(1500))) {
+            Ok(msg) => {
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text("Connection successful".into());
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Info)
+                            .set_title("Test Success")
+                            .set_description(format!("Connection successful:\n{}", msg))
+                            .show();
+                    }
+                });
+            }
+            Err(e) => {
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_handle.upgrade() {
+                        ui.set_loading(false);
+                        ui.set_status_text(format!("Connection failed: {}", e).into());
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Test Failure")
+                            .set_description(format!("Connection failed:\n{}", e))
+                            .show();
+                    }
+                });
+            }
         }
-        Err(e) => {
-            fltk::dialog::alert_default(&format!("Connection failed:\n{}", e));
-            log::error!("Connection test failed: {}", e);
-        }
-    }
+    });
 }

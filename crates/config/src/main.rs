@@ -1,15 +1,40 @@
+// Copyright (c) 2025 Virtual Cable S.L.U.
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//    * Redistributions of source code must retain the above copyright notice,
+//      this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above copyright notice,
+//      this list of conditions and the following disclaimer in the documentation
+//      and/or other materials provided with the distribution.
+//    * Neither the name of Virtual Cable S.L.U. nor the names of its contributors
+//      may be used to endorse or promote products derived from this software
+//      without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*!
+Author: Adolfo Gómez, dkmaster at dkmon dot com
+*/
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::sync::{Arc, Mutex};
-
-use fltk::{dialog::NativeFileChooser, enums::CallbackTrigger, prelude::*};
-
-use crate::config_fltk::ConfigGui;
+use slint::ComponentHandle;
 
 mod callbacks;
-mod config_fltk;
 mod regcfg;
 
 use shared::log;
+
+slint::include_modules!();
 
 fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
@@ -20,7 +45,11 @@ fn main() {
     #[cfg(not(debug_assertions))]
     {
         if operations.check_permissions().is_err() {
-            fltk::dialog::alert_default("This program must be run with administrator privileges");
+            let _ = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("Permission Error")
+                .set_description("This program must be run with administrator privileges")
+                .show();
             std::process::exit(1);
         }
     }
@@ -29,166 +58,104 @@ fn main() {
     let auths = Arc::new(Mutex::new(
         Vec::<shared::broker::api::types::Authenticator>::new(),
     ));
-    // Las server used. To avoid re-querying the authenticators if the server hasn't changed
-    // we store the last server in a Mutex<String> and only re-query if it changes
-    let last_server = Arc::new(Mutex::new(String::new()));
 
-    let app = fltk::app::App::default();
-    let mut cfg_window = ConfigGui::new();
+    let ui = AppWindow::new().unwrap();
 
-    cfg_window.button_test.deactivate(); // Disabled until we have a valid config
+    // Set some defaults
+    ui.set_active_authenticator(0);
+    ui.set_active_log_level(1);
 
-    // Eat "escape" key presses to avoid closing the window
-    cfg_window.win.set_callback({
-        move |_| {
-            log::debug!("Window callback triggered: event={:?}", fltk::app::event());
-            if fltk::app::event() == fltk::enums::Event::Shortcut
-                && fltk::app::event_key() == fltk::enums::Key::Escape
-            {
-                // Just eat the event
-                log::debug!("Escape pressed, ignoring");
-            } else {
-                fltk::app::quit();
-            }
+    // Callbacks
+    let ui_handle = ui.as_weak();
+    let saved_auths = auths.clone();
+    ui.on_host_changed(move |host| {
+        if let Some(ui) = ui_handle.upgrade() {
+            log::debug!("Using UDS Server: {}", host);
+            callbacks::uds_server_changed(&ui, saved_auths.clone());
         }
     });
 
-    // Add "Ignore certificate" and "Verify certificate" to choice_ssl_validation
-    cfg_window
-        .choice_ssl_validation
-        .add_choice("Ignore certificate|Verify certificate");
-    cfg_window.choice_ssl_validation.set_value(1); // Default to "Verify certificate"
-    cfg_window.choice_ssl_validation.take_focus().unwrap();
-    // Add DEBUG, INFO, WARNING, ERROR & CRITICAL to choice_log_level
-    cfg_window
-        .choice_log_level
-        .add_choice("DEBUG|INFO|WARNING|ERROR|FATAL");
-    cfg_window.choice_log_level.set_value(1); // Default to "INFO"
-
-    // Default value for Authenticator is "Administration"
-    cfg_window.choice_authenticator.add_choice("Administration");
-    cfg_window.choice_authenticator.set_value(0); // Default to "Administration"
-
-    cfg_window
-        .input_uds_server
-        .set_trigger(CallbackTrigger::ReleaseAlways);
-    cfg_window.input_uds_server.set_callback({
-        let saved_auths = auths.clone();
-        let cfg_window = cfg_window.clone();
-        // Set a callback on input_uds_server to validate the hostname
-
-        move |s| {
-            log::debug!("Using UDS Server: {}", s.value());
-            let uds_server = s.value().trim().to_string();
-            if uds_server.is_empty() {
-                return;
-            }
-            // If the UDS Server + ssl hasn't changed, do nothing
-            if *last_server.lock().unwrap()
-                == uds_server.clone()
-                    + cfg_window
-                        .choice_ssl_validation
-                        .value()
-                        .to_string()
-                        .as_str()
-            {
-                log::debug!("UDS Server hasn't changed, not re-querying authenticators");
-                return;
-            }
-            *last_server.lock().unwrap() = uds_server.clone()
-                + cfg_window
-                    .choice_ssl_validation
-                    .value()
-                    .to_string()
-                    .as_str();
-
-            callbacks::uds_server_changed(&cfg_window, saved_auths.clone());
-        }
-    });
-    // Set the callback to register when the "Register" button is clicked
-    cfg_window.button_register.set_callback({
-        let auths = auths.clone();
-        let cfg_window = cfg_window.clone();
-        // Fail if we can't get at least one network interface
-        let interface = operations
-            .get_first_network_interface()
-            .unwrap_or_else(|e| {
-                log::error!("No network interfaces found: {}", e);
-                fltk::dialog::alert_default("No network interfaces found, cannot continue");
-                fltk::app::quit();
-                std::process::exit(1);
-            });
-
-        move |_| {
-            callbacks::btn_register_clicked(
-                &cfg_window,
-                auths.clone(),
-                operations.clone(),
-                &interface,
-            );
+    let ui_handle = ui.as_weak();
+    let saved_auths = auths.clone();
+    let ops = operations.clone();
+    ui.on_register_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            // Fail if we can't get at least one network interface
+            let interface = match ops.get_first_network_interface() {
+                Ok(iface) => iface,
+                Err(e) => {
+                    log::error!("No network interfaces found: {}", e);
+                    let _ = rfd::MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Error)
+                        .set_title("Network Error")
+                        .set_description("No network interfaces found, cannot continue")
+                        .show();
+                    return;
+                }
+            };
+            callbacks::btn_register_clicked(&ui, saved_auths.clone(), ops.clone(), &interface);
         }
     });
 
-    cfg_window.button_test.set_callback({
-        move |_| {
-            callbacks::btn_test_clicked();
+    let ui_handle = ui.as_weak();
+    ui.on_test_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            callbacks::btn_test_clicked(&ui);
         }
     });
 
-    // Set the close button to quit the app
-    cfg_window.button_close.set_callback({
-        move |_| {
+    let ui_handle = ui.as_weak();
+    ui.on_close_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
             log::debug!("Close button clicked, quitting");
-            fltk::app::quit();
+            ui.hide().unwrap();
         }
     });
 
-    // Setup buttons for browsing files, postconfig_cmd
-    cfg_window.browse_postconfig_cmd.set_callback({
-        let mut input = cfg_window.input_postconfig_cmd.clone();
-        move |_| {
-            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
-            dlg.show();
-            if let Some(path) = dlg.filename().to_str()
-                && !path.is_empty()
-            {
-                input.set_value(path);
-            }
+    // Browse callbacks
+    let ui_handle = ui.as_weak();
+    ui.on_browse_preconnect_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade()
+            && let Some(path) = rfd::FileDialog::new().pick_file() {
+                ui.set_preconnect_cmd(path.to_string_lossy().to_string().into());
         }
     });
 
-    // preconnect_cmd
-    cfg_window.browse_preconnect_cmd.set_callback({
-        let mut input = cfg_window.input_preconnect_cmd.clone();
-        move |_| {
-            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
-            dlg.show();
-            if let Some(path) = dlg.filename().to_str()
-                && !path.is_empty()
-            {
-                input.set_value(path);
-            }
+    let ui_handle = ui.as_weak();
+    ui.on_browse_runonce_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade()
+            && let Some(path) = rfd::FileDialog::new().pick_file() {
+                ui.set_runonce_cmd(path.to_string_lossy().to_string().into());
         }
     });
 
-    // runonce_cmd
-    cfg_window.browse_runonce_cmd.set_callback({
-        let mut input = cfg_window.input_runonce_cmd.clone();
-        move |_| {
-            let mut dlg = NativeFileChooser::new(fltk::dialog::FileDialogType::BrowseFile);
-            dlg.show();
-            if let Some(path) = dlg.filename().to_str()
-                && !path.is_empty()
-            {
-                input.set_value(path);
+    let ui_handle = ui.as_weak();
+    ui.on_browse_postconfig_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade()
+            && let Some(path) = rfd::FileDialog::new().pick_file() {
+                ui.set_postconfig_cmd(path.to_string_lossy().to_string().into());
+        }
+    });
+
+    // Validate ciphers (pure callback)
+    ui.on_validate_ciphers(|ciphers| {
+        if ciphers.is_empty() {
+            return true;
+        }
+        // Simple check: split by colon and ensure no empty parts
+        for part in ciphers.split(':') {
+            if part.trim().is_empty() {
+                return false;
             }
         }
+        true
     });
 
     // Fill the fields from existing config
-    regcfg::fill_window_fields(&mut cfg_window);
-    callbacks::uds_server_changed(&cfg_window, auths.clone());
+    regcfg::fill_window_fields(&ui);
+    
+    // Trigger initial auth query
+    callbacks::uds_server_changed(&ui, auths.clone());
 
-    cfg_window.win.center_screen();
-    app.run().unwrap();
+    ui.run().unwrap();
 }

@@ -1,13 +1,39 @@
+// Copyright (c) 2025 Virtual Cable S.L.U.
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//    * Redistributions of source code must retain the above copyright notice,
+//      this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above copyright notice,
+//      this list of conditions and the following disclaimer in the documentation
+//      and/or other materials provided with the distribution.
+//    * Neither the name of Virtual Cable S.L.U. nor the names of its contributors
+//      may be used to endorse or promote products derived from this software
+//      without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*!
+Author: Adolfo Gómez, dkmaster at dkmon dot com
+*/
 #![cfg_attr(not(test), windows_subsystem = "windows")]
-use fltk::prelude::*;
 
-use crate::config_unmanaged_fltk::ConfigGui;
+use slint::ComponentHandle;
 
 mod callbacks;
-mod config_unmanaged_fltk;
 mod regcfg;
 
 use shared::log;
+
+slint::include_modules!();
 
 fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
@@ -17,72 +43,58 @@ fn main() {
     {
         let operations = shared::system::new_system();
         if operations.check_permissions().is_err() {
-            fltk::dialog::alert_default("This program must be run with administrator privileges");
+            let _ = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("Permission Error")
+                .set_description("This program must be run with administrator privileges")
+                .show();
             std::process::exit(1);
         }
     }
 
-    let app = fltk::app::App::default();
-    let mut cfg_window = ConfigGui::new();
+    let ui = AppWindow::new().unwrap();
 
-    // Disable button_test until we have a valid config
-    cfg_window.button_test.deactivate();
+    // Set some defaults
+    ui.set_active_log_level(1);
 
-    // Eat "escape" key presses to avoid closing the window
-    cfg_window.win.set_callback({
-        move |_| {
-            log::debug!("Window callback triggered: event={:?}", fltk::app::event());
-            if fltk::app::event() == fltk::enums::Event::Shortcut
-                && fltk::app::event_key() == fltk::enums::Key::Escape
-            {
-                // Just eat the event
-                log::debug!("Escape pressed, ignoring");
-            } else {
-                fltk::app::quit();
+    // Callbacks
+    let ui_handle = ui.as_weak();
+    ui.on_save_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            callbacks::bnt_save_clicked(&ui);
+        }
+    });
+
+    let ui_handle = ui.as_weak();
+    ui.on_test_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            callbacks::btn_test_clicked(&ui);
+        }
+    });
+
+    let ui_handle = ui.as_weak();
+    ui.on_close_clicked(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            log::debug!("Close button clicked, quitting");
+            ui.hide().unwrap();
+        }
+    });
+
+    // Validate ciphers
+    ui.on_validate_ciphers(|ciphers| {
+        if ciphers.is_empty() {
+            return true;
+        }
+        for part in ciphers.split(':') {
+            if part.trim().is_empty() {
+                return false;
             }
         }
-    });
-
-    // Add "Ignore certificate" and "Verify certificate" to choice_ssl_validation
-    cfg_window
-        .choice_ssl_validation
-        .add_choice("Ignore certificate|Verify certificate");
-    cfg_window.choice_ssl_validation.set_value(1); // Default to "Verify certificate"
-    cfg_window.choice_ssl_validation.take_focus().unwrap();
-    // Add DEBUG, INFO, WARNING, ERROR & CRITICAL to choice_log_level
-    cfg_window
-        .choice_log_level
-        .add_choice("DEBUG|INFO|WARNING|ERROR|FATAL");
-    cfg_window.choice_log_level.set_value(1); // Default to "INFO"
-
-    // Set the callback to register when the "Save" button is clicked
-    cfg_window.button_save.set_callback({
-        let cfg_window = cfg_window.clone();
-        // Set a callback on input_uds_server to validate the hostname
-
-        move |_| {
-            callbacks::bnt_save_clicked(&cfg_window);
-        }
-    });
-
-    // Set the close button to quit the app
-    cfg_window.button_close.set_callback({
-        move |_| {
-            log::debug!("Close button clicked, quitting");
-            fltk::app::quit();
-        }
-    });
-
-    cfg_window.button_test.set_callback({
-        let cfg_window = cfg_window.clone();
-        move |_| {
-            callbacks::btn_test_clicked(&cfg_window);
-        }
+        true
     });
 
     // Fill the fields from existing config
-    regcfg::fill_window_fields(&mut cfg_window);
+    regcfg::fill_window_fields(&ui);
 
-    cfg_window.win.center_screen();
-    app.run().unwrap();
+    ui.run().unwrap();
 }

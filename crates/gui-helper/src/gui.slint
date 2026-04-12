@@ -1,0 +1,35 @@
+import { Button, VerticalBox } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: root.title_text;
+    min-width: 400px;
+    min-height: 150px;
+    
+    in-out property <string> title_text: "Message";
+    in-out property <string> message_text: "";
+    
+    callback ok_clicked();
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 20px;
+        alignment: center;
+
+        Text {
+            text: root.message_text;
+            wrap: word-wrap;
+            font-size: 14px;
+            horizontal-alignment: center;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            Button {
+                text: "OK";
+                width: 100px;
+                height: 30px;
+                clicked => { root.ok_clicked(); }
+            }
+        }
+    }
+}

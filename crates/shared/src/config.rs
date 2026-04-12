@@ -61,6 +61,7 @@ impl Deref for ActorOsConfiguration {
 pub struct ActorDataConfiguration {
     pub unique_id: Option<String>,
     pub os: Option<ActorOsConfiguration>,
+    pub ssl_ciphers: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

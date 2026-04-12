@@ -1,0 +1,191 @@
+import { Button, LineEdit, ComboBox, GroupBox, VerticalBox, HorizontalBox, TabWidget, TextEdit } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "UDS Actor Unmanaged Configuration";
+    icon: @image-url("../../../assets/img/uds-128.png");
+    min-width: 500px;
+    min-height: 480px;
+    
+    callback save_clicked();
+    callback test_clicked();
+    callback close_clicked();
+    callback ssl_changed(bool);
+    
+    pure callback validate_ciphers(string) -> bool;
+
+    in-out property <string> server_host: "";
+    in-out property <bool> verify_ssl: true;
+    in-out property <string> service_token: "";
+    in-out property <string> net_restriction: "";
+    in-out property <[string]> log_levels: ["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"];
+    in-out property <int> active_log_level: 1;
+    
+    in-out property <string> ssl_ciphers: "";
+    
+    in-out property <string> status_text: "Ready";
+    in-out property <bool> test_enabled: false;
+    in-out property <bool> loading: false;
+
+    VerticalBox {
+        alignment: start; 
+        padding: 24px;
+        spacing: 12px;
+
+        HorizontalLayout {
+            height: 80px;
+            alignment: center;
+            spacing: 15px;
+            
+            Rectangle {
+                width: 48px; height: 48px;
+                Image {
+                    source: @image-url("../../../assets/img/uds-128.png");
+                    width: 48px;
+                    height: 48px;
+                    y: (Math.sin((animation-tick() / (root.loading ? 150ms : 400ms)) * 1rad) * (root.loading ? 6px : 3px));
+                    transform-rotation: (Math.cos((animation-tick() / (root.loading ? 200ms : 600ms)) * 1rad) * (root.loading ? 5deg : 2deg));
+                }
+            }
+            
+            Text {
+                text: "UDS Actor (Unmanaged)";
+                font-size: 20px;
+                font-weight: 700;
+                color: #0055aa;
+                vertical-alignment: center;
+            }
+        }
+
+        TabWidget {
+            Tab {
+                title: "General";
+                VerticalLayout {
+                    padding-top: 10px;
+                    spacing: 10px;
+                    
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "SSL Validation:"; width: 140px; vertical-alignment: center; }
+                        ComboBox {
+                            model: ["Ignore certificate", "Verify certificate"];
+                            current-index: root.verify_ssl ? 1 : 0;
+                            selected(val) => { 
+                                root.verify_ssl = (val == "Verify certificate");
+                                root.ssl_changed(root.verify_ssl);
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "UDS Broker Host:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.server_host;
+                            placeholder-text: "broker.example.com";
+                            edited(val) => { root.server_host = val; } 
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Service Token:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.service_token;
+                            edited(val) => { root.service_token = val; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Net Restriction:"; width: 140px; vertical-alignment: center; }
+                        LineEdit {
+                            text: root.net_restriction;
+                            placeholder-text: "e.g. 192.168.1.0/24";
+                            edited(val) => { root.net_restriction = val; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 32px;
+                        Text { text: "Log level:"; width: 140px; vertical-alignment: center; }
+                        ComboBox {
+                            model: root.log_levels;
+                            current-index: root.active_log_level;
+                        }
+                    }
+                }
+            }
+            Tab {
+                title: "Advanced";
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 10px;
+                    spacing: 10px;
+                    Text { 
+                        text: "Custom SSL Cipher Suites:"; 
+                        font-weight: 600;
+                    }
+                    TextEdit {
+                        text: root.ssl_ciphers;
+                        min-height: 140px;
+                        edited(val) => { root.ssl_ciphers = val; }
+                    }
+                    Text {
+                        text: "Leave empty to use secure defaults. Separated by colon (:).";
+                        font-size: 11px;
+                        color: #666;
+                        wrap: word-wrap;
+                    }
+                    if (!root.validate_ciphers(root.ssl_ciphers)): Text {
+                        text: "Warning: Some ciphers might be invalid or unsupported.";
+                        color: #aa0000;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: root.status_text;
+            font-size: 13px;
+            color: root.loading ? #0055aa : #666;
+            horizontal-alignment: center;
+            height: 40px;
+            vertical-alignment: center;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 20px;
+            height: 42px;
+            
+            Button {
+                text: "Save Configuration";
+                primary: true;
+                width: 180px;
+                height: 34px;
+                enabled: !root.loading;
+                clicked => { root.save_clicked(); }
+            }
+            Button {
+                text: "Test";
+                width: 100px;
+                height: 34px;
+                enabled: root.test_enabled && !root.loading;
+                clicked => { root.test_clicked(); }
+            }
+            Button {
+                text: "Close";
+                width: 100px;
+                height: 34px;
+                clicked => { root.close_clicked(); }
+            }
+        }
+    }
+}

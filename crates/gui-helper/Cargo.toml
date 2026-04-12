@@ -8,8 +8,8 @@ license = "BSD-3-Clause"
 
 [dependencies]
 # Gui
-fltk = { workspace = true }
-
+slint = { workspace = true }
 
 [build-dependencies]
 builder = { path = "../builder" }
+slint-build = { workspace = true }
