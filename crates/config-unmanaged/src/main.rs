@@ -55,7 +55,6 @@ fn main() {
     let ui = AppWindow::new().unwrap();
 
     // Set some defaults
-    ui.set_active_log_level(1);
 
     // Callbacks
     let ui_handle = ui.as_weak();

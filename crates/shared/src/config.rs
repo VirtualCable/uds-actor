@@ -64,7 +64,7 @@ pub struct ActorDataConfiguration {
     pub ssl_ciphers: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ActorConfiguration {
     pub broker_url: String,
     pub verify_ssl: bool,
@@ -79,6 +79,25 @@ pub struct ActorConfiguration {
     // Additional configuration data from server
     pub config: ActorDataConfiguration,
     pub data: Option<serde_json::Value>,
+}
+
+impl Default for ActorConfiguration {
+    fn default() -> Self {
+        Self {
+            broker_url: String::new(),
+            verify_ssl: false,
+            actor_type: ActorType::default(),
+            master_token: None,
+            own_token: None,
+            restrict_net: None,
+            pre_command: None,
+            runonce_command: None,
+            post_command: None,
+            log_level: 50000, // ERROR
+            config: ActorDataConfiguration::default(),
+            data: None,
+        }
+    }
 }
 
 impl ActorConfiguration {
