@@ -10,15 +10,15 @@ Package: udsactor
 Section: admin
 Priority: optional
 Architecture: any
-Depends: policykit-1(>=0.100), libxss1, xscreensaver, ${shlibs:Depends}, ${misc:Depends}
+Depends: pkexec, libxss1, xscreensaver, ${shlibs:Depends}, ${misc:Depends}
 Description: Actor for Universal Desktop Services (UDS) Broker
  This package provides the required components to allow managed machines to work on an environment managed by UDS Broker.
- 
+
 Package: udsactor-unmanaged
 Section: admin
 Priority: optional
 Architecture: any
-Depends: policykit-1(>=0.100), libxss1, xscreensaver, ${shlibs:Depends}, ${misc:Depends}
+Depends: pkexec, libxss1, xscreensaver, ${shlibs:Depends}, ${misc:Depends}
 Description: Actor for Universal Desktop Services (UDS) Broker Static Unmanaged machines
  This package provides the required components to allow unmanaged machines (static, independent machines) to work on an environment managed by UDS Broker.
  
