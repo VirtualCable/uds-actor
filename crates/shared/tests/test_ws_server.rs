@@ -34,9 +34,10 @@ async fn create_test_server_task(
     let stop = OnceSignal::new();
     let cert_info = test_certs::test_certinfo();
 
-    let (server_info, handle) = start_server(cert_info, stop.clone(), secret.into(), Some(port))
-        .await
-        .unwrap();
+    let (server_info, handle) =
+        start_server(cert_info, stop.clone(), secret.into(), Some(port), None)
+            .await
+            .unwrap();
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     (server_info, handle, port)

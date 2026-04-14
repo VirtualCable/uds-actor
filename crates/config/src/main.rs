@@ -36,7 +36,8 @@ use shared::log;
 
 slint::include_modules!();
 
-fn main() {
+#[tokio::main]
+async fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
     let operations = shared::system::new_system();

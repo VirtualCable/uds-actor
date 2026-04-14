@@ -35,6 +35,7 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
         tracker: tracker.clone(),
         stop: stop.clone(),
         secret: secret.into(),
+        ciphers: None,
     };
 
     let server_info_task = server_info.clone();

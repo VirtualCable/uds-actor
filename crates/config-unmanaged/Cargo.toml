@@ -15,6 +15,7 @@ slint = { workspace = true }
 rfd = { workspace = true }
 
 reqwest = { workspace = true }
+tokio = { workspace = true }
 
 [build-dependencies]
 builder = { path = "../builder" }

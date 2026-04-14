@@ -9,6 +9,7 @@ license = "BSD-3-Clause"
 [dependencies]
 # Gui
 slint = { workspace = true }
+tokio = { workspace = true }
 
 [build-dependencies]
 builder = { path = "../builder" }

@@ -51,7 +51,8 @@ Communication is minimal:
 - To request all windows to close, it creates a temp file named `uds-actor-gui-close-all`.
 - This binary checks for that file periodically and exits if found.
 */
-fn main() {
+#[tokio::main]
+async fn main() {
     // Get title and message from args
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {

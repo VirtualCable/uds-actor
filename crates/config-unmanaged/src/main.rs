@@ -35,7 +35,8 @@ use shared::log;
 
 slint::include_modules!();
 
-fn main() {
+#[tokio::main]
+async fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
     // On debug builds, skip the admin check

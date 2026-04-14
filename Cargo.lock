@@ -2291,6 +2291,7 @@ dependencies = [
  "builder",
  "slint",
  "slint-build",
+ "tokio",
 ]
 
 [[package]]
@@ -6604,6 +6605,7 @@ dependencies = [
  "shared",
  "slint",
  "slint-build",
+ "tokio",
 ]
 
 [[package]]
@@ -6638,6 +6640,7 @@ dependencies = [
  "shared",
  "slint",
  "slint-build",
+ "tokio",
 ]
 
 [[package]]
