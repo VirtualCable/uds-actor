@@ -12,13 +12,8 @@ pub fn bnt_save_clicked(ui: &AppWindow) {
     let ciphers = ui.get_ssl_ciphers().trim().to_string();
 
     if uds_server.is_empty() {
-        std::thread::spawn(|| {
-            let _ = rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Error)
-                .set_title("Validation Error")
-                .set_description("Hostname is required")
-                .show();
-        });
+        ui.set_has_error(true);
+        ui.set_status_text("Hostname is required".into());
         return;
     }
 
@@ -51,23 +46,20 @@ pub fn bnt_save_clicked(ui: &AppWindow) {
         log::error!("Failed to save config: {}", e);
     } else {
         log::debug!("Config saved successfully");
-        ui.set_test_enabled(true);
     }
 
-    // Show dialog in a separate thread to avoid blocking the UI repaint
-    std::thread::spawn(move || {
-        if let Err(e) = res {
-            let _ = rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Error)
-                .set_title("Save Error")
-                .set_description(format!("Failed to save config: {}", e))
-                .show();
-        } else {
-            let _ = rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Info)
-                .set_title("Success")
-                .set_description("Configuration saved successfully!")
-                .show();
+    let ui_handle = ui.as_weak();
+    let res_err = res.as_ref().err().map(|e| e.to_string());
+    let _ = slint::invoke_from_event_loop(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            if let Some(err) = res_err {
+                ui.set_has_error(true);
+                ui.set_status_text(format!("Failed to save config: {}", err).into());
+            } else {
+                ui.set_has_error(false);
+                ui.set_status_text("Configuration saved successfully!".into());
+                ui.set_test_enabled(true);
+            }
         }
     });
 }
@@ -77,29 +69,20 @@ pub fn btn_test_clicked(ui: &AppWindow) {
     let cfg_res = config::new_config_storage().load_config();
     if let Err(err) = cfg_res {
         log::error!("Failed to load existing config: {}", err);
-        std::thread::spawn(move || {
-            let _ = rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Error)
-                .set_title("Config Error")
-                .set_description(format!("Failed to load existing config: {}", err))
-                .show();
-        });
+        ui.set_has_error(true);
+        ui.set_status_text(format!("Failed to load existing config: {}", err).into());
         return;
     }
 
     let actor_cfg = cfg_res.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
-        std::thread::spawn(|| {
-            let _ = rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Warning)
-                .set_title("No Token")
-                .set_description("Nothing to test: Only actors with tokens can be tested")
-                .show();
-        });
+        ui.set_has_error(true);
+        ui.set_status_text("Nothing to test: Only actors with tokens can be tested".into());
         return;
     }
 
     ui.set_loading(true);
+    ui.set_has_error(false);
     ui.set_status_text("Testing connection...".into());
     let ui_handle = ui.as_weak();
 
@@ -112,14 +95,10 @@ pub fn btn_test_clicked(ui: &AppWindow) {
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
-                        ui.set_status_text("Connection successful".into());
+                        ui.set_has_error(false);
+                        ui.set_status_text(format!("Connection successful: {}", msg).into());
                     }
                 });
-                let _ = rfd::MessageDialog::new()
-                    .set_level(rfd::MessageLevel::Info)
-                    .set_title("Test Success")
-                    .set_description(format!("Connection successful:\n{}", msg))
-                    .show();
             }
             Err(e) => {
                 let err_msg = e.to_string();
@@ -127,15 +106,11 @@ pub fn btn_test_clicked(ui: &AppWindow) {
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
+                        ui.set_has_error(true);
                         ui.set_status_text(format!("Connection failed: {}", err_msg_ui).into());
                         ui.set_test_enabled(false);
                     }
                 });
-                let _ = rfd::MessageDialog::new()
-                    .set_level(rfd::MessageLevel::Error)
-                    .set_title("Test Failure")
-                    .set_description(format!("Connection failed:\n{}", err_msg))
-                    .show();
             }
         }
     });

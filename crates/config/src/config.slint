@@ -38,6 +38,7 @@ export component AppWindow inherits Window {
     in-out property <string> status_text: "Ready";
     in-out property <bool> test_enabled: false;
     in-out property <bool> loading: false;
+    in-out property <bool> has_error: false;
 
     // Track host focus to trigger refresh on focus-out
     private property <bool> host_focused: host_input.has-focus;
@@ -246,10 +247,11 @@ export component AppWindow inherits Window {
         Text {
             text: root.status_text;
             font-size: 13px;
-            color: root.loading ? #0055aa : #666;
+            color: root.has_error ? #aa0000 : (root.loading ? #0055aa : #666);
             horizontal-alignment: center;
-            height: 40px;
+            height: 48px;
             vertical-alignment: center;
+            wrap: word-wrap;
         }
 
         HorizontalLayout {
