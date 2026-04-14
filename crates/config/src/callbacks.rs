@@ -106,11 +106,13 @@ pub fn btn_register_clicked(
     let ciphers = ui.get_ssl_ciphers().trim().to_string();
 
     if hostname.is_empty() || username.is_empty() || password.is_empty() {
-        let _ = rfd::MessageDialog::new()
-            .set_level(rfd::MessageLevel::Error)
-            .set_title("Validation Error")
-            .set_description("Hostname, username and password are required")
-            .show();
+        std::thread::spawn(|| {
+            let _ = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("Validation Error")
+                .set_description("Hostname, username and password are required")
+                .show();
+        });
         return;
     }
 
@@ -212,43 +214,54 @@ pub fn btn_register_clicked(
                         let mut config_storage = config::new_config_storage();
                         let res = config_storage.save_config(&final_cfg);
 
+                        let res_err = res.as_ref().err().map(|e| e.to_string());
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_handle.upgrade() {
                                 ui.set_loading(false);
-                                if let Err(e) = res {
+                                if let Some(err) = res_err {
                                     ui.set_status_text(
-                                        format!("Failed to save config: {}", e).into(),
+                                        format!("Failed to save config: {}", err).into(),
                                     );
-                                    let _ = rfd::MessageDialog::new()
-                                        .set_level(rfd::MessageLevel::Error)
-                                        .set_title("Save Error")
-                                        .set_description(format!("Failed to save config: {}", e))
-                                        .show();
                                 } else {
                                     ui.set_status_text("Registration successful".into());
                                     ui.set_test_enabled(true);
-                                    let _ = rfd::MessageDialog::new()
-                                        .set_level(rfd::MessageLevel::Info)
-                                        .set_title("Success")
-                                        .set_description("Registration successful!")
-                                        .show();
                                 }
                             }
                         });
+
+                        // Show dialog from background thread
+                        match res {
+                            Err(e) => {
+                                let _ = rfd::MessageDialog::new()
+                                    .set_level(rfd::MessageLevel::Error)
+                                    .set_title("Save Error")
+                                    .set_description(format!("Failed to save config: {}", e))
+                                    .show();
+                            }
+                            Ok(_) => {
+                                let _ = rfd::MessageDialog::new()
+                                    .set_level(rfd::MessageLevel::Info)
+                                    .set_title("Success")
+                                    .set_description("Registration successful!")
+                                    .show();
+                            }
+                        }
                     }
                     Err(e) => {
                         log::error!("Registration failed: {}", e);
+                        let err_msg = e.to_string();
+                        let err_msg_ui = err_msg.clone();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_handle.upgrade() {
                                 ui.set_loading(false);
-                                ui.set_status_text(format!("Registration failed: {}", e).into());
-                                let _ = rfd::MessageDialog::new()
-                                    .set_level(rfd::MessageLevel::Error)
-                                    .set_title("Registration Error")
-                                    .set_description(format!("Registration failed: {}", e))
-                                    .show();
+                                ui.set_status_text(format!("Registration failed: {}", err_msg_ui).into());
                             }
                         });
+                        let _ = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Registration Error")
+                            .set_description(format!("Registration failed: {}", err_msg))
+                            .show();
                     }
                 }
             }
@@ -258,15 +271,15 @@ pub fn btn_register_clicked(
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
                         ui.set_status_text(format!("Login failed: {}", e).into());
-                        let _ = rfd::MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Error)
-                            .set_title("Login Error")
-                            .set_description(
-                                "Login failed. Check credentials and server connectivity.",
-                            )
-                            .show();
                     }
                 });
+                let _ = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Error)
+                    .set_title("Login Error")
+                    .set_description(
+                        "Login failed. Check credentials and server connectivity.",
+                    )
+                    .show();
             }
         }
     });
@@ -276,21 +289,25 @@ pub fn btn_test_clicked(ui: &AppWindow) {
     log::debug!("Test connection button clicked");
     let cfg = config::new_config_storage().load_config();
     if let Err(err) = cfg {
-        let _ = rfd::MessageDialog::new()
-            .set_level(rfd::MessageLevel::Error)
-            .set_title("Config Error")
-            .set_description(format!("Failed to load existing config: {}", err))
-            .show();
+        std::thread::spawn(move || {
+            let _ = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("Config Error")
+                .set_description(format!("Failed to load existing config: {}", err))
+                .show();
+        });
         return;
     }
 
     let actor_cfg = cfg.unwrap();
     if actor_cfg.broker_url.is_empty() || actor_cfg.token().is_empty() {
-        let _ = rfd::MessageDialog::new()
-            .set_level(rfd::MessageLevel::Warning)
-            .set_title("Action Required")
-            .set_description("Please register with UDS before testing the connection")
-            .show();
+        std::thread::spawn(|| {
+            let _ = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Warning)
+                .set_title("Action Required")
+                .set_description("Please register with UDS before testing the connection")
+                .show();
+        });
         return;
     }
 
@@ -308,26 +325,28 @@ pub fn btn_test_clicked(ui: &AppWindow) {
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
                         ui.set_status_text("Connection successful".into());
-                        let _ = rfd::MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Info)
-                            .set_title("Test Success")
-                            .set_description(format!("Connection successful:\n{}", msg))
-                            .show();
                     }
                 });
+                let _ = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Info)
+                    .set_title("Test Success")
+                    .set_description(format!("Connection successful:\n{}", msg))
+                    .show();
             }
             Err(e) => {
+                let err_msg = e.to_string();
+                let err_msg_ui = err_msg.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_handle.upgrade() {
                         ui.set_loading(false);
-                        ui.set_status_text(format!("Connection failed: {}", e).into());
-                        let _ = rfd::MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Error)
-                            .set_title("Test Failure")
-                            .set_description(format!("Connection failed:\n{}", e))
-                            .show();
+                        ui.set_status_text(format!("Connection failed: {}", err_msg_ui).into());
                     }
                 });
+                let _ = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Error)
+                    .set_title("Test Failure")
+                    .set_description(format!("Connection failed:\n{}", err_msg))
+                    .show();
             }
         }
     });

@@ -118,6 +118,7 @@ export component AppWindow inherits Window {
                             model: root.authenticators;
                             current-index: root.active_authenticator;
                             selected(val) => { 
+                                root.active_authenticator = self.current-index;
                                 root.authenticator_changed(val, self.current-index);
                             }
                         }
@@ -152,6 +153,7 @@ export component AppWindow inherits Window {
                             model: root.log_levels;
                             current-index: root.active_log_level;
                             selected(val) => {
+                                root.active_log_level = self.current-index;
                                 root.log_level_changed(val, self.current-index);
                             }
                         }

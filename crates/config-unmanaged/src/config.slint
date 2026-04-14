@@ -116,6 +116,9 @@ export component AppWindow inherits Window {
                         ComboBox {
                             model: root.log_levels;
                             current-index: root.active_log_level;
+                            selected(val) => {
+                                root.active_log_level = self.current-index;
+                            }
                         }
                     }
                 }
