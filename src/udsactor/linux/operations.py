@@ -213,27 +213,32 @@ def joinDomain(custom: typing.Optional[collections.abc.Mapping[str, typing.Any]]
     if server_software == 'ipa':
         try:
             hostname = f'{getComputerName().lower()}.{domain}'
-            command = f'hostnamectl set-hostname {hostname}'
-            subprocess.run(command, shell=True)
+            subprocess.run(['hostnamectl', 'set-hostname', hostname], check=False)
         except Exception as e:
             logger.error(f'Error set hostname for freeeipa: {e}')
+
+    # Default to samba membership for AD: avoids adcli kpasswd
+    # "Message stream modified" bug against Windows Server 2019+/2025
+    if server_software == 'ad' and (not membership_software or membership_software == 'automatically'):
+        membership_software = 'samba'
+
     try:
-        command = f'realm join -U {account} '
+        cmd: list[str] = ['realm', 'join', '--stdin-password', '-U', account]
         if client_software and client_software != 'automatically':
-            command += f'--client-software={client_software} '
+            cmd.append(f'--client-software={client_software}')
         if server_software:
-            command += f'--server-software={server_software} '
+            cmd.append(f'--server-software={server_software}')
         if membership_software and membership_software != 'automatically':
-            command += f'--membership-software={membership_software} '
+            cmd.append(f'--membership-software={membership_software}')
         if ou and server_software != 'ipa':
-            command += f'--computer-ou="{ou}" '
+            cmd.append(f'--computer-ou={ou}')
         if ssl in ('y', True):
-            command += '--use-ldaps '
+            cmd.append('--use-ldaps')
         if automatic_id_mapping in ('n', False):
-            command += '--automatic-id-mapping=no '
-        command += domain
-        logger.debug(f'Joining domain {domain} with command: {command}')
-        result = subprocess.run(command, input=password.encode(), shell=True, capture_output=True)
+            cmd.append('--automatic-id-mapping=no')
+        cmd.append(domain)
+        logger.debug(f'Joining domain {domain} with command: {cmd}')
+        result = subprocess.run(cmd, input=password.encode(), capture_output=True)
         if result.returncode == 0:
             logger.debug(f'Joined domain {domain} successfully')
         else:
