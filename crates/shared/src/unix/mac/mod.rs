@@ -166,7 +166,7 @@ impl crate::system::System for MacSystem {
 
     fn get_current_user(&self) -> Result<String> {
         log::debug!("MacSystem::get_current_user called");
-        Ok(whoami::username())
+        Ok(whoami::username()?)
     }
 
     fn get_session_type(&self) -> Result<String> {
