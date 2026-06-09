@@ -104,7 +104,6 @@ def prepare_build_root() -> None:
     (BUILD_ROOT / "usr/local/share/doc/udsactor").mkdir(parents=True)
     (BUILD_ROOT / "Library/LaunchAgents").mkdir(parents=True)
     (BUILD_ROOT / "Library/LaunchDaemons").mkdir(parents=True)
-    (BUILD_ROOT / "scripts").mkdir(parents=True)
 
     print("Copying binaries...")
     for f in OUTPUT_DIR.iterdir():
@@ -119,11 +118,6 @@ def prepare_build_root() -> None:
     shutil.copy(SCRIPT_DIR / "scripts/udsactor-uninstall.sh", uninstall)
     uninstall.chmod(0o755)
 
-    print("Copying postinstall script...")
-    postinstall = BUILD_ROOT / "scripts/postinstall"
-    shutil.copy(SCRIPT_DIR / "scripts/postinstall.sh", postinstall)
-    postinstall.chmod(0o755)
-
     print("Copying documentation...")
     shutil.copy(SCRIPT_DIR / "README.txt", BUILD_ROOT / "usr/local/share/doc/udsactor/README.txt")
     shutil.copy(SCRIPT_DIR / "license.txt", BUILD_ROOT / "usr/local/share/doc/udsactor/license.txt")
@@ -133,17 +127,25 @@ def build_pkg() -> str:
     print("=== Building .pkg ===")
     pkgname = f"UDSActor-{VERSION}.pkg"
 
+    scripts_dir = SCRIPT_DIR / "pkgbuild-scripts"
+    remove_if_exists(scripts_dir)
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(SCRIPT_DIR / "scripts/postinstall.sh", scripts_dir / "postinstall")
+    (scripts_dir / "postinstall").chmod(0o755)
+
     run(
         [
-            "productbuild",
+            "pkgbuild",
+            "--identifier",
+            "org.openuds.udsactor",
+            "--version",
+            VERSION,
             "--root",
-            str(BUILD_ROOT / "usr/local"),
-            "/usr/local",
-            "--root",
-            str(BUILD_ROOT / "Library"),
-            "/Library",
+            str(BUILD_ROOT),
+            "--install-location",
+            "/",
             "--scripts",
-            str(BUILD_ROOT / "scripts"),
+            str(scripts_dir),
             pkgname,
         ]
     )

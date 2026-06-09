@@ -4,3 +4,4 @@ build-root/
 *.pkg
 *.dmg
 .DS_Store
+__pycache__/
