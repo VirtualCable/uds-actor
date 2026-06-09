@@ -2,3 +2,4 @@
 /client/target
 /target
 *_enterprise*
+.DS_Store
