@@ -40,12 +40,6 @@ slint::include_modules!();
 async fn main() {
     log::setup_logging("debug", shared::log::LogType::Config);
 
-    // Force software renderer to avoid issues with vms
-    slint::platform::BackendSelector::new()
-        .with_software_renderer()
-        .select()
-        .unwrap();
-
     let operations = shared::system::new_system();
 
     // On debug builds, skip the admin check

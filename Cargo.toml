@@ -106,7 +106,7 @@ axum-server = { version = "0.8", features = ["tls-rustls"] }
 socket2 = "0.6"  # To disable dual stack on listening, make IPv4 and IPv6 listeners separately
 
 # GUI
-slint = { version = "1.16", features=["log", "backend-winit", "renderer-winit-software"] }
+slint = { version = "1.16", default-features = false, features=["compat-1-2", "log", "backend-winit", "renderer-winit-software"] }
 slint-build = "1.16"
 rfd = "0.17"
 # Web services
