@@ -106,6 +106,12 @@ pub fn btn_register_clicked(
     let username = ui.get_username().trim().to_string();
     let password = ui.get_password_val().to_string();
     let ciphers = ui.get_ssl_ciphers().trim().to_string();
+    // Must read UI values on the UI thread: Slint Weak::upgrade() returns None
+    // from the worker thread below, so these would otherwise fall back to defaults.
+    let log_level_idx = ui.get_active_log_level();
+    let pre_cmd = ui.get_preconnect_cmd().trim().to_string();
+    let run_cmd = ui.get_runonce_cmd().trim().to_string();
+    let post_cmd = ui.get_postconfig_cmd().trim().to_string();
 
     if hostname.is_empty() || username.is_empty() || password.is_empty() {
         ui.set_has_error(true);
@@ -136,24 +142,10 @@ pub fn btn_register_clicked(
                 log::debug!("Login successful, got token");
 
                 let username_full = format!("{}@{}", username, selected_auth);
-                let log_level_idx = ui_handle
-                    .upgrade()
-                    .map(|ui| ui.get_active_log_level())
-                    .unwrap_or(1);
                 let log_level: types::LogLevel = (log_level_idx as u8).min(4).into();
 
                 let os = ops.get_os_version().unwrap_or_default();
                 let computer_name = ops.get_computer_name().unwrap_or_default();
-
-                let (pre_cmd, run_cmd, post_cmd) = if let Some(ui) = ui_handle.upgrade() {
-                    (
-                        ui.get_preconnect_cmd().trim().to_string(),
-                        ui.get_runonce_cmd().trim().to_string(),
-                        ui.get_postconfig_cmd().trim().to_string(),
-                    )
-                } else {
-                    (String::new(), String::new(), String::new())
-                };
 
                 let reg_auth = types::RegisterRequest {
                     version: shared::consts::VERSION,
