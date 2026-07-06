@@ -92,10 +92,7 @@ impl crate::system::System for MacSystem {
         computer::join_domain(options)
     }
 
-    fn ensure_domain_membership(
-        &self,
-        options: &crate::system::JoinDomainOptions,
-    ) -> Result<bool> {
+    fn ensure_domain_membership(&self, options: &crate::system::JoinDomainOptions) -> Result<bool> {
         computer::ensure_domain_membership(options)
     }
 

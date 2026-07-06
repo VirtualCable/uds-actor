@@ -230,7 +230,9 @@ pub fn btn_register_clicked(
                             if let Some(ui) = ui_handle.upgrade() {
                                 ui.set_loading(false);
                                 ui.set_has_error(true);
-                                ui.set_status_text(format!("Registration failed: {}", err_msg_ui).into());
+                                ui.set_status_text(
+                                    format!("Registration failed: {}", err_msg_ui).into(),
+                                );
                             }
                         });
                     }

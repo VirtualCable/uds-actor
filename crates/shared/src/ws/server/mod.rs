@@ -267,13 +267,13 @@ pub async fn websocket_loop(
 async fn server(config: &ServerStartInfo) -> Result<()> {
     log::debug!("Initializing server {}", config.port);
     let state = ServerState::from(config);
-    
+
     let mut cert_info = config.cert_info.clone();
     // If certificate info from broker doesn't have ciphers, use the ones from our config
     if cert_info.ciphers.is_none() {
         cert_info.ciphers = config.ciphers.clone();
     }
-    
+
     let tls_config = certool::rustls_config_from_pem(cert_info)?;
     log::debug!("TLS configuration loaded");
 

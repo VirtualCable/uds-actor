@@ -146,10 +146,12 @@ async fn test_managed_join_domain_should_join() -> Result<()> {
     assert!(test_setup.calls.count_calls("operations::force_time_sync") == 1);
     assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
     assert!(test_setup.calls.count_calls("operations::rename_computer") == 1);
-    assert!(test_setup
-        .calls
-        .count_calls("operations::ensure_domain_membership")
-        == 1);
+    assert!(
+        test_setup
+            .calls
+            .count_calls("operations::ensure_domain_membership")
+            == 1
+    );
     assert!(test_setup.calls.count_calls("operations::reboot") == 1); // Should reboot after join
     Ok(())
 }
@@ -190,10 +192,12 @@ async fn test_managed_join_domain_should_not_join() -> Result<()> {
         .assert_not_called("operations::rename_computer");
     // ensure_domain_membership IS called (delegates the "already joined?" check
     // to the platform). The mock returns Ok(false), so no reboot.
-    assert!(test_setup
-        .calls
-        .count_calls("operations::ensure_domain_membership")
-        == 1);
+    assert!(
+        test_setup
+            .calls
+            .count_calls("operations::ensure_domain_membership")
+            == 1
+    );
     test_setup.calls.assert_not_called("operations::reboot");
     Ok(())
 }

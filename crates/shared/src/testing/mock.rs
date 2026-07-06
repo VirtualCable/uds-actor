@@ -119,8 +119,10 @@ impl System for OperationsMock {
         &self,
         options: &crate::system::JoinDomainOptions,
     ) -> anyhow::Result<bool> {
-        self.calls
-            .push(format!("operations::ensure_domain_membership({:?})", options));
+        self.calls.push(format!(
+            "operations::ensure_domain_membership({:?})",
+            options
+        ));
         crate::log::info!("Ensuring domain membership: {:?}", options);
         Ok(false)
     }

@@ -115,7 +115,12 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             .unwrap()
             .to_string(),
         Some(shared::consts::UDS_PORT),
-        platform.config().read().await.ssl_ciphers().map(|s| s.to_string()),
+        platform
+            .config()
+            .read()
+            .await
+            .ssl_ciphers()
+            .map(|s| s.to_string()),
     )
     .await?;
 

@@ -119,7 +119,8 @@ pub async fn join_domain(
     // that require a reboot. We must reboot in that case.
     let ops = platform.system();
     let opts = join_options.clone();
-    let needs_reboot = tokio::task::spawn_blocking(move || ops.ensure_domain_membership(&opts)).await??;
+    let needs_reboot =
+        tokio::task::spawn_blocking(move || ops.ensure_domain_membership(&opts)).await??;
 
     // If the machine was just renamed, a reboot is required anyway for the
     // rename to take effect (handled by the managed caller).

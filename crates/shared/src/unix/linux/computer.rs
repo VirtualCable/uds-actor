@@ -139,9 +139,7 @@ pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<
     Ok(())
 }
 
-pub(super) fn ensure_domain_membership(
-    options: &crate::system::JoinDomainOptions,
-) -> Result<bool> {
+pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOptions) -> Result<bool> {
     // TODO: use `realm check` to validate and `realm refresh` to repair in place
     // (no reboot) — those need validation on a real AD/IPA-joined host before
     // being enabled. For now we fall back to the same safe behaviour as the
