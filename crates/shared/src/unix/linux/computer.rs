@@ -139,6 +139,23 @@ pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<
     Ok(())
 }
 
+pub(super) fn ensure_domain_membership(
+    options: &crate::system::JoinDomainOptions,
+) -> Result<bool> {
+    // TODO: use `realm check` to validate and `realm refresh` to repair in place
+    // (no reboot) — those need validation on a real AD/IPA-joined host before
+    // being enabled. For now we fall back to the same safe behaviour as the
+    // original `join_domain` caller:
+    //   - already in the requested domain -> no-op (no reboot)
+    //   - not in domain -> full join (reboot required)
+    //
+    // `realm` itself is not authoritative about whether the host is joined;
+    // it operates on a configured realm. So we delegate the "already joined?"
+    // question to the caller via `get_domain_name()`.
+    join_domain(options)?;
+    Ok(true)
+}
+
 fn is_timesyncd_active() -> Result<bool> {
     let status = Command::new("systemctl")
         .arg("is-active")

@@ -51,6 +51,14 @@ pub(super) fn join_domain(_options: &crate::system::JoinDomainOptions) -> Result
     Ok(())
 }
 
+pub(super) fn ensure_domain_membership(
+    _options: &crate::system::JoinDomainOptions,
+) -> Result<bool> {
+    // No domain join implementation on macOS yet, so nothing to ensure.
+    log::warn!("ensure_domain_membership is not implemented for macOS");
+    Ok(false)
+}
+
 // For macos
 /// Ensures that the system time is updated by restarting systemd-timesyncd if it is active.
 pub(super) fn refresh_system_time() -> Result<()> {

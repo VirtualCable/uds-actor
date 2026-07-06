@@ -69,7 +69,6 @@ pub async fn join_domain(
             "No custom data provided for join domain action"
         ));
     }
-    let operations = platform.system();
 
     // Parse custom data, extract possible required fields
     let custom = custom.unwrap();
@@ -109,29 +108,22 @@ pub async fn join_domain(
         automatic_id_mapping: custom.get("automatic_id_mapping").and_then(|v| v.as_bool()),
     };
 
-    // Rename the machine first
-    // Execute on a blocking task to avoid blocking the async runtime
+    // Rename the machine first (may return Ok(true) if a reboot will be needed)
     let renamed = rename_computer(platform, name).await?;
 
-    // If already joined to the requested domain, and name not changed, skip
-    if let Ok(Some(current_domain)) = operations.get_domain_name()
-        && current_domain.eq_ignore_ascii_case(&join_options.domain)
-        && !renamed
-    {
-        log::info!(
-            "System is already joined to domain '{}', skipping join",
-            current_domain
-        );
-        return Ok(false);
-    }
-    log::info!("Joining system to domain '{}'", join_options.domain);
+    // Delegate the "is the trust healthy?" decision to the platform, so each
+    // OS can do the appropriate validation/repair (e.g. Windows can probe
+    // and repair the secure channel without rebooting).
+    //
+    // ensure_domain_membership returns Ok(true) when changes were applied
+    // that require a reboot. We must reboot in that case.
+    let ops = platform.system();
+    let opts = join_options.clone();
+    let needs_reboot = tokio::task::spawn_blocking(move || ops.ensure_domain_membership(&opts)).await??;
 
-    // Join the domain on a blocking task to avoid blocking the async runtime
-    tokio::task::spawn_blocking(move || operations.join_domain(&join_options)).await??;
-
-    // Again, a reboot is usually required for the change to take effect
-    // Take care of it outside this function
-    Ok(true)
+    // If the machine was just renamed, a reboot is required anyway for the
+    // rename to take effect (handled by the managed caller).
+    Ok(needs_reboot || renamed)
 }
 
 // Process a command (pre_command, runonce_command, post_command)

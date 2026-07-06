@@ -106,6 +106,25 @@ pub trait System: Send + Sync {
     /// The `options` struct contains all necessary information for joining the domain.
     fn join_domain(&self, options: &JoinDomainOptions) -> Result<()>;
 
+    /// Ensures that the machine account is healthy inside its domain.
+    ///
+    /// This is the smart variant of `join_domain`, designed to also recover from
+    /// situations where the machine has already been joined, but its secure
+    /// channel trust with the domain controller has been broken (e.g. machine
+    /// account password expired after restoring a long-lived snapshot).
+    ///
+    /// Behavior contract:
+    /// - If the computer is not joined to the requested domain, it is joined
+    ///   (delegating to `join_domain`) and `Ok(true)` is returned (reboot required).
+    /// - If the computer is joined to the requested domain and the secure channel
+    ///   trust is healthy, no action is taken and `Ok(false)` is returned.
+    /// - If the computer is joined but the secure channel is broken, the trust
+    ///   is repaired using `options.account`/`options.password`. On platforms
+    ///   where this can be done without a reboot (e.g. Windows via Netlogon
+    ///   password change), `Ok(false)` is returned; otherwise the machine is
+    ///   re-joined and `Ok(true)` is returned.
+    fn ensure_domain_membership(&self, options: &JoinDomainOptions) -> Result<bool>;
+
     /// Change the password for a user.
     /// This may require the old password, depending on the platform and user privileges.
     fn change_user_password(

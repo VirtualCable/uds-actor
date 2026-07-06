@@ -98,6 +98,55 @@ impl WindowsOperations {
         Self {}
     }
 
+    /// Re-join using flags that preserve the existing machine account on the DC.
+    /// Used as a fallback inside `ensure_domain_membership` when the in-place
+    /// netlogon repair has failed (e.g. wrong account password in custom data).
+    fn rejoin_preserving_account(
+        &self,
+        options: &crate::system::JoinDomainOptions,
+    ) -> Result<()> {
+        unsafe {
+            let domain = options.domain.to_string();
+            let account = options.account.to_string();
+            let mut account_str = account.clone();
+            if !account.contains('@') && !account.contains('\\') {
+                if domain.contains('.') {
+                    account_str = format!("{}@{}", account, domain);
+                } else {
+                    account_str = format!("{}\\{}", domain, account);
+                }
+            }
+            let lp_domain =
+                U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
+            let lp_ou = match options.ou.clone() {
+                Some(s) => {
+                    Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?)
+                }
+                None => None,
+            };
+            let lp_account = U16CString::from_str(&account_str)
+                .context("failed to convert account to UTF-16")?;
+            let lp_password = U16CString::from_str(options.password.clone())
+                .context("failed to convert password to UTF-16")?;
+            let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+            let res = NetJoinDomain(
+                PCWSTR::null(),
+                PCWSTR(lp_domain.as_ptr()),
+                lp_ou
+                    .as_ref()
+                    .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                PCWSTR(lp_account.as_ptr()),
+                PCWSTR(lp_password.as_ptr()),
+                flags,
+            );
+            if res == 0 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("NetJoinDomain (rejoin) failed: {}", res))
+            }
+        }
+    }
+
     fn get_windows_version(&self) -> Result<(u32, u32, u32, u32, String)> {
         unsafe {
             let mut info = OSVERSIONINFOW {
@@ -295,6 +344,147 @@ impl System for WindowsOperations {
                 Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
             }
         }
+    }
+
+    fn ensure_domain_membership(
+        &self,
+        options: &crate::system::JoinDomainOptions,
+    ) -> Result<bool> {
+        use windows::Win32::NetworkManagement::NetManagement::I_NetLogonControl2;
+
+        // Netlogon control function codes (see netlogon.h)
+        const NETLOGON_CONTROL_REDISCOVER: u32 = 5;
+        const NETLOGON_CONTROL_TC_QUERY: u32 = 6;
+        const NETLOGON_CONTROL_CHANGE_PASSWORD: u32 = 7;
+        const NETLOGON_CONTROL_QUERY_LEVEL: u32 = 1;
+        const NETLOGON_CONTROL_CHANGE_PASSWORD_QUERY_LEVEL: u32 = 2;
+
+        // If not joined (or joined to a different domain), do a full join (reboot required)
+        match self.get_domain_name()? {
+            None => {
+                log::info!(
+                    "Not joined to any domain, performing full join to '{}'",
+                    options.domain
+                );
+                self.join_domain(options)?;
+                return Ok(true);
+            }
+            Some(other) if !other.eq_ignore_ascii_case(&options.domain) => {
+                log::info!(
+                    "Currently joined to '{}', requested '{}', performing full join",
+                    other,
+                    options.domain
+                );
+                self.join_domain(options)?;
+                return Ok(true);
+            }
+            Some(current) => {
+                log::info!(
+                    "Already joined to '{}', probing secure channel trust",
+                    current
+                );
+                current
+            }
+        };
+
+        // We are in the right domain. Probe secure channel via
+        // NETLOGON_CONTROL_TC_QUERY. If healthy, we're done.
+        let mut output: *mut u8 = std::ptr::null_mut();
+        let probe_status = unsafe {
+            I_NetLogonControl2(
+                PCWSTR::null(),
+                NETLOGON_CONTROL_TC_QUERY,
+                NETLOGON_CONTROL_QUERY_LEVEL,
+                std::ptr::null(),
+                &mut output,
+            )
+        };
+
+        if probe_status == 0 && !output.is_null() {
+            // The output for query level 1 is a NETLOGON_INFO_1, whose
+            // first u32 field is `netlogon_flags`. The flag
+            // NETLOGON_VERIFY_STATUS_RETURNED (0x4) indicates trust is verified.
+            const NETLOGON_VERIFY_STATUS_RETURNED: u32 = 0x4;
+            let netlogon_flags: u32 = unsafe { *(output as *const u32) };
+            unsafe { NetApiBufferFree(Some(output as _)); }
+            if (netlogon_flags & NETLOGON_VERIFY_STATUS_RETURNED) != 0 {
+                log::info!("Secure channel trust is healthy, no action needed");
+                return Ok(false);
+            }
+            log::warn!("Secure channel trust is broken, attempting in-place repair");
+        } else {
+            if !output.is_null() {
+                unsafe { NetApiBufferFree(Some(output as _)); }
+            }
+            log::warn!(
+                "Netlogon TC_QUERY failed with status {} (0x{:08x}), attempting repair",
+                probe_status, probe_status
+            );
+        }
+
+        // Repair: NETLOGON_CONTROL_CHANGE_PASSWORD (level 2) followed by
+        // NETLOGON_CONTROL_REDISCOVER. This rotates the machine account
+        // password on the DC without requiring a reboot.
+        #[repr(C)]
+        struct NetlogonChangePasswordInput {
+            partner_name: *const u16,
+            account_name: *const u16,
+            password: *const u16,
+        }
+        let account_w = U16CString::from_str(options.account.as_str())
+            .context("invalid account UTF-16")?;
+        let password_w = U16CString::from_str(options.password.as_str())
+            .context("invalid password UTF-16")?;
+        let input = NetlogonChangePasswordInput {
+            partner_name: std::ptr::null(),
+            account_name: account_w.as_ptr(),
+            password: password_w.as_ptr(),
+        };
+        let mut repair_output: *mut u8 = std::ptr::null_mut();
+        let change_status = unsafe {
+            I_NetLogonControl2(
+                PCWSTR::null(),
+                NETLOGON_CONTROL_CHANGE_PASSWORD,
+                NETLOGON_CONTROL_CHANGE_PASSWORD_QUERY_LEVEL,
+                &input as *const _ as *const u8,
+                &mut repair_output,
+            )
+        };
+        if !repair_output.is_null() {
+            unsafe { NetApiBufferFree(Some(repair_output as _)); }
+        }
+        if change_status != 0 {
+            log::warn!(
+                "Netlogon CHANGE_PASSWORD failed with status {} (0x{:08x}), falling back to rejoin",
+                change_status, change_status
+            );
+            self.rejoin_preserving_account(options)?;
+            return Ok(true); // reboot required
+        }
+
+        // Tell netlogon to rediscover DCs / re-establish channel
+        let mut rediscover_output: *mut u8 = std::ptr::null_mut();
+        let rediscover_status = unsafe {
+            I_NetLogonControl2(
+                PCWSTR::null(),
+                NETLOGON_CONTROL_REDISCOVER,
+                NETLOGON_CONTROL_QUERY_LEVEL,
+                std::ptr::null(),
+                &mut rediscover_output,
+            )
+        };
+        if !rediscover_output.is_null() {
+            unsafe { NetApiBufferFree(Some(rediscover_output as _)); }
+        }
+        if rediscover_status != 0 {
+            log::warn!(
+                "Netlogon REDISCOVER returned status {} (0x{:08x}) (continuing)",
+                rediscover_status, rediscover_status
+            );
+        }
+
+        log::info!("Secure channel repaired without reboot");
+        Ok(false)
     }
 
     fn get_os_version(&self) -> Result<String> {
