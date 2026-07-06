@@ -77,7 +77,7 @@ impl crate::system::System for LinuxSystem {
     }
 
     fn get_domain_name(&self) -> Result<Option<String>> {
-        Ok(None)
+        computer::get_domain_name()
     }
 
     fn rename_computer(&self, new_name: &str) -> Result<()> {
