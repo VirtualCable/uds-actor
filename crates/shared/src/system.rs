@@ -71,7 +71,7 @@ impl NetworkInterface {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct JoinDomainOptions {
     pub domain: String,
     pub account: String,
@@ -84,6 +84,21 @@ pub struct JoinDomainOptions {
     pub membership_software: Option<String>,
     pub ssl: Option<bool>,
     pub automatic_id_mapping: Option<bool>,
+}
+
+impl std::fmt::Debug for JoinDomainOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JoinDomainOptions")
+            .field("domain", &self.domain)
+            .field("account", &self.account)
+            .field("ou", &self.ou)
+            .field("client_software", &self.client_software)
+            .field("server_software", &self.server_software)
+            .field("membership_software", &self.membership_software)
+            .field("ssl", &self.ssl)
+            .field("automatic_id_mapping", &self.automatic_id_mapping)
+            .finish()
+    }
 }
 
 pub trait System: Send + Sync {

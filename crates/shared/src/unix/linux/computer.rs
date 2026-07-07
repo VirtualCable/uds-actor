@@ -186,15 +186,22 @@ pub(super) fn join_domain(options: &crate::system::JoinDomainOptions) -> Result<
 
     if output.status.success() {
         log::debug!("Joined domain {} successfully", domain);
+        Ok(())
     } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         log::error!(
-            "Error joining domain {}: {}",
+            "Error joining domain {} (exit {:?}): {}",
             domain,
-            String::from_utf8_lossy(&output.stderr)
+            output.status.code(),
+            stderr.trim()
         );
+        Err(anyhow::anyhow!(
+            "realm join {} failed (exit {:?}): {}",
+            domain,
+            output.status.code(),
+            stderr.trim()
+        ))
     }
-
-    Ok(())
 }
 
 pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOptions) -> Result<bool> {
