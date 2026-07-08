@@ -142,9 +142,23 @@ impl WindowsOperations {
                 flags,
             );
             if res == 0 {
+                log::info!(
+                    "Re-join to '{}' succeeded (account preserved)",
+                    options.domain
+                );
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("NetJoinDomain (rejoin) failed: {}", res))
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetJoinDomain (rejoin) to '{}' failed: {}",
+                    options.domain,
+                    detail
+                );
+                Err(anyhow::anyhow!(
+                    "NetJoinDomain (rejoin) to '{}' failed: {}",
+                    options.domain,
+                    detail
+                ))
             }
         }
     }
@@ -166,6 +180,43 @@ impl WindowsOperations {
                 ))
             } else {
                 Err(anyhow::anyhow!("GetVersionExW failed"))
+            }
+        }
+    }
+
+    /// Translate a Win32 / netapi32 error code into a human-readable message
+    /// using `FormatMessageW`. Falls back to the numeric code if the message
+    /// cannot be resolved (e.g. custom HRESULT, driver-specific codes).
+    ///
+    /// Used everywhere we return an `Err` from a netapi32 / win32 syscall so
+    /// the operator sees `"The specified network name is no longer available.
+    /// (code 64, 0x00000040)"` instead of an opaque `"26952"`.
+    fn format_net_error(code: u32) -> String {
+        unsafe {
+            use windows::Win32::System::Diagnostics::Debug::{
+                FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS,
+            };
+            let mut buf = [0u16; 512];
+            let len = FormatMessageW(
+                FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                None,
+                code,
+                0,
+                PWSTR(buf.as_mut_ptr()),
+                buf.len() as u32,
+                None,
+            );
+            let msg = if len > 0 {
+                utf16_ptr_to_string(buf.as_ptr()).unwrap_or_default()
+            } else {
+                String::new()
+            };
+            // FormatMessageW includes trailing CRLF (and sometimes a leading one), strip them.
+            let msg = msg.trim().to_string();
+            if msg.is_empty() {
+                format!("code {code} (0x{code:08X})")
+            } else {
+                format!("{msg} (code {code}, 0x{code:08X})")
             }
         }
     }
@@ -213,7 +264,12 @@ impl System for WindowsOperations {
             let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
 
             if ret != 0 {
-                return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
+                let detail = Self::format_net_error(ret as u32);
+                log::error!("NetGetJoinInformation failed: {}", detail);
+                return Err(anyhow::anyhow!(
+                    "NetGetJoinInformation failed: {}",
+                    detail
+                ));
             }
 
             // Convert the returned PWSTR to String
@@ -296,16 +352,20 @@ impl System for WindowsOperations {
                 flags,
             );
 
-            // If the error is "already joined", try again with less flags (no create account, use existing)
-            // This may happen if the account already exists on another ou
+            // If the error is "already joined", try again with less flags (no create account, no
+            // new name flag) AND drop the OU. The v4.0 python actor does exactly this because
+            // error 2224 typically means the machine account already exists in another OU of
+            // the same domain, so re-issuing NetJoinDomain with a non-null OU keeps failing.
             if res == 2224 {
+                log::warn!(
+                    "NetJoinDomain returned 2224 (ERROR_JOINED_TO_OU), retrying without OU \
+                    and without NETSETUP_ACCT_CREATE / NETSETUP_JOIN_WITH_NEW_NAME"
+                );
                 let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
                 res = NetJoinDomain(
                     PCWSTR::null(),
                     PCWSTR(lp_domain.as_ptr()),
-                    lp_ou
-                        .as_ref()
-                        .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                    PCWSTR::null(), // force NULL OU on retry
                     PCWSTR(lp_account.as_ptr()),
                     PCWSTR(lp_password.as_ptr()),
                     flags,
@@ -313,9 +373,22 @@ impl System for WindowsOperations {
             }
 
             if res == 0 {
+                log::info!("NetJoinDomain for '{}' succeeded", options.domain);
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("NetJoinDomain failed: {}", res))
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetJoinDomain for domain '{}', OU '{}', account '{}' failed: {}",
+                    options.domain,
+                    options.ou.as_deref().unwrap_or(""),
+                    options.account,
+                    detail
+                );
+                Err(anyhow::anyhow!(
+                    "NetJoinDomain for domain '{}' failed: {}",
+                    options.domain,
+                    detail
+                ))
             }
         }
     }
@@ -343,7 +416,13 @@ impl System for WindowsOperations {
             if res == 0 {
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetUserChangePassword for user '{}' failed: {}",
+                    user,
+                    detail
+                );
+                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", detail))
             }
         }
     }
@@ -550,7 +629,9 @@ impl System for WindowsOperations {
         };
 
         if ret != 0 {
-            return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", ret));
+            let detail = Self::format_net_error(ret as u32);
+            log::error!("GetAdaptersAddresses failed: {}", detail);
+            return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", detail));
         }
 
         let mut results = vec![];
@@ -618,7 +699,9 @@ impl System for WindowsOperations {
         if status.success() {
             Ok(())
         } else {
-            anyhow::bail!("w32tm /resync failed with {:?}", status.code());
+            let msg = format!("w32tm /resync failed with {:?}", status.code());
+            log::error!("{}", msg);
+            anyhow::bail!(msg);
         }
     }
 
@@ -676,7 +759,16 @@ impl System for WindowsOperations {
             );
 
             if err.0 != 0 {
-                return Err(anyhow::anyhow!("SetNamedSecurityInfoW failed: {}", err.0));
+                let detail = Self::format_net_error(err.0 as u32);
+                log::error!(
+                    "SetNamedSecurityInfoW for path '{}' failed: {}",
+                    path,
+                    detail
+                );
+                return Err(anyhow::anyhow!(
+                    "SetNamedSecurityInfoW failed: {}",
+                    detail
+                ));
             }
 
             Ok(())
@@ -810,9 +902,16 @@ impl System for WindowsOperations {
                         1,
                     );
                     if status != 0 {
+                        let detail = Self::format_net_error(status);
+                        log::error!(
+                            "NetLocalGroupAddMembers to '{}' for user '{}' failed: {}",
+                            group_name,
+                            user,
+                            detail
+                        );
                         return Err(anyhow::anyhow!(
-                            "NetLocalGroupAddMembers failed with code {}",
-                            status
+                            "NetLocalGroupAddMembers failed: {}",
+                            detail
                         ));
                     }
                 }
