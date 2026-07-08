@@ -133,6 +133,80 @@ async fn test_managed_join_domain_should_join() -> Result<()> {
 
 #[tokio::test]
 #[serial_test::serial(server)]
+async fn test_managed_join_domain_failure_reports_to_broker() -> Result<()> {
+    use std::sync::atomic::Ordering;
+
+    let mut test_setup = TestSetup::new(run).await;
+    // Force the OS-level join to fail (mimics NetJoinDomain Win32 error 2).
+    test_setup
+        .operations
+        .fail_join_domain
+        .store(true, Ordering::SeqCst);
+    test_setup.broker_api.write().await.init_response =
+        shared::broker::api::types::InitializationResponse {
+            master_token: Some("mastertoken".into()),
+            token: Some("owntoken".into()),
+            unique_id: Some("uniqueid".into()),
+            os: Some(shared::config::ActorOsConfiguration {
+                action: shared::config::ActorOsAction::JoinDomain,
+                name: "new_actor_name".into(),
+                custom: Some(json!({
+                    "domain": "domain.local",
+                    "ou": "OU=Computers,DC=domain,DC=local",
+                    "account": "admin",
+                    "password": "password"
+                })),
+            }),
+        };
+    // Signal the run function to start
+    test_setup.notify.notify_one();
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    // Invariant: a failed OS action MUST hit broker /log and abort BEFORE reboot
+    // or ready() — otherwise it restart-loops with an empty "Registros" panel.
+    assert!(test_setup.calls.count_calls("operations::join_domain") == 1);
+    assert!(test_setup.calls.count_calls("broker_api::log") == 1);
+    test_setup.calls.assert_not_called("operations::reboot");
+    test_setup.calls.assert_not_called("broker_api::ready");
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
+async fn test_managed_rename_failure_reports_to_broker() -> Result<()> {
+    use std::sync::atomic::Ordering;
+
+    let mut test_setup = TestSetup::new(run).await;
+    test_setup
+        .operations
+        .fail_rename
+        .store(true, Ordering::SeqCst);
+    test_setup.broker_api.write().await.init_response =
+        shared::broker::api::types::InitializationResponse {
+            master_token: Some("mastertoken".into()),
+            token: Some("owntoken".into()),
+            unique_id: Some("uniqueid".into()),
+            os: Some(shared::config::ActorOsConfiguration {
+                action: shared::config::ActorOsAction::Rename,
+                name: "new_actor_name".into(),
+                custom: None,
+            }),
+        };
+    // Signal the run function to start
+    test_setup.notify.notify_one();
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    assert!(test_setup.calls.count_calls("operations::rename_computer") == 1);
+    test_setup.calls.assert_not_called("operations::reboot");
+    assert!(test_setup.calls.count_calls("broker_api::log") == 1);
+    test_setup.calls.assert_not_called("broker_api::ready");
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
 async fn test_managed_join_domain_should_not_join() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
     // Note that

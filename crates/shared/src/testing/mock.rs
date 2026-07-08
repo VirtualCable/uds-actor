@@ -5,6 +5,7 @@ use crate::{
     system::{NetworkInterface, System},
     tls::CertificateInfo,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use super::test_certs;
@@ -69,19 +70,26 @@ impl Calls {
 
 pub struct OperationsMock {
     pub calls: Calls,
+    // Error-injection flags. Shared (Arc) so a test can flip them AFTER the mock
+    // is already wrapped in the platform's `Arc<dyn System>`. Default off, so
+    // existing happy-path tests are unaffected.
+    pub fail_rename: Arc<AtomicBool>,
+    pub fail_join_domain: Arc<AtomicBool>,
 }
 
 impl OperationsMock {
     pub fn new(calls: Calls) -> Self {
-        Self { calls }
+        Self {
+            calls,
+            fail_rename: Arc::new(AtomicBool::new(false)),
+            fail_join_domain: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
 impl Default for OperationsMock {
     fn default() -> Self {
-        Self {
-            calls: Calls::new(),
-        }
+        Self::new(Calls::new())
     }
 }
 
@@ -105,6 +113,9 @@ impl System for OperationsMock {
         self.calls
             .push(format!("operations::rename_computer({})", new_name));
         crate::log::info!("Renaming computer to {}", new_name);
+        if self.fail_rename.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("Injected rename_computer failure"));
+        }
         Ok(())
     }
 
@@ -112,6 +123,9 @@ impl System for OperationsMock {
         self.calls
             .push(format!("operations::join_domain({:?})", options));
         crate::log::info!("Joining domain: {:?}", options);
+        if self.fail_join_domain.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("Injected join_domain failure"));
+        }
         Ok(())
     }
 
