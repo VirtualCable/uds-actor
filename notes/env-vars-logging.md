@@ -74,15 +74,71 @@ single struct.
 
 ---
 
-## 3. Auxiliary writers (Event Viewer / syslog)
+## 3. Stderr writer
 
-These are **not implemented yet**. They live in `notes/` as the specification
-for the next iteration. Once added, they will respect the following env vars:
+A second `fmt::Layer` writes a coloured, line-numbered copy of every event
+to `stderr`. This is what systemd (`StandardError=journal`), launchd
+(`log show --predicate 'process == "udsactor-service"'`) and a manual
+console attach all consume.
+
+The stderr layer is **always registered** for `LogType::Service` and
+`LogType::Client`; the only thing that varies is the inner `EnvFilter`
+applied to it. `LogType::Config` does not get a stderr layer (it is a
+one-shot GUI tool).
 
 | Variable | Component | Default | Notes |
 | --- | --- | --- | --- |
-| `UDSACTOR_<TYPE>_EVENTLOG_LEVEL` | Windows SERVICE / CONFIG | `info` | Minimum level that is forwarded to the Windows Event Log (`Source = "UDS Actor Service"`). Only records `Error` (red), `Warn` (yellow) and `Info` (green). |
-| `UDSACTOR_<TYPE>_EVENTLOG_DISABLE` | Windows SERVICE / CONFIG | `false` | Set to `true` to suppress the Event-Log layer entirely (e.g. when running in containers). |
+| `UDSACTOR_<TYPE>_STDERR_DISABLE` | SERVICE / CLIENT | `false` | Set to `true` / `1` / `yes` / `on` to mute stderr. The layer stays registered (so the type stays uniform across binaries); it is gated internally by `EnvFilter::new("off")`. |
+| `UDSACTOR_<TYPE>_STDERR_LEVEL` | SERVICE / CLIENT | inherits `LOG_LEVEL` on release, `debug` on debug builds | Minimum level emitted to stderr. Accepted values: `trace`, `debug`, `info`, `warn`, `error`, `off`. |
+
+> **Why "always register"?** `tracing-subscriber`'s `Layered` type changes
+> every time you conditionally add a layer, which forces the
+> `tracing_subscriber::registry().with(...).try_init()` chain to be
+> type-specialised per branch. Keeping the layer unconditionally registered
+> lets the `EnvFilter` carry the "on/off" decision and keeps the call site
+> readable. The cost of an extra (filtered-out) layer is negligible.
+
+---
+
+## 4. Auxiliary writers (Event Viewer / syslog)
+
+These give operators a system-level view of the actor's events without
+having to open the log file.
+
+### 4.1 Windows Event Viewer
+
+Implemented in `crates/shared/src/windows/eventlog.rs`. It registers an
+event source named `"UDS Actor Service"` against the local
+`Application` log via `RegisterEventSourceW` and reports each event with
+`ReportEventW`, mapping `tracing::Level` to Windows event types:
+`ERROR`/`WARN` → `EVENTTYPE_WARNING` (yellow), `INFO`/`DEBUG`/`TRACE` →
+`EVENTTYPE_INFORMATION` (green).
+
+The layer is **only active** for `LogType::Service` (`EventLogLayer::for_type`
+returns a no-op layer for everything else, mirroring the broker forwarder).
+
+| Variable | Component | Default | Notes |
+| --- | --- | --- | --- |
+| `UDSACTOR_<TYPE>_EVENTLOG_LEVEL` | Windows SERVICE | `info` | Minimum level forwarded. Accepted values: `trace`, `debug`, `info`, `warn`, `error`, `off`. |
+| `UDSACTOR_<TYPE>_EVENTLOG_DISABLE` | Windows SERVICE | `false` | Set to `true` to skip registering the event source. Useful inside CI / containers where the event-log service is absent. |
+
+> The event source registration must happen with elevated privileges (the
+> service runs as `LocalSystem`, which has them). On `EventLogLayer::shutdown`
+> the handle is deregistered via `DeregisterEventSource` — called from
+> `crates/service/src/main.rs` after the WS server stops.
+>
+> The event source entry (`UDS Actor Service`) is created with the right
+> message file on install: see `building/windows/Dockerfile` and the
+> installer that drops the corresponding registry keys under
+> `HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\UDS Actor Service`.
+
+### 4.2 Syslog (Linux / macOS)
+
+**Not implemented yet** (placeholder for parity with the v4.0 Python
+actor). When added it will respect:
+
+| Variable | Component | Default | Notes |
+| --- | --- | --- | --- |
 | `UDSACTOR_<TYPE>_SYSLOG_LEVEL` | Linux / macOS SERVICE | `info` | Minimum level forwarded to the local syslog (UDP `127.0.0.1:514`). Levels are mapped to RFC 3164 priorities (`daemon.notice` for `info`, `daemon.warning` for `warn`, `daemon.err` for `error`). |
 | `UDSACTOR_<TYPE>_SYSLOG_DISABLE` | Linux / macOS SERVICE | `false` | Set to `true` to skip opening the syslog socket on environments where no syslogd is running. |
 
@@ -92,7 +148,7 @@ for the next iteration. Once added, they will respect the following env vars:
 
 ---
 
-## 4. Broker log forwarding (service-only)
+## 5. Broker log forwarding (service-only)
 
 `crates/shared/src/log_forward.rs` adds a tracing `Layer` that mirrors the
 v4.0 Python actor: every `info!` / `warn!` / `error!` emitted by the service
@@ -125,9 +181,9 @@ and `tokio::spawn`-ed to call `BrokerApi::log(...)`.
 
 ---
 
-## 4. Quick recipes
+## 6. Quick recipes
 
-### 4.1 Diagnose a JoinDomain failure on Windows
+### 6.1 Diagnose a JoinDomain failure on Windows
 
 ```powershell
 $env:UDSACTOR_SERVICE_LOG_LEVEL = "debug"
@@ -146,7 +202,7 @@ ERROR NetJoinDomain for domain 'corp.example.com', OU 'OU=Machines,…', \
   (code 64, 0x00000040)
 ```
 
-### 4.2 Per-machine rotating logs on Linux
+### 6.2 Per-machine rotating logs on Linux
 
 ```bash
 export UDSACTOR_SERVICE_LOG_LEVEL=info
@@ -156,7 +212,7 @@ ls -l /var/log/udsactor/
 # -> udsactor-service-<host>-<timestamp>.log
 ```
 
-### 4.3 Force the client log into a stable location (debugging)
+### 6.3 Force the client log into a stable location (debugging)
 
 ```cmd
 setx UDSACTOR_CLIENT_LOG_PATH "C:\UDS\client-logs"
@@ -168,7 +224,7 @@ The actor also prints the resolved path to stderr at startup
 (`udsactor log file: …`), so even without the env vars you can always tell
 where the log is written.
 
-### 4.4 Toggle broker forwarding or change its threshold
+### 6.4 Toggle broker forwarding or change its threshold
 
 ```powershell
 # Disable forwarding entirely (still logs to file + stderr)
@@ -188,14 +244,57 @@ Useful env vars to confirm it's wired up:
 | Broker REST log | `actor/v3/log` POSTs with the formatted message, token = the managed `own_token` |
 | Server side | The broker stores these in the actor's `UserService.log` table for the admin UI |
 
+### 6.5 Inspect the service from Event Viewer (Windows)
+
+```powershell
+# Open the most recent errors / warnings from the actor
+Get-EventLog -LogName Application -Source "UDS Actor Service" -Newest 20 |
+    Where-Object { $_.EntryType -in "Error","Warning" } |
+    Format-List TimeGenerated, EntryType, Message
+
+# Or use the modern cmdlet
+Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='UDS Actor Service'} -MaxEvents 20
+```
+
+To mute the EventLog writer (e.g. inside a CI container):
+
+```powershell
+[Environment]::SetEnvironmentVariable("UDSACTOR_SERVICE_EVENTLOG_DISABLE","true","Machine")
+Restart-Service UDSActorService
+```
+
+To switch the EventLog writer to DEBUG while investigating:
+
+```powershell
+[Environment]::SetEnvironmentVariable("UDSACTOR_SERVICE_EVENTLOG_LEVEL","debug","Machine")
+Restart-Service UDSActorService
+```
+
+### 6.6 Tail stderr alongside the file (Linux / macOS)
+
+The systemd unit captures stderr into the journal, but during development
+you may want to follow it directly:
+
+```bash
+journalctl -u udsactor.service -f
+# or, when running the binary outside systemd:
+RUST_LOG=debug ./udsactor-service
+```
+
+The same events show up three places (file, stderr, broker) — each layer
+has its own `EnvFilter`, so you can crank one without flooding the others.
+
 ---
 
-## 5. See also
+## 7. See also
 
-- `crates/shared/src/log.rs` — implementation of the rolling file writer and
-  the `EnvFilter`-based level control.
+- `crates/shared/src/log.rs` — implementation of the rolling file writer,
+  the stderr layer and the layer-pipeline assembly.
 - `crates/shared/src/log_forward.rs` — broker-forwarding `Layer`,
   `set_log_forwarder()` API and `flood_allow()` lock-free rate limiter.
+- `crates/shared/src/windows/eventlog.rs` — `EventLogLayer`,
+  `RegisterEventSourceW` + `ReportEventW` plumbing and the
+  `Shutdown` integration at `crates/service/src/main.rs`.
 - `crates/shared/src/windows/system/mod.rs` —
   `WindowsOperations::format_net_error`, the helper that translates Win32
   error codes (returned by `NetJoinDomain`, `NetGetJoinInformation`,
