@@ -188,8 +188,8 @@ async fn test_managed_join_domain_failure_reports_to_broker() -> Result<()> {
     test_setup.stop_and_wait_task(1).await?;
 
     log::info!("Calls: {:?}", test_setup.calls.dump());
-    // Invariant: a failed OS action MUST hit broker /log and abort BEFORE reboot
-    // or ready() — otherwise it restart-loops with an empty "Registros" panel.
+    // Note: a failed OS action should hit broker /log and abort before reboot
+    // or ready(), otherwise it just restarts with an empty "Registros" panel.
     assert!(test_setup.calls.count_calls("operations::ensure_domain_membership") == 1);
     assert!(test_setup.calls.count_calls("broker_api::log") == 1);
     test_setup.calls.assert_not_called("operations::reboot");

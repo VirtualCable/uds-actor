@@ -4,13 +4,13 @@ use shared::{broker::api::types::LogLevel, config::ActorOsAction, log, ws::serve
 
 use crate::{common, platform, workers};
 
-/// Report a fatal OS-config error to BOTH the local log and the broker.
+/// Report a fatal OS-config error to both the local log and the broker.
 ///
-/// During the OS-config phase (rename/join domain) the actor has NO local
+/// During the OS-config phase (rename/join domain) the actor has no local
 /// websocket client yet, so failures never reach the admin "Registros" panel
-/// and the service just restart-loops silently. The broker token/secret are
-/// ALREADY set at this point (initialize() has run), so we can POST /log here.
-/// Best-effort: if the broker call fails we keep the original error anyway.
+/// and the service just keeps restarting. The broker token/secret are already
+/// set at this point (initialize() has run), so we can POST /log here.
+/// Best-effort: if the broker call fails, we keep the original error anyway.
 async fn report_fatal(platform: &platform::Platform, message: &str) {
     log::error!("{}", message);
     let _ = platform
@@ -71,8 +71,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                     }
                     Ok(false) => {} // Already has the correct name, skips reboot
                     Err(e) => {
-                        // Surface the failure on the admin panel before dying, otherwise
-                        // the service just restart-loops with an empty "Registros" panel.
+                        // Surface the failure on the admin panel before returning, otherwise
+                        // the service just restarts with an empty "Registros" panel.
                         let msg = format!("Rename to '{}' failed: {}", os_data.name, e);
                         report_fatal(&platform, &msg).await;
                         return Err(anyhow::anyhow!(msg));
@@ -100,8 +100,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                     Ok(false) => {} // Already has the correct name and domain, skips reboot
                     Err(e) => {
                         // Same reasoning as rename: a failed NetJoinDomain (e.g. Win32 error 2,
-                        // ERROR_FILE_NOT_FOUND -> DC/OU not found) MUST reach the admin panel
-                        // instead of vanishing into a silent restart loop.
+                        // ERROR_FILE_NOT_FOUND -> DC/OU not found) should reach the admin panel
+                        // instead of a silent restart.
                         let msg = format!("Domain join for '{}' failed: {}", os_data.name, e);
                         report_fatal(&platform, &msg).await;
                         return Err(anyhow::anyhow!(msg));
