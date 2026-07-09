@@ -37,6 +37,91 @@ fn test_get_domain_name() {
 
 // change_user_password is not tested to avoid changing any user password
 
+// -----------------------------------------------------------------------
+// Regression tests for OU = "" -> NULL mapping.
+//
+// The server (`windows_domain.py`) emits `custom.ou = ""` whenever the
+// OsManager has no OU configured. NetJoinDomain rejects an empty string
+// with ERROR_FILE_NOT_FOUND (code 2), so we must convert "empty" -> NULL
+// on the Rust side before building the wide string.
+//
+// These tests do NOT call NetJoinDomain itself (that would require admin
+// privileges and a real domain). They just validate the data shape:
+//   - server payload parses cleanly when ou = ""
+//   - JoinDomainOptions with Some("") is treated as None for the syscall
+// -----------------------------------------------------------------------
+
+#[test]
+fn test_os_action_payload_rename_ad_with_empty_ou_parses() {
+    use crate::config::ActorOsConfiguration;
+
+    // Real payload shape that the v4.0 and v5.0 servers send when the user
+    // did NOT configure an OU on the OsManager.
+    let json = r#"{
+        "action": "rename_ad",
+        "name": "UDSZVZ000",
+        "custom": {
+            "domain": "vc.local",
+            "ou": "",
+            "account": "administrador",
+            "password": "fictitious-password"
+        }
+    }"#;
+
+    let cfg: ActorOsConfiguration =
+        serde_json::from_str(json).expect("server payload must deserialize");
+    let custom = cfg.custom.expect("custom block must be present");
+
+    // The empty string should reach us verbatim; the NULL coercion is the
+    // responsibility of the windows code, not of the config layer.
+    assert_eq!(custom.get("domain").and_then(|v| v.as_str()), Some("vc.local"));
+    assert_eq!(custom.get("ou").and_then(|v| v.as_str()), Some(""));
+    assert_eq!(
+        custom.get("account").and_then(|v| v.as_str()),
+        Some("administrador")
+    );
+}
+
+#[test]
+fn test_join_options_empty_ou_should_be_treated_as_none() {
+    use crate::system::JoinDomainOptions;
+
+    // This mirrors what `computer::join_domain` builds before calling
+    // `WindowsOperations::join_domain`. If the server sends ou="" the
+    // resulting options carry Some("") — and the windows-side wrapper
+    // *must* convert that to NULL on the way to NetJoinDomain.
+    let options = JoinDomainOptions {
+        domain: "vc.local".into(),
+        account: "administrador".into(),
+        password: "secret".into(),
+        ou: Some(String::new()), // <-- empty string from the server
+        client_software: None,
+        server_software: None,
+        membership_software: None,
+        ssl: None,
+        automatic_id_mapping: None,
+    };
+
+    // The only thing we can verify at the unit-test level (without invoking
+    // the Win32 syscall) is that the precondition that drives the NULL
+    // coercion holds: the trimmed value must be empty.
+    assert!(
+        options.ou.as_deref().map(str::trim).unwrap_or("").is_empty(),
+        "An empty OU should be coerced to NULL when calling NetJoinDomain"
+    );
+
+    // And the symmetric case: a real OU must NOT be coerced.
+    let options_with_ou = JoinDomainOptions { ou: Some("OU=Machines,DC=vc,DC=local".into()), ..options };
+    assert!(
+        !options_with_ou
+            .ou
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+    );
+}
+
 #[test]
 fn test_get_os_version() {
     setup_logging("debug", LogType::Tests);

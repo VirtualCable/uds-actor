@@ -117,10 +117,13 @@ impl WindowsOperations {
             }
             let lp_domain =
                 U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
-            let lp_ou = match options.ou.clone() {
-                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
-                None => None,
-            };
+            // Same NULL-on-empty rule as in `join_domain` (see comment there).
+            let lp_ou = options
+                .ou
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| U16CString::from_str(s).context("failed to convert OU to UTF-16"))
+                .transpose()?;
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
             let lp_password = U16CString::from_str(options.password.clone())
@@ -331,10 +334,15 @@ impl System for WindowsOperations {
             // Convert to utf16
             let lp_domain =
                 U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
-            let lp_ou = match options.ou.clone() {
-                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
-                None => None,
-            };
+            // The server may emit `ou = ""` to mean "default Computers container"
+            // (None). NetJoinDomain rejects an empty string with ERROR_FILE_NOT_FOUND,
+            // so we must convert empty -> NULL on the Rust side.
+            let lp_ou = options
+                .ou
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| U16CString::from_str(s).context("failed to convert OU to UTF-16"))
+                .transpose()?;
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
             let lp_password = U16CString::from_str(options.password.clone())
@@ -434,6 +442,7 @@ impl System for WindowsOperations {
 
         let current_domain = match self.get_domain_name()? {
             None => {
+                // Not joined to any domain: full join required.
                 log::info!(
                     "Not joined to any domain, performing full join to '{}'",
                     options.domain
@@ -441,19 +450,16 @@ impl System for WindowsOperations {
                 self.join_domain(options)?;
                 return Ok(true);
             }
-            Some(other) if !other.eq_ignore_ascii_case(&options.domain) => {
-                log::info!(
-                    "Currently joined to '{}', requested '{}', performing full join",
-                    other,
-                    options.domain
-                );
-                self.join_domain(options)?;
-                return Ok(true);
-            }
             Some(current) => {
+                // Already joined to *some* domain. The broker's domain name is
+                // treated as immutable: if it ever changed, the existing
+                // machine account would be invalid anyway, so the operator
+                // must redeploy. We never auto-rejoin in this branch — we just
+                // verify the secure channel trust with the DC.
                 log::info!(
-                    "Already joined to '{}', probing secure channel trust",
-                    current
+                    "Already joined to '{}', probing secure channel trust (requested domain '{}')",
+                    current,
+                    options.domain
                 );
                 current
             }

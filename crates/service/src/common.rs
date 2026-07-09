@@ -54,9 +54,13 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
     let broker_api = platform.broker_api(); // Avoid drop borrow
     let mut broker_api_guard = broker_api.write().await;
     let interfaces = platform.system().get_network_info()?;
-    // Initialize
-    let master_token = cfg_guard.master_token.clone().unwrap_or_default();
-    broker_api_guard.set_token(&master_token);
+    // Initialize. Use the actor's `token()` helper which already implements the
+    // correct precedence: own_token > master_token > empty. Calling
+    // `set_token` with the master_token directly is wrong because in Managed
+    // mode the master_token has been cleared from disk after the first
+    // successful initialize, so subsequent boots would authenticate with "".
+    let initial_token = cfg_guard.token();
+    broker_api_guard.set_token(&initial_token);
     log::info!(
         "{:?} actor not initialized, initializing with broker",
         actor_type
@@ -85,12 +89,12 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         }
 
         if actor_type == shared::config::ActorType::Managed {
-            // On managed, master_token must be cleared
-            // TODO: clear master_token (remove commented line when tested)
-            log::info!(
-                "Clearing master token on managed actor (currently not doing for debugging)"
-            );
-            // cfg_guard.master_token.take();
+            // On managed, master_token must be cleared so subsequent restarts
+            // authenticate with the per-deployment `own_token` rather than the
+            // deployment-wide master token.
+            if cfg_guard.master_token.take().is_some() {
+                log::info!("Cleared master token on managed actor");
+            }
         }
         cfg_guard.own_token = response.token;
         cfg_guard.config.unique_id = response.unique_id;

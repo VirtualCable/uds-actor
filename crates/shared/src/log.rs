@@ -194,7 +194,7 @@ fn default_log_dir(log_type: &LogType) -> String {
         //   - LocalSystem (service) => C:\Windows\Temp
         //   - User (client)        => %USERPROFILE%\AppData\Local\Temp
         let _ = log_type; // not used on Windows; suppress unused-variable warning
-        return std::env::temp_dir().to_string_lossy().into_owned();
+        std::env::temp_dir().to_string_lossy().into_owned()
     }
 
     #[cfg(target_family = "unix")]
