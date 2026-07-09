@@ -40,6 +40,9 @@ use tracing_subscriber::{
 
 use crate::log_forward::LogForwardLayer;
 
+#[cfg(target_os = "windows")]
+use crate::windows::eventlog::EventLogLayer;
+
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
 
@@ -295,29 +298,61 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .with_thread_ids(level == "debug" || level == "trace")
             .with_filter(reload_layer);
 
-        #[cfg(debug_assertions)]
-        let main_layer = main_layer.and_then(
-            fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_ansi(true)
-                .with_target(true)
-                .with_level(true)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_line_number(true)
-                .with_filter(EnvFilter::new("debug")),
+        // Stderr layer: emits colored, line-numbered output to stderr.
+        // Useful under systemd / launchd, which capture stderr into the
+        // journal / log show. Enabled for service and client (both run as
+        // long-lived processes). Config is intentionally excluded because
+        // it's a one-shot GUI tool.
+        //
+        // On debug builds we force-enable it and bump verbosity. On release
+        // it's also enabled by default; disable with
+        // UDSACTOR_<TYPE>_STDERR_DISABLE=true.
+        let stderr_disable_key = format!(
+            "UDSACTOR_{}_STDERR_DISABLE",
+            log_type.to_string().to_uppercase()
         );
+        let stderr_enabled = matches!(log_type, LogType::Service | LogType::Client)
+            && std::env::var(&stderr_disable_key)
+                .ok()
+                .map(|v| !matches!(v.to_lowercase().as_str(), "true" | "1" | "yes" | "on"))
+                .unwrap_or(true);
 
-        // Optional forwarder: only `LogType::Service` actually forwards
-        // (see `LogForwardLayer::for_type`); for everything else this
-        // returns a layer whose `enabled()` is false, which is a no-op.
-        let forwarder = LogForwardLayer::for_type(&log_type);
-        let main_layer = main_layer.and_then(forwarder);
+let stderr_level = if !stderr_enabled {
+    // Effectively disable: filter out everything.
+    "off"
+} else if cfg!(debug_assertions) {
+    "debug"
+} else {
+    // On release, match the file log level for consistency.
+    level.as_str()
+};
 
-        tracing_subscriber::registry()
-            .with(main_layer)
-            .try_init()
-            .ok();
+// Stderr layer: always added, controlled by EnvFilter so the type stays
+// uniform across the conditional branch above.
+let main_layer = main_layer.and_then(
+    fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_ansi(true)
+        .with_target(true)
+        .with_level(true)
+        .with_thread_ids(true)
+        .with_file(cfg!(debug_assertions))
+        .with_line_number(cfg!(debug_assertions))
+        .with_filter(EnvFilter::new(stderr_level)),
+);
+
+// Optional forwarder: only `LogType::Service` actually forwards
+// (see `LogForwardLayer::for_type`); for everything else this returns
+// a layer whose `enabled()` is false, which is a no-op.
+let main_layer = main_layer.and_then(LogForwardLayer::for_type(&log_type));
+
+#[cfg(target_os = "windows")]
+let main_layer = main_layer.and_then(EventLogLayer::for_type(&log_type));
+
+tracing_subscriber::registry()
+    .with(main_layer)
+    .try_init()
+    .ok();
 
         // Setup panic hook, not if testing
         if log_type != LogType::Tests {

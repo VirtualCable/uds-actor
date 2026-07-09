@@ -125,6 +125,14 @@ async fn async_main(platform: platform::Platform) -> Result<()> {
         actors::managed::run(platform.clone()).await?;
     }
     log::info!("Service main async logic exiting");
+
+    // Release the Windows EventLog handle, if any. No-op on non-Windows
+    // and on services where the layer was disabled. The OS reclaims the
+    // handle on process exit anyway, but being explicit avoids leaking
+    // a stale handle in long-lived services that are restart-managed.
+    #[cfg(target_os = "windows")]
+    shared::windows::eventlog::shutdown();
+
     Ok(())
 }
 
