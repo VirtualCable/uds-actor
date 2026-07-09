@@ -33,6 +33,7 @@ pub mod config;
 pub mod consts;
 pub mod installer;
 pub mod log;
+pub mod log_forward;
 pub mod service;
 pub mod sync;
 pub mod system;

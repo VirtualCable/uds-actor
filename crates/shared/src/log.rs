@@ -38,6 +38,8 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
 
+use crate::log_forward::LogForwardLayer;
+
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
 
@@ -115,7 +117,7 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum LogType {
     Client,
     Service,
@@ -305,6 +307,12 @@ pub fn setup_logging(level: &str, log_type: LogType) {
                 .with_line_number(true)
                 .with_filter(EnvFilter::new("debug")),
         );
+
+        // Optional forwarder: only `LogType::Service` actually forwards
+        // (see `LogForwardLayer::for_type`); for everything else this
+        // returns a layer whose `enabled()` is false, which is a no-op.
+        let forwarder = LogForwardLayer::for_type(&log_type);
+        let main_layer = main_layer.and_then(forwarder);
 
         tracing_subscriber::registry()
             .with(main_layer)

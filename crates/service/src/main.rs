@@ -93,6 +93,12 @@ fn main() {
 async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
 
+    // Wire the log forwarder so service-side tracing events (>= WARN by
+    // default) get pushed to the broker via POST actor/v3/log.
+    // Only LogType::Service forwards (see LogForwardLayer::for_type); the
+    // service's own log_type is hard-coded here.
+    shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
+
     let cfg = platform.config().read().await.clone();
 
     // Setup logging level from config

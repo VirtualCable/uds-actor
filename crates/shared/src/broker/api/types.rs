@@ -256,6 +256,20 @@ impl From<u8> for LogLevel {
     }
 }
 
+/// Map `tracing::Level` to our server-side `LogLevel`. Used by the log
+/// forwarder in `crates/shared/src/log_forward.rs`.
+impl From<tracing::Level> for LogLevel {
+    fn from(level: tracing::Level) -> Self {
+        match level {
+            tracing::Level::TRACE => LogLevel::Debug,
+            tracing::Level::DEBUG => LogLevel::Debug,
+            tracing::Level::INFO => LogLevel::Info,
+            tracing::Level::WARN => LogLevel::Warn,
+            tracing::Level::ERROR => LogLevel::Error,
+        }
+    }
+}
+
 impl From<LogLevel> for u8 {
     fn from(level: LogLevel) -> Self {
         match level {
