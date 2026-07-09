@@ -34,10 +34,14 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         log::warn!("Failed to force time sync on startup: {}", e);
     }
 
-    // Call initialize with broker if not already initialized.
-    if platform.config().read().await.already_initialized() {
-        log::info!("Managed actor already initialized, skipping initialization");
-    } else if let Err(e) = crate::common::initialize(&platform).await {
+    // Call initialize with broker if not already initialized in this process.
+    // Note: `is_initialized` is a runtime-only flag (serde-skipped on the config),
+    // so it resets to false on every service restart, ensuring the broker
+    // initialize REST is re-evaluated every time the actor starts (including
+    // after restoring a snapshot where the domain trust may have expired).
+    if !platform.config().read().await.is_initialized
+        && let Err(e) = crate::common::initialize(&platform).await
+    {
         log::error!("Failed to initialize managed actor with broker: {}", e);
         return Err(anyhow::anyhow!(
             "Failed to initialize managed actor with broker: {}",
@@ -147,7 +151,12 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             .unwrap()
             .to_string(),
         Some(shared::consts::UDS_PORT),
-        platform.config().read().await.ssl_ciphers().map(|s| s.to_string()),
+        platform
+            .config()
+            .read()
+            .await
+            .ssl_ciphers()
+            .map(|s| s.to_string()),
     )
     .await?;
 

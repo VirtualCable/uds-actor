@@ -129,6 +129,23 @@ impl System for OperationsMock {
         Ok(())
     }
 
+    fn ensure_domain_membership(
+        &self,
+        options: &crate::system::JoinDomainOptions,
+    ) -> anyhow::Result<bool> {
+        self.calls.push(format!(
+            "operations::ensure_domain_membership({:?})",
+            options
+        ));
+        crate::log::info!("Ensuring domain membership: {:?}", options);
+        if self.fail_join_domain.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!(
+                "Injected ensure_domain_membership failure"
+            ));
+        }
+        Ok(false)
+    }
+
     fn change_user_password(
         &self,
         user: &str,

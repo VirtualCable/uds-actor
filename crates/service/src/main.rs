@@ -92,7 +92,7 @@ fn main() {
 // Real "main" async logic of the service
 async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
-    
+
     let cfg = platform.config().read().await.clone();
 
     // Setup logging level from config

@@ -38,7 +38,8 @@ use windows::{
                 GET_ADAPTERS_ADDRESSES_FLAGS, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
             },
             NetManagement::{
-                LOCALGROUP_MEMBERS_INFO_0, LOCALGROUP_MEMBERS_INFO_1, NETSETUP_ACCT_CREATE,
+                I_NetLogonControl2, LOCALGROUP_MEMBERS_INFO_0, LOCALGROUP_MEMBERS_INFO_1,
+                NETLOGON_CONTROL_TC_QUERY, NETLOGON_INFO_1, NETSETUP_ACCT_CREATE,
                 NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME,
                 NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers,
                 NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus,
@@ -98,6 +99,70 @@ impl WindowsOperations {
         Self {}
     }
 
+    /// Re-join using flags that preserve the existing machine account on the DC.
+    /// Used inside `ensure_domain_membership` when the secure channel is broken
+    /// (e.g. machine account secret in the snapshot is stale). This operation
+    /// always requires a reboot to complete, per the `NetJoinDomain` docs.
+    fn rejoin_preserving_account(&self, options: &crate::system::JoinDomainOptions) -> Result<()> {
+        unsafe {
+            let domain = options.domain.to_string();
+            let account = options.account.to_string();
+            let mut account_str = account.clone();
+            if !account.contains('@') && !account.contains('\\') {
+                if domain.contains('.') {
+                    account_str = format!("{}@{}", account, domain);
+                } else {
+                    account_str = format!("{}\\{}", domain, account);
+                }
+            }
+            let lp_domain =
+                U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
+            let lp_ou = match options.ou.clone() {
+                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
+                None => None,
+            };
+            let lp_account = U16CString::from_str(&account_str)
+                .context("failed to convert account to UTF-16")?;
+            let lp_password = U16CString::from_str(options.password.clone())
+                .context("failed to convert password to UTF-16")?;
+            // `NETSETUP_ACCT_CREATE` lets us recreate the account if it has been
+            // deleted from the AD since the snapshot was taken; combined with
+            // `NETSETUP_DOMAIN_JOIN_IF_JOINED` the existing account is reused if
+            // present, and recreated only if missing.
+            let flags =
+                NETSETUP_ACCT_CREATE | NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+            let res = NetJoinDomain(
+                PCWSTR::null(),
+                PCWSTR(lp_domain.as_ptr()),
+                lp_ou
+                    .as_ref()
+                    .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                PCWSTR(lp_account.as_ptr()),
+                PCWSTR(lp_password.as_ptr()),
+                flags,
+            );
+            if res == 0 {
+                log::info!(
+                    "Re-join to '{}' succeeded (account preserved)",
+                    options.domain
+                );
+                Ok(())
+            } else {
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetJoinDomain (rejoin) to '{}' failed: {}",
+                    options.domain,
+                    detail
+                );
+                Err(anyhow::anyhow!(
+                    "NetJoinDomain (rejoin) to '{}' failed: {}",
+                    options.domain,
+                    detail
+                ))
+            }
+        }
+    }
+
     fn get_windows_version(&self) -> Result<(u32, u32, u32, u32, String)> {
         unsafe {
             let mut info = OSVERSIONINFOW {
@@ -115,6 +180,43 @@ impl WindowsOperations {
                 ))
             } else {
                 Err(anyhow::anyhow!("GetVersionExW failed"))
+            }
+        }
+    }
+
+    /// Translate a Win32 / netapi32 error code into a human-readable message
+    /// using `FormatMessageW`. Falls back to the numeric code if the message
+    /// cannot be resolved (e.g. custom HRESULT, driver-specific codes).
+    ///
+    /// Used everywhere we return an `Err` from a netapi32 / win32 syscall so
+    /// the operator sees `"The specified network name is no longer available.
+    /// (code 64, 0x00000040)"` instead of an opaque `"26952"`.
+    fn format_net_error(code: u32) -> String {
+        unsafe {
+            use windows::Win32::System::Diagnostics::Debug::{
+                FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS,
+            };
+            let mut buf = [0u16; 512];
+            let len = FormatMessageW(
+                FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                None,
+                code,
+                0,
+                PWSTR(buf.as_mut_ptr()),
+                buf.len() as u32,
+                None,
+            );
+            let msg = if len > 0 {
+                utf16_ptr_to_string(buf.as_ptr()).unwrap_or_default()
+            } else {
+                String::new()
+            };
+            // FormatMessageW includes trailing CRLF (and sometimes a leading one), strip them.
+            let msg = msg.trim().to_string();
+            if msg.is_empty() {
+                format!("code {code} (0x{code:08X})")
+            } else {
+                format!("{msg} (code {code}, 0x{code:08X})")
             }
         }
     }
@@ -162,7 +264,12 @@ impl System for WindowsOperations {
             let ret = NetGetJoinInformation(None, &mut buffer, &mut status);
 
             if ret != 0 {
-                return Err(anyhow::anyhow!("NetGetJoinInformation failed: {}", ret));
+                let detail = Self::format_net_error(ret as u32);
+                log::error!("NetGetJoinInformation failed: {}", detail);
+                return Err(anyhow::anyhow!(
+                    "NetGetJoinInformation failed: {}",
+                    detail
+                ));
             }
 
             // Convert the returned PWSTR to String
@@ -245,16 +352,20 @@ impl System for WindowsOperations {
                 flags,
             );
 
-            // If the error is "already joined", try again with less flags (no create account, use existing)
-            // This may happen if the account already exists on another ou
+            // If the error is "already joined", try again with less flags (no create account, no
+            // new name flag) AND drop the OU. The v4.0 python actor does exactly this because
+            // error 2224 typically means the machine account already exists in another OU of
+            // the same domain, so re-issuing NetJoinDomain with a non-null OU keeps failing.
             if res == 2224 {
+                log::warn!(
+                    "NetJoinDomain returned 2224 (ERROR_JOINED_TO_OU), retrying without OU \
+                    and without NETSETUP_ACCT_CREATE / NETSETUP_JOIN_WITH_NEW_NAME"
+                );
                 let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
                 res = NetJoinDomain(
                     PCWSTR::null(),
                     PCWSTR(lp_domain.as_ptr()),
-                    lp_ou
-                        .as_ref()
-                        .map_or(PCWSTR::null(), |s| PCWSTR(s.as_ptr())),
+                    PCWSTR::null(), // force NULL OU on retry
                     PCWSTR(lp_account.as_ptr()),
                     PCWSTR(lp_password.as_ptr()),
                     flags,
@@ -262,9 +373,22 @@ impl System for WindowsOperations {
             }
 
             if res == 0 {
+                log::info!("NetJoinDomain for '{}' succeeded", options.domain);
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("NetJoinDomain failed: {}", res))
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetJoinDomain for domain '{}', OU '{}', account '{}' failed: {}",
+                    options.domain,
+                    options.ou.as_deref().unwrap_or(""),
+                    options.account,
+                    detail
+                );
+                Err(anyhow::anyhow!(
+                    "NetJoinDomain for domain '{}' failed: {}",
+                    options.domain,
+                    detail
+                ))
             }
         }
     }
@@ -292,9 +416,106 @@ impl System for WindowsOperations {
             if res == 0 {
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", res))
+                let detail = Self::format_net_error(res);
+                log::error!(
+                    "NetUserChangePassword for user '{}' failed: {}",
+                    user,
+                    detail
+                );
+                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", detail))
             }
         }
+    }
+
+    fn ensure_domain_membership(&self, options: &crate::system::JoinDomainOptions) -> Result<bool> {
+        // Query levels are not exposed by the `windows` crate (they are just
+        // integer constants from netlogon.h, not part of the public API surface).
+        const QUERY_LEVEL_INFO_1: u32 = 1;
+
+        let current_domain = match self.get_domain_name()? {
+            None => {
+                log::info!(
+                    "Not joined to any domain, performing full join to '{}'",
+                    options.domain
+                );
+                self.join_domain(options)?;
+                return Ok(true);
+            }
+            Some(other) if !other.eq_ignore_ascii_case(&options.domain) => {
+                log::info!(
+                    "Currently joined to '{}', requested '{}', performing full join",
+                    other,
+                    options.domain
+                );
+                self.join_domain(options)?;
+                return Ok(true);
+            }
+            Some(current) => {
+                log::info!(
+                    "Already joined to '{}', probing secure channel trust",
+                    current
+                );
+                current
+            }
+        };
+
+        // TC_QUERY expects `Data` to be a pointer to a `LPWSTR` containing the
+        // trusted domain name (not a NULL pointer).
+        let domain_w =
+            U16CString::from_str(current_domain.as_str()).context("invalid domain UTF-16")?;
+        let mut domain_arg: *mut u16 = domain_w.as_ptr() as *mut u16;
+        let data_ptr: *const u8 = &mut domain_arg as *mut *mut u16 as *const u8;
+
+        let mut output: *mut u8 = std::ptr::null_mut();
+        let probe_status = unsafe {
+            I_NetLogonControl2(
+                PCWSTR::null(),
+                NETLOGON_CONTROL_TC_QUERY,
+                QUERY_LEVEL_INFO_1,
+                data_ptr,
+                &mut output,
+            )
+        };
+
+        // Read `netlog1_pdc_connection_status` (second u32 of NETLOGON_INFO_1),
+        // which is 0 when the secure channel is healthy and the Win32 error
+        // code of the last failed secure-channel operation otherwise.
+        // `netlog1_flags` carries informational bits only; the
+        // `NETLOGON_VERIFY_STATUS_RETURNED (0x80)` constant belongs to
+        // NETLOGON_INFO_3 and must not be tested against NETLOGON_INFO_1.
+        if probe_status != 0 || output.is_null() {
+            if !output.is_null() {
+                unsafe {
+                    NetApiBufferFree(Some(output as _));
+                }
+            }
+            log::warn!(
+                "Netlogon TC_QUERY failed with status {} (0x{:08x}); performing rejoin to restore trust",
+                probe_status,
+                probe_status
+            );
+            self.rejoin_preserving_account(options)?;
+            return Ok(true);
+        }
+
+        let info = unsafe { &*(output as *const NETLOGON_INFO_1) };
+        let connection_status = info.netlog1_pdc_connection_status;
+        unsafe {
+            NetApiBufferFree(Some(output as _));
+        }
+
+        if connection_status == 0 {
+            log::info!("Secure channel trust is healthy, no action needed");
+            return Ok(false);
+        }
+
+        log::warn!(
+            "Secure channel trust is broken (netlog1_pdc_connection_status = {} / 0x{:08x}); performing rejoin to restore trust",
+            connection_status,
+            connection_status
+        );
+        self.rejoin_preserving_account(options)?;
+        Ok(true)
     }
 
     fn get_os_version(&self) -> Result<String> {
@@ -408,7 +629,9 @@ impl System for WindowsOperations {
         };
 
         if ret != 0 {
-            return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", ret));
+            let detail = Self::format_net_error(ret as u32);
+            log::error!("GetAdaptersAddresses failed: {}", detail);
+            return Err(anyhow::anyhow!("GetAdaptersAddresses failed: {}", detail));
         }
 
         let mut results = vec![];
@@ -476,7 +699,9 @@ impl System for WindowsOperations {
         if status.success() {
             Ok(())
         } else {
-            anyhow::bail!("w32tm /resync failed with {:?}", status.code());
+            let msg = format!("w32tm /resync failed with {:?}", status.code());
+            log::error!("{}", msg);
+            anyhow::bail!(msg);
         }
     }
 
@@ -534,7 +759,16 @@ impl System for WindowsOperations {
             );
 
             if err.0 != 0 {
-                return Err(anyhow::anyhow!("SetNamedSecurityInfoW failed: {}", err.0));
+                let detail = Self::format_net_error(err.0 as u32);
+                log::error!(
+                    "SetNamedSecurityInfoW for path '{}' failed: {}",
+                    path,
+                    detail
+                );
+                return Err(anyhow::anyhow!(
+                    "SetNamedSecurityInfoW failed: {}",
+                    detail
+                ));
             }
 
             Ok(())
@@ -668,9 +902,16 @@ impl System for WindowsOperations {
                         1,
                     );
                     if status != 0 {
+                        let detail = Self::format_net_error(status);
+                        log::error!(
+                            "NetLocalGroupAddMembers to '{}' for user '{}' failed: {}",
+                            group_name,
+                            user,
+                            detail
+                        );
                         return Err(anyhow::anyhow!(
-                            "NetLocalGroupAddMembers failed with code {}",
-                            status
+                            "NetLocalGroupAddMembers failed: {}",
+                            detail
                         ));
                     }
                 }

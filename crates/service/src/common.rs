@@ -115,6 +115,11 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         }
         // Note: right here we are storing all de config, including that one not needed for in fact
 
+        // Mark this process as having successfully initialized against the broker.
+        // This is a runtime-only flag (serde-skip on the field), so it's never persisted
+        // and is reset to false on every restart.
+        cfg_guard.is_initialized = true;
+
         // Now, set the broker_api token to the new own_token
         if let Some(own_token) = cfg_guard.own_token.clone() {
             broker_api_guard.set_token(&own_token);

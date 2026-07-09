@@ -71,7 +71,7 @@ impl NetworkInterface {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct JoinDomainOptions {
     pub domain: String,
     pub account: String,
@@ -84,6 +84,21 @@ pub struct JoinDomainOptions {
     pub membership_software: Option<String>,
     pub ssl: Option<bool>,
     pub automatic_id_mapping: Option<bool>,
+}
+
+impl std::fmt::Debug for JoinDomainOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JoinDomainOptions")
+            .field("domain", &self.domain)
+            .field("account", &self.account)
+            .field("ou", &self.ou)
+            .field("client_software", &self.client_software)
+            .field("server_software", &self.server_software)
+            .field("membership_software", &self.membership_software)
+            .field("ssl", &self.ssl)
+            .field("automatic_id_mapping", &self.automatic_id_mapping)
+            .finish()
+    }
 }
 
 pub trait System: Send + Sync {
@@ -105,6 +120,25 @@ pub trait System: Send + Sync {
     /// Joins the computer to a domain with the given options.
     /// The `options` struct contains all necessary information for joining the domain.
     fn join_domain(&self, options: &JoinDomainOptions) -> Result<()>;
+
+    /// Ensures that the machine account is healthy inside its domain.
+    ///
+    /// This is the smart variant of `join_domain`, designed to also recover from
+    /// situations where the machine has already been joined, but its secure
+    /// channel trust with the domain controller has been broken (e.g. machine
+    /// account password expired after restoring a long-lived snapshot).
+    ///
+    /// Behavior contract:
+    /// - If the computer is not joined to the requested domain, it is joined
+    ///   (delegating to `join_domain`) and `Ok(true)` is returned (reboot required).
+    /// - If the computer is joined to the requested domain and the secure channel
+    ///   trust is healthy, no action is taken and `Ok(false)` is returned.
+    /// - If the computer is joined but the secure channel is broken, the trust
+    ///   is repaired using `options.account`/`options.password`. On platforms
+    ///   where this can be done without a reboot (e.g. Windows via Netlogon
+    ///   password change), `Ok(false)` is returned; otherwise the machine is
+    ///   re-joined and `Ok(true)` is returned.
+    fn ensure_domain_membership(&self, options: &JoinDomainOptions) -> Result<bool>;
 
     /// Change the password for a user.
     /// This may require the old password, depending on the platform and user privileges.

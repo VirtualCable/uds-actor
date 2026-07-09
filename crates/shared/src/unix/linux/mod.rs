@@ -77,7 +77,7 @@ impl crate::system::System for LinuxSystem {
     }
 
     fn get_domain_name(&self) -> Result<Option<String>> {
-        Ok(None)
+        computer::get_domain_name()
     }
 
     fn rename_computer(&self, new_name: &str) -> Result<()> {
@@ -89,6 +89,10 @@ impl crate::system::System for LinuxSystem {
 
     fn join_domain(&self, options: &crate::system::JoinDomainOptions) -> Result<()> {
         computer::join_domain(options)
+    }
+
+    fn ensure_domain_membership(&self, options: &crate::system::JoinDomainOptions) -> Result<bool> {
+        computer::ensure_domain_membership(options)
     }
 
     fn change_user_password(

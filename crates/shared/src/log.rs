@@ -83,14 +83,29 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
     fn make_writer(&'a self) -> Self::Writer {
         // Rotate if needed
         let _ = self.rotate_if_needed();
+        // Ensure the parent directory exists. This is mostly a no-op for the
+        // well-known default locations (C:\Windows\Temp, /var/log/udsactor)
+        // but protects against custom paths that may not exist yet.
+        if let Some(parent) = self.path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
         // Always open in append mode, creating it if it doesn't exist
         // If self.path cannot be opened, try with one in temp dir
         OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .unwrap_or_else(|_e| {
+            .unwrap_or_else(|e| {
                 let temp_path = std::env::temp_dir().join("udsactor-fallback.log");
+                if let Some(parent) = temp_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                eprintln!(
+                    "udsactor: could not open '{}': {} (falling back to '{}')",
+                    self.path.display(),
+                    e,
+                    temp_path.display()
+                );
                 OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -156,6 +171,55 @@ pub fn setup_panic_hook() {
     }));
 }
 
+/// Resolve the **directory** (no file name) where logs should be written when
+/// `UDSACTOR_<TYPE>_LOG_PATH` is not set.
+///
+/// Defaults per platform:
+///
+/// - **Windows service / config**: `std::env::temp_dir()` -> `C:\Windows\Temp`
+///   (the process runs as LocalSystem, so its TEMP maps to that location).
+/// - **Windows client**: `std::env::temp_dir()` -> `%USERPROFILE%\AppData\Local\Temp`
+///   (the `udsactor-client.exe` is launched per-user by the user themselves,
+///   so its TEMP resolves correctly to that user's temp folder).
+/// - **Linux / macOS service**: tries `/var/log/udsactor` (created if possible),
+///   falling back to `/tmp` if not writable.
+/// - **Linux / macOS client**: `$TMPDIR` -> `/tmp`.
+///
+/// See `notes/env-vars-logging.md` for the full list of override env vars.
+#[cfg_attr(target_os = "windows", allow(unused_variables))]
+fn default_log_dir(log_type: &LogType) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        // temp_dir() already returns the *current process's* TEMP:
+        //   - LocalSystem (service) => C:\Windows\Temp
+        //   - User (client)        => %USERPROFILE%\AppData\Local\Temp
+        let _ = log_type; // not used on Windows; suppress unused-variable warning
+        return std::env::temp_dir().to_string_lossy().into_owned();
+    }
+
+    #[cfg(target_family = "unix")]
+    {
+        let service_mode = matches!(log_type, LogType::Service | LogType::Config);
+        if service_mode {
+            // Try /var/log/udsactor first; if we cannot write there, fall back to /tmp.
+            let var_log = std::path::PathBuf::from("/var/log/udsactor");
+            if std::fs::create_dir_all(&var_log).is_ok() {
+                // Probe writability with a tiny file (cheap and reliable).
+                let probe = var_log.join(".udsactor-write-probe");
+                if std::fs::write(&probe, b"ok")
+                    .and_then(|_| std::fs::remove_file(&probe))
+                    .is_ok()
+                {
+                    return var_log.to_string_lossy().into_owned();
+                }
+            }
+            return "/tmp".to_string();
+        }
+        // Client: trust the user's TMPDIR / fall back to /tmp.
+        std::env::temp_dir().to_string_lossy().into_owned()
+    }
+}
+
 pub fn setup_logging(level: &str, log_type: LogType) {
     let (level_key, log_path, use_datetime, log_name) = (
         format!("UDSACTOR_{}_LOG_LEVEL", log_type.to_string().to_uppercase()),
@@ -168,8 +232,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
     );
 
     let level = std::env::var(level_key).unwrap_or_else(|_| level.to_string());
-    let log_path =
-        std::env::var(log_path).unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into());
+    let log_path = std::env::var(log_path).unwrap_or_else(|_| default_log_dir(&log_type));
     let use_datetime: bool = std::env::var(use_datetime)
         .unwrap_or_else(|_| "false".into())
         .to_lowercase()
@@ -189,6 +252,28 @@ pub fn setup_logging(level: &str, log_type: LogType) {
     } else {
         log_name.to_string()
     } + ".log";
+
+    // Best-effort: make sure the log directory exists. We don't fail setup if
+    // the directory cannot be created (RotatingWriter falls back to
+    // `temp_dir()/udsactor-fallback.log`), but we try to surface the situation
+    // to the operator via an early warning so they know where to look.
+    let full_log_path = std::path::Path::new(&log_path).join(&log_name);
+    if let Some(parent) = full_log_path.parent() {
+        match std::fs::create_dir_all(parent) {
+            Ok(()) => {
+                // Announce to stderr so the operator always knows the path,
+                // even when stdout redirection strips log output.
+                eprintln!("udsactor log file: {}", full_log_path.display());
+            }
+            Err(e) => {
+                eprintln!(
+                    "udsactor: could not create log directory '{}': {} (will fall back to a temp dir file)",
+                    parent.display(),
+                    e
+                );
+            }
+        }
+    }
 
     LOGGER_INIT.get_or_init(|| {
         let env_filter = EnvFilter::new(level.clone());

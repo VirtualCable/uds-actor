@@ -79,6 +79,15 @@ pub struct ActorConfiguration {
     // Additional configuration data from server
     pub config: ActorDataConfiguration,
     pub data: Option<serde_json::Value>,
+
+    // Runtime-only flag indicating that the broker initialize REST has been
+    // successfully invoked during this process lifetime. NOT persisted (serde skip):
+    // every time the actor service starts, this resets to false, ensuring that
+    // the broker initialization is re-evaluated (and so are os_data-driven
+    // actions such as JoinDomain, including after restoring a snapshot where the
+    // machine account trust may have expired).
+    #[serde(default, skip)]
+    pub is_initialized: bool,
 }
 
 impl Default for ActorConfiguration {
@@ -96,6 +105,7 @@ impl Default for ActorConfiguration {
             log_level: 50000, // ERROR
             config: ActorDataConfiguration::default(),
             data: None,
+            is_initialized: false,
         }
     }
 }
@@ -112,10 +122,6 @@ impl ActorConfiguration {
 
     pub fn is_valid(&self) -> bool {
         !self.broker_url.is_empty() && !self.token().is_empty()
-    }
-
-    pub fn already_initialized(&self) -> bool {
-        self.own_token.is_some()
     }
 
     pub fn log_level(&self) -> crate::broker::api::types::LogLevel {
@@ -167,6 +173,7 @@ mod tests {
             log_level: 3,
             config: ActorDataConfiguration::default(),
             data: None,
+            is_initialized: false,
         }
     }
 
