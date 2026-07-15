@@ -352,16 +352,19 @@ impl System for WindowsOperations {
                 flags,
             );
 
-            // If the error is "already joined", try again with less flags (no create account, no
-            // new name flag) AND drop the OU. The v4.0 python actor does exactly this because
-            // error 2224 typically means the machine account already exists in another OU of
-            // the same domain, so re-issuing NetJoinDomain with a non-null OU keeps failing.
+            // 2224 (NERR_UserExists) means the machine account already exists in the domain,
+            // so retry reusing it: drop NETSETUP_ACCT_CREATE (stop trying to create it) and
+            // drop the OU. Keep NETSETUP_JOIN_WITH_NEW_NAME: the machine has been renamed but
+            // not yet rebooted, so the active name is still the old one; without this flag the
+            // join looks up an account for the OLD name and fails with 1332 (ERROR_NONE_MAPPED).
             if res == 2224 {
                 log::warn!(
-                    "NetJoinDomain returned 2224 (ERROR_JOINED_TO_OU), retrying without OU \
-                    and without NETSETUP_ACCT_CREATE / NETSETUP_JOIN_WITH_NEW_NAME"
+                    "NetJoinDomain returned 2224 (NERR_UserExists), retrying without OU \
+                    and without NETSETUP_ACCT_CREATE (reusing existing account)"
                 );
-                let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED | NETSETUP_JOIN_DOMAIN;
+                let flags = NETSETUP_DOMAIN_JOIN_IF_JOINED
+                    | NETSETUP_JOIN_DOMAIN
+                    | NETSETUP_JOIN_WITH_NEW_NAME;
                 res = NetJoinDomain(
                     PCWSTR::null(),
                     PCWSTR(lp_domain.as_ptr()),
