@@ -194,9 +194,9 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        // tracing::Level is ordered so ERROR > WARN > INFO > DEBUG > TRACE.
-        // We forward events whose level is at least `min_level`.
-        self.enabled && *metadata.level() >= self.min_level
+        // In tracing::Level's derived Ord, ERROR (1) is the minimum and TRACE (5) is the maximum.
+        // To allow events with severity at least `min_level`, we must check `<=`.
+        self.enabled && *metadata.level() <= self.min_level
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {

@@ -435,4 +435,9 @@ mod tests {
         let meta = fs::metadata(&log_file).unwrap();
         assert!(meta.len() < 16 * 1024 * 1024); // Current log file should be less than 16MB
     }
+
+    #[test]
+    fn test_tracing_level_order() {
+        assert!(tracing::Level::ERROR < tracing::Level::WARN);
+    }
 }

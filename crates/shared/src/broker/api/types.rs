@@ -233,6 +233,7 @@ pub struct ClientInfo {
 
 // Log levels, must match server ones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "u32", try_from = "u32")]
 pub enum LogLevel {
     Other = 10000,
     Debug = 20000,

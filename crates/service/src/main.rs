@@ -117,14 +117,19 @@ async fn async_main(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    if cfg.actor_type == ActorType::Unmanaged {
+    let err = if cfg.actor_type == ActorType::Unmanaged {
         log::info!("Starting in Unmanaged mode");
-        actors::unmanaged::run(platform.clone()).await?;
+        actors::unmanaged::run(platform.clone()).await
     } else {
         log::info!("Starting in Managed mode");
-        actors::managed::run(platform.clone()).await?;
+        actors::managed::run(platform.clone()).await
+    };
+
+    if let Err(e) = err {
+        log::error!("Service main async logic exited with error: {}", e);
+    } else {
+        log::info!("Service main async logic exited");
     }
-    log::info!("Service main async logic exiting");
 
     // Release the Windows EventLog handle, if any. No-op on non-Windows
     // and on services where the layer was disabled. The OS reclaims the

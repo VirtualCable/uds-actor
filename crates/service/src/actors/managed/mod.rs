@@ -77,9 +77,11 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         log::debug!("No OS data action requested");
     }
 
+    log::debug!("Starting post config commands");
     // Post-config command will run, but no reboot will be done after it
     crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig).await;
 
+    log::debug!("Sending ready to broker");
     // Notify ready to broker, will return TLS certs
     // Note: The server is started after this, as we need the certs to start it
     // Is not expected to receive any calls before server is started (and will not)
@@ -124,6 +126,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     )
     .await?;
 
+    log::info!("Webserver/Websocket server started");
+
     // create the ip watcher task
     // Will simply stop the service if ip changes
     // Allowing the system to restart it cleanly
@@ -136,8 +140,12 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         }
     });
 
+    log::debug!("Starting workers");
+
     // Create workers for requests, wsclient communication, etc.
     workers::create_workers(server_info.clone(), platform.clone()).await;
+
+    log::debug!("Workers started, waiting for stop signal");
 
     // Simply wait here until stop is signaled
     platform.get_stop().wait().await;
