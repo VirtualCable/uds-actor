@@ -13,9 +13,56 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
     // force time sync on managed startup
+    #[cfg(test)]
     if let Err(e) = platform.system().force_time_sync() {
         log::warn!("Failed to force time sync on startup: {}", e);
     }
+
+    #[cfg(not(test))]
+    tokio::spawn({
+        let platform = platform.clone();
+        async move {
+            let start_time = std::time::Instant::now();
+            let mut attempt = 1;
+            let max_duration = std::time::Duration::from_secs(120);
+            let interval = std::time::Duration::from_secs(10);
+
+            // Wait 10 seconds initially
+            tokio::select! {
+                _ = tokio::time::sleep(interval) => {}
+                _ = platform.get_stop().wait() => {
+                    log::debug!("Time sync task stopped during initial wait");
+                    return;
+                }
+            }
+
+            loop {
+                log::debug!("Attempting time sync (attempt {})", attempt);
+                match platform.system().force_time_sync() {
+                    Ok(()) => {
+                        log::info!("Time sync successful");
+                        break;
+                    }
+                    Err(e) => {
+                        if start_time.elapsed() >= max_duration {
+                            log::warn!("Failed to force time sync after retrying for 120 seconds: {}", e);
+                            break;
+                        }
+
+                        attempt += 1;
+
+                        tokio::select! {
+                            _ = tokio::time::sleep(interval) => {}
+                            _ = platform.get_stop().wait() => {
+                                log::debug!("Time sync task stopped during retry wait");
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 
     // Call initialize with broker if not already initialized in this process.
     // Note: `is_initialized` is a runtime-only flag (serde-skipped on the config),

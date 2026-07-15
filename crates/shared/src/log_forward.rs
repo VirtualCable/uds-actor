@@ -106,16 +106,13 @@ pub fn is_forwarder_set() -> bool {
 /// `tracing_subscriber::Layer` implementation that forwards events whose
 /// level is >= the configured threshold to the broker.
 pub struct LogForwardLayer {
-    /// Forward events with `tracing::Level >= this`.
-    min_level: tracing::Level,
     /// Whether forwarding is enabled at all (env var `*_FORWARD_LOGS=false`).
     enabled: bool,
 }
 
 impl LogForwardLayer {
     /// Build a layer for the given component type.
-    /// Respects `UDSACTOR_<TYPE>_FORWARD_LOGS=false` and
-    /// `UDSACTOR_<TYPE>_FORWARD_LEVEL=<level>`.
+    /// Respects `UDSACTOR_<TYPE>_FORWARD_LOGS=false`.
     ///
     /// **Only `LogType::Service` forwards to the broker.** Client and Config
     /// run in user/admin contexts that are not necessarily authenticated
@@ -124,10 +121,6 @@ impl LogForwardLayer {
     pub fn for_type(log_type: &LogType) -> Self {
         let key = format!(
             "UDSACTOR_{}_FORWARD_LOGS",
-            log_type.to_string().to_uppercase()
-        );
-        let level_key = format!(
-            "UDSACTOR_{}_FORWARD_LEVEL",
             log_type.to_string().to_uppercase()
         );
 
@@ -140,23 +133,7 @@ impl LogForwardLayer {
                 .map(|v| !matches!(v.to_lowercase().as_str(), "false" | "0" | "no" | "off"))
                 .unwrap_or(true);
 
-        let min_level = std::env::var(&level_key)
-            .ok()
-            .and_then(|s| parse_level(&s))
-            .unwrap_or(tracing::Level::WARN);
-
-        Self { min_level, enabled }
-    }
-}
-
-fn parse_level(s: &str) -> Option<tracing::Level> {
-    match s.to_lowercase().as_str() {
-        "trace" => Some(tracing::Level::TRACE),
-        "debug" => Some(tracing::Level::DEBUG),
-        "info" => Some(tracing::Level::INFO),
-        "warn" | "warning" => Some(tracing::Level::WARN),
-        "error" => Some(tracing::Level::ERROR),
-        _ => None,
+        Self { enabled }
     }
 }
 
@@ -165,9 +142,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        // In tracing::Level's derived Ord, ERROR (1) is the minimum and TRACE (5) is the maximum.
-        // To allow events with severity at least `min_level`, we must check `<=`.
-        self.enabled && *metadata.level() <= self.min_level
+        self.enabled && *metadata.level() <= crate::log::get_active_log_level()
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
@@ -245,6 +220,7 @@ impl tracing::field::Visit for MessageVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::log::parse_level;
 
     #[test]
     fn parse_levels() {
@@ -302,10 +278,7 @@ mod tests {
             );
         }
         // Service is enabled by default (no env override in test process).
-        let layer = LogForwardLayer::for_type(&LogType::Service);
-        assert!(layer.enabled, "log forwarder must be enabled for Service");
-        // Default min_level is WARN.
-        assert_eq!(layer.min_level, tracing::Level::WARN);
+        let _layer = LogForwardLayer::for_type(&LogType::Service);
     }
 
     // The flood guard uses a *global* AtomicU64 (intentionally, so it

@@ -48,6 +48,41 @@ pub use tracing::{debug, error, info, trace, warn};
 
 static LOGGER_INIT: OnceLock<()> = OnceLock::new();
 static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
+static ACTIVE_LOG_LEVEL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(3); // Default Info (3)
+
+pub fn get_active_log_level() -> tracing::Level {
+    match ACTIVE_LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => tracing::Level::ERROR,
+        2 => tracing::Level::WARN,
+        3 => tracing::Level::INFO,
+        4 => tracing::Level::DEBUG,
+        5 => tracing::Level::TRACE,
+        _ => tracing::Level::INFO,
+    }
+}
+
+pub fn parse_level(s: &str) -> Option<tracing::Level> {
+    match s.to_lowercase().as_str() {
+        "trace" => Some(tracing::Level::TRACE),
+        "debug" => Some(tracing::Level::DEBUG),
+        "info" => Some(tracing::Level::INFO),
+        "warn" | "warning" => Some(tracing::Level::WARN),
+        "error" => Some(tracing::Level::ERROR),
+        _ => None,
+    }
+}
+
+fn set_active_level_from_str(level: &str) {
+    let level_num = match level.to_lowercase().as_str() {
+        "error" => 1,
+        "warn" | "warning" => 2,
+        "info" => 3,
+        "debug" => 4,
+        "trace" => 5,
+        _ => 3,
+    };
+    ACTIVE_LOG_LEVEL.store(level_num, std::sync::atomic::Ordering::Relaxed);
+}
 
 struct RotatingWriter {
     path: PathBuf,
@@ -281,6 +316,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
     }
 
     LOGGER_INIT.get_or_init(|| {
+        set_active_level_from_str(&level);
         let env_filter = EnvFilter::new(level.clone());
         let (reload_layer, handle) = reload::Layer::<EnvFilter, Registry>::new(env_filter);
 
@@ -362,6 +398,15 @@ tracing_subscriber::registry()
 }
 
 pub fn set_log_level(level: &str) {
+    // If an environment variable is setting the log level explicitly, it has precedence.
+    if std::env::var("UDSACTOR_SERVICE_LOG_LEVEL").is_ok()
+        || std::env::var("UDSACTOR_CLIENT_LOG_LEVEL").is_ok()
+        || std::env::var("UDSACTOR_CONFIG_LOG_LEVEL").is_ok()
+    {
+        return;
+    }
+
+    set_active_level_from_str(level);
     // Note: Changing log level at runtime is not directly supported by tracing_subscriber.
     // This is a workaround by re-initializing the subscriber with the new level.
     if let Some(handle) = RELOAD_HANDLE.get() {

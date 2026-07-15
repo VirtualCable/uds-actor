@@ -85,7 +85,6 @@ static REGISTER_FAILED: OnceLock<()> = OnceLock::new();
 /// `tracing-subscriber::Layer` that forwards events whose level is `>=`
 /// the configured threshold to the Windows EventLog.
 pub struct EventLogLayer {
-    min_level: tracing::Level,
     enabled: bool,
 }
 
@@ -93,10 +92,6 @@ impl EventLogLayer {
     /// Build a layer for the given component type. Returns a layer whose
     /// `enabled()` is `false` for anything that is not `LogType::Service`.
     pub fn for_type(log_type: &LogType) -> Self {
-        let key = format!(
-            "UDSACTOR_{}_EVENTLOG_LEVEL",
-            log_type.to_string().to_uppercase()
-        );
         let disable_key = format!(
             "UDSACTOR_{}_EVENTLOG_DISABLE",
             log_type.to_string().to_uppercase()
@@ -112,31 +107,71 @@ impl EventLogLayer {
                 .map(|v| !matches!(v.to_lowercase().as_str(), "true" | "1" | "yes" | "on"))
                 .unwrap_or(true);
 
-        let min_level = std::env::var(&key)
-            .ok()
-            .and_then(|s| parse_level(&s))
-            .unwrap_or(tracing::Level::INFO);
-
-        Self { min_level, enabled }
+        Self { enabled }
     }
 }
 
-fn parse_level(s: &str) -> Option<tracing::Level> {
-    match s.to_lowercase().as_str() {
-        "trace" => Some(tracing::Level::TRACE),
-        "debug" => Some(tracing::Level::DEBUG),
-        "info" => Some(tracing::Level::INFO),
-        "warn" | "warning" => Some(tracing::Level::WARN),
-        "error" => Some(tracing::Level::ERROR),
-        _ => None,
-    }
-}
+
 
 fn report_type_for(level: tracing::Level) -> u16 {
     match level {
         tracing::Level::ERROR => EVENTLOG_ERROR_TYPE.0,
         tracing::Level::WARN => EVENTLOG_WARNING_TYPE.0,
         _ => EVENTLOG_INFORMATION_TYPE.0,
+    }
+}
+
+fn register_event_source_in_registry() {
+    use windows::Win32::System::Registry::*;
+    use widestring::U16CString;
+
+    unsafe {
+        let key_path = U16CString::from_str_truncate(
+            r"SYSTEM\CurrentControlSet\Services\EventLog\Application\UDS Actor Service"
+        );
+        let mut hkey = HKEY::default();
+        let status = RegCreateKeyExW(
+            HKEY_LOCAL_MACHINE,
+            windows::core::PCWSTR(key_path.as_ptr()),
+            None,
+            None,
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut hkey,
+            None,
+        );
+        if status.is_ok() {
+            // Write EventMessageFile (REG_EXPAND_SZ) pointing to EventCreate.exe
+            let msg_file = U16CString::from_str_truncate(r"%SystemRoot%\System32\EventCreate.exe");
+            let msg_file_bytes = std::slice::from_raw_parts(
+                msg_file.as_ptr() as *const u8,
+                (msg_file.len() + 1) * 2,
+            );
+            let _ = RegSetValueExW(
+                hkey,
+                windows::core::PCWSTR(U16CString::from_str_truncate("EventMessageFile").as_ptr()),
+                None,
+                REG_EXPAND_SZ,
+                Some(msg_file_bytes),
+            );
+
+            // Write TypesSupported (REG_DWORD)
+            let types_supported: u32 = 7;
+            let types_bytes = std::slice::from_raw_parts(
+                &types_supported as *const u32 as *const u8,
+                4,
+            );
+            let _ = RegSetValueExW(
+                hkey,
+                windows::core::PCWSTR(U16CString::from_str_truncate("TypesSupported").as_ptr()),
+                None,
+                REG_DWORD,
+                Some(types_bytes),
+            );
+
+            let _ = RegCloseKey(hkey);
+        }
     }
 }
 
@@ -150,6 +185,9 @@ fn get_or_register_handle() -> Option<EventLogHandle> {
     if let Some(h) = EVENTLOG_HANDLE.get() {
         return Some(*h);
     }
+    // Register custom source in the registry so Event Viewer formats it correctly
+    register_event_source_in_registry();
+
     let wide = encode_wide_with_nul(SOURCE_NAME)?;
     // SAFETY: `wide` is a valid wide C string with trailing nul, lives
     // for the duration of this call. Passing `None` for the server name
@@ -194,9 +232,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        // In tracing::Level's derived Ord, ERROR (1) is the minimum and TRACE (5) is the maximum.
-        // To allow events with severity at least `min_level`, we must check `<=`.
-        self.enabled && *metadata.level() <= self.min_level
+        self.enabled && *metadata.level() <= crate::log::get_active_log_level()
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
@@ -229,7 +265,7 @@ where
                 handle.0,
                 windows::Win32::System::EventLog::REPORT_EVENT_TYPE(report_type),
                 0,    // wCategory
-                0,    // dwEventID
+                1,    // dwEventID
                 None, // lpUserSid
                 0,    // dwDataSize
                 Some(&strings),
@@ -283,6 +319,7 @@ impl tracing::field::Visit for MessageVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::log::parse_level;
 
     #[test]
     fn parse_levels() {
@@ -312,7 +349,6 @@ mod tests {
         }
         let layer = EventLogLayer::for_type(&LogType::Service);
         assert!(layer.enabled, "EventLog layer must be enabled for Service");
-        assert_eq!(layer.min_level, tracing::Level::INFO);
     }
 
     #[test]
