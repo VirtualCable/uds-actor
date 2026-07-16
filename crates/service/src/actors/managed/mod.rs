@@ -22,6 +22,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     tokio::spawn({
         let platform = platform.clone();
         async move {
+            let stop = platform.get_stop();
             let start_time = std::time::Instant::now();
             let mut attempt = 1;
             let max_duration = std::time::Duration::from_secs(120);
@@ -30,7 +31,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             // Wait 10 seconds initially
             tokio::select! {
                 _ = tokio::time::sleep(interval) => {}
-                _ = platform.get_stop().wait() => {
+                _ = stop.wait() => {
                     log::debug!("Time sync task stopped during initial wait");
                     return;
                 }
@@ -53,7 +54,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
 
                         tokio::select! {
                             _ = tokio::time::sleep(interval) => {}
-                            _ = platform.get_stop().wait() => {
+                            _ = stop.wait() => {
                                 log::debug!("Time sync task stopped during retry wait");
                                 return;
                             }
