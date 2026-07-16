@@ -323,6 +323,7 @@ pub fn setup_logging(level: &str, log_type: LogType) {
         let _ = RELOAD_HANDLE.set(handle);
 
         let main_layer = fmt::layer()
+            .with_timer(LocalTimer)
             .with_writer(RotatingWriter {
                 path: std::path::Path::new(&log_path).join(log_name),
                 max_size: 16 * 1024 * 1024, // 16 MB
@@ -367,6 +368,7 @@ let stderr_level = if !stderr_enabled {
 // uniform across the conditional branch above.
 let main_layer = main_layer.and_then(
     fmt::layer()
+        .with_timer(LocalTimer)
         .with_writer(std::io::stderr)
         .with_ansi(true)
         .with_target(true)
@@ -416,6 +418,15 @@ pub fn set_log_level(level: &str) {
         }
     } else {
         eprintln!("Logger not initialized yet");
+    }
+}
+
+struct LocalTimer;
+
+impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+        let now = chrono::Local::now();
+        write!(w, "{}", now.to_rfc3339_opts(chrono::SecondsFormat::Micros, false))
     }
 }
 
