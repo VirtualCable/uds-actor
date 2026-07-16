@@ -26,17 +26,17 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             let mut attempt = 1;
             let max_duration = std::time::Duration::from_secs(120);
             let interval = std::time::Duration::from_secs(10);
-
-            // Wait 10 seconds initially
-            tokio::select! {
-                _ = tokio::time::sleep(interval) => {}
-                _ = platform.get_stop().wait() => {
-                    log::debug!("Time sync task stopped during initial wait");
-                    return;
-                }
-            }
+            let stop = platform.get_stop();
 
             loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {}
+                    _ = stop.wait() => {
+                        log::debug!("Time sync task stopped during wait");
+                        return;
+                    }
+                }
+
                 log::debug!("Attempting time sync (attempt {})", attempt);
                 match platform.system().force_time_sync() {
                     Ok(()) => {
@@ -48,16 +48,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                             log::warn!("Failed to force time sync after retrying for 120 seconds: {}", e);
                             break;
                         }
-
                         attempt += 1;
-
-                        tokio::select! {
-                            _ = tokio::time::sleep(interval) => {}
-                            _ = platform.get_stop().wait() => {
-                                log::debug!("Time sync task stopped during retry wait");
-                                return;
-                            }
-                        }
                     }
                 }
             }
