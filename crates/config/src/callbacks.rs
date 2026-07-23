@@ -199,7 +199,6 @@ pub fn btn_register_clicked(
                                 ..Default::default()
                             },
                             data: None,
-                            is_initialized: false,
                         };
 
                         let mut config_storage = config::new_config_storage();

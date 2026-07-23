@@ -80,7 +80,7 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
 
         // If master token is present on response, and is different of current, update it
         // but if actor_type is managed, master_token must be cleared
-        if actor_type != shared::config::ActorType::Managed
+        if actor_type == shared::config::ActorType::Unmanaged
             && let Some(master_token) = response.master_token
             && cfg_guard.master_token.as_ref() != Some(&master_token)
         {
@@ -119,14 +119,14 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         }
         // Note: right here we are storing all de config, including that one not needed for in fact
 
-        // Mark this process as having successfully initialized against the broker.
-        // This is a runtime-only flag (serde-skip on the field), so it's never persisted
-        // and is reset to false on every restart.
-        cfg_guard.is_initialized = true;
-
         // Now, set the broker_api token to the new own_token
         if let Some(own_token) = cfg_guard.own_token.clone() {
             broker_api_guard.set_token(&own_token);
+            // Wire the log forwarder so service-side tracing events (>= WARN by
+            // default) get pushed to the broker via POST actor/v3/log.
+            // Only LogType::Service forwards (see LogForwardLayer::for_type); the
+            // service's own log_type is hard-coded here.
+            shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
         }
     }
     Ok(())

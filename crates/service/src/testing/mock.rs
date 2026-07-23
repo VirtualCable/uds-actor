@@ -33,7 +33,6 @@ pub async fn mock_platform() -> MockedPlatform {
         log_level: 0,
         config: ActorDataConfiguration::default(),
         data: None,
-        is_initialized: false,
     };
     let calls = Calls::new();
     let operations = Arc::new(OperationsMock::new(calls.clone()));

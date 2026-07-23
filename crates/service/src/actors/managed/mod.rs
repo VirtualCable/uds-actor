@@ -60,8 +60,7 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     // so it resets to false on every service restart, ensuring the broker
     // initialize REST is re-evaluated every time the actor starts (including
     // after restoring a snapshot where the domain trust may have expired).
-    if !platform.config().read().await.is_initialized
-        && let Err(e) = crate::common::initialize(&platform).await
+    if let Err(e) = crate::common::initialize(&platform).await
     {
         log::error!("Failed to initialize managed actor with broker: {}", e);
         return Err(anyhow::anyhow!(

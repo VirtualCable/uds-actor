@@ -26,7 +26,6 @@ pub fn broker_api_config(
             ..Default::default()
         },
         data: None,
-        is_initialized: false,
     }
 }
 
