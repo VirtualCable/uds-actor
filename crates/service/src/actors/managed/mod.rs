@@ -55,11 +55,14 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         }
     });
 
-    // Call initialize with broker if not already initialized in this process.
-    // Note: `is_initialized` is a runtime-only flag (serde-skipped on the config),
-    // so it resets to false on every service restart, ensuring the broker
-    // initialize REST is re-evaluated every time the actor starts (including
-    // after restoring a snapshot where the domain trust may have expired).
+// Initialize broker on every start. The initialize REST call is
+ // re-evaluated every time the service starts, including after restoring
+ // a snapshot where the domain trust expired.
+ // Note: `common::initialize` also wires the log forwarder with the
+ // updated `own_token` after the broker handshake, so subsequent service
+ // log events are forwarded to the broker with the correct per-deployment
+ // token (not the master token).
+
     if let Err(e) = crate::common::initialize(&platform).await
     {
         log::error!("Failed to initialize managed actor with broker: {}", e);
