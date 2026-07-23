@@ -161,6 +161,11 @@ impl UdsBrokerApi {
         }
     }
 
+    // Has a token and is nto empty
+    fn is_token_valid(&self) -> bool {
+        self.token.is_some() && !self.token.as_ref().unwrap().is_empty()
+    }
+
     fn headers(&self) -> reqwest::header::HeaderMap {
         use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
         let mut headers = HeaderMap::new();
@@ -371,6 +376,10 @@ impl BrokerApi for UdsBrokerApi {
     }
 
     async fn ready(&self, ip: &str, port: u16) -> Result<CertificateInfo, types::RestError> {
+        if !self.is_token_valid() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+
         let payload = types::ReadyRequest {
             token: &self.get_token()?,
             secret: self.get_secret()?,
@@ -387,6 +396,10 @@ impl BrokerApi for UdsBrokerApi {
         interfaces: &[crate::system::NetworkInterface],
         port: u16,
     ) -> Result<CertificateInfo, types::RestError> {
+        if !self.is_token_valid() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+
         let payload = types::UnmanagedReadyRequest {
             id: interfaces.iter().cloned().map(Into::into).collect(),
             token: &self.get_token()?,
@@ -404,6 +417,10 @@ impl BrokerApi for UdsBrokerApi {
         ip: &str,
         port: u16,
     ) -> Result<CertificateInfo, types::RestError> {
+        if !self.is_token_valid() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+
         let payload = types::ReadyRequest {
             token: &self.get_token()?,
             secret: self.get_secret()?,
@@ -422,6 +439,10 @@ impl BrokerApi for UdsBrokerApi {
         username: &str,
         session_type: &str,
     ) -> Result<types::LoginResponse, types::RestError> {
+        if !self.is_token_valid() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+
         let payload = types::LoginRequest {
             actor_type: self.actor_type(),
             id: interfaces.iter().cloned().map(Into::into).collect(),
@@ -442,6 +463,10 @@ impl BrokerApi for UdsBrokerApi {
         session_type: &str,
         session_id: &str,
     ) -> Result<String, types::RestError> {
+        if !self.is_token_valid() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+
         let payload = types::LogoutRequest {
             actor_type: self.actor_type(),
             id: interfaces.iter().cloned().map(Into::into).collect(),
@@ -456,6 +481,11 @@ impl BrokerApi for UdsBrokerApi {
     }
 
     async fn log(&self, level: types::LogLevel, message: &str) -> Result<String, types::RestError> {
+        if !self.is_token_valid() {
+            // This case simple do not forward log, no error
+            return Ok("".to_string());
+        }
+
         let payload = types::LogRequest {
             token: &self.get_token()?,
             level,
