@@ -9,7 +9,7 @@ use std::{
 
 use shared::{
     config::ActorType,
-    installer, log,
+    consts, installer, log,
     service::{AsyncService, AsyncServiceTrait},
     sync::OnceSignal,
     tls,
@@ -37,31 +37,44 @@ fn main() {
 
     if args.len() > 1 {
         println!("Service installer options detected: {}", args[1]);
-        match args[1].as_str() {
+        let failed = match args[1].as_str() {
             "--install" => {
-                if let Err(e) = installer::register(
-                    "UDSActorService",
-                    "UDS Actor Service",
-                    "UDS Actor Management Service",
+                remove_legacy_services();
+                match installer::register(
+                    consts::SERVICE_NAME,
+                    consts::SERVICE_DISPLAY_NAME,
+                    consts::SERVICE_DESCRIPTION,
                 ) {
-                    eprintln!("Failed to install service: {}", e);
-                } else {
-                    println!("Service installed successfully.");
+                    Ok(()) => {
+                        println!("Service installed successfully.");
+                        false
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to install service: {}", e);
+                        true
+                    }
                 }
             }
             "--uninstall" => {
-                if let Err(e) = installer::unregister("UDSActorService") {
-                    eprintln!("Failed to uninstall service: {}", e);
-                } else {
-                    println!("Service uninstalled successfully.");
+                remove_legacy_services();
+                match installer::unregister(consts::SERVICE_NAME) {
+                    Ok(()) => {
+                        println!("Service uninstalled successfully.");
+                        false
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to uninstall service: {}", e);
+                        true
+                    }
                 }
             }
             _ => {
                 eprintln!("Unknown option: {}", args[1]);
                 eprintln!("Usage: {} [--install|--uninstall]", args[0]);
+                true
             }
-        }
-        std::process::exit(1);
+        };
+        std::process::exit(if failed { 1 } else { 0 });
     }
 
     // Setup logging
@@ -86,6 +99,14 @@ fn main() {
         std::process::exit(1); // Exit with code 1 to indicate restart
     } else {
         log::info!("Service exited normally");
+    }
+}
+
+fn remove_legacy_services() {
+    for name in consts::LEGACY_SERVICE_NAMES {
+        if let Err(e) = installer::unregister(name) {
+            eprintln!("Could not remove legacy service {}: {}", name, e);
+        }
     }
 }
 
