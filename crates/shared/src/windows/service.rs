@@ -38,7 +38,7 @@ use crate::{
     sync::OnceSignal,
 };
 
-const SERVICE_NAME: PCWSTR = w!("RustExampleService");
+const SERVICE_NAME: PCWSTR = w!("UDSActorService");
 
 static LAUNCHER: OnceLock<Arc<dyn AsyncServiceTrait>> = OnceLock::new();
 
@@ -226,6 +226,12 @@ pub fn run_service<L: AsyncServiceTrait>(launcher: L) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_service_name_matches_registered_name() {
+        let dispatcher_name = unsafe { SERVICE_NAME.to_string() }.unwrap();
+        assert_eq!(dispatcher_name, crate::consts::SERVICE_NAME);
+    }
 
     #[test]
     fn test_stop_signals_notify_and_event() {
