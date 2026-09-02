@@ -32,3 +32,13 @@ pub const BUILD: &str = env!("CARGO_PKG_BUILD");
 
 // Port used for listener of UDS Actor Service
 pub const UDS_PORT: u16 = 43910;
+
+// Windows service identity. Shared by the service dispatcher and the installer
+pub const SERVICE_NAME: &str = "UDSActorService";
+pub const SERVICE_DISPLAY_NAME: &str = "UDS Actor Service";
+pub const SERVICE_DESCRIPTION: &str = "UDS Actor Management Service";
+
+// Service names used by 4.x actors. Their installers leave the service behind when
+// a 5.0 actor is installed on top, so we remove them ourselves to avoid two UDS
+// services showing up on the machine
+pub const LEGACY_SERVICE_NAMES: &[&str] = &["UDSActorNG", "UDSActor"];

@@ -24,15 +24,15 @@ Section
   !define serviceName "UDSActorService"
 
   CreateDirectory "$SMPROGRAMS\${COMPANYNAME}"
-  CreateShortCut "$SMPROGRAMS\${COMPANYNAME}\UDSActorConfig.lnk" "$INSTDIR\udsactor_config.exe" "" ""
+  CreateShortCut "$SMPROGRAMS\${COMPANYNAME}\UDSActorConfig.lnk" "$INSTDIR\udsactor-config.exe" "" ""
 
-  ExecWait '"$INSTDIR\udsactor_service.exe" --install'
+  ExecWait '"$INSTDIR\udsactor-service.exe" --install'
 
   WriteUninstaller "$INSTDIR\uninstaller.exe"
 SectionEnd
 
 Section "Uninstall"
-  ExecWait '"$INSTDIR\udsactor_service.exe" --uninstall'
+  ExecWait '"$INSTDIR\udsactor-service.exe" --uninstall'
 
   Delete "$SMPROGRAMS\${COMPANYNAME}\UDSActorConfig.lnk"
   Delete "$INSTDIR\gui-helper.exe"
