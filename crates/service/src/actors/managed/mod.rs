@@ -72,7 +72,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce).await {
+    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce, &[]).await
+    {
         // If runonce was executed, exit
         log::info!("Exiting after runonce execution as requested");
         return Ok(());
@@ -119,7 +120,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
 
     log::debug!("Starting post config commands");
     // Post-config command will run, but no reboot will be done after it
-    crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig).await;
+    crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig, &[])
+        .await;
 
     log::debug!("Sending ready to broker");
     // Notify ready to broker, will return TLS certs

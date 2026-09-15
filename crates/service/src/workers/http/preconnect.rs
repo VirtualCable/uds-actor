@@ -23,8 +23,16 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                 log::info!("Ensured user can RDP: {}", msg.user);
             }
         }
-        // If the a pre command is configured, run it
-        computer::process_command(&platform, computer::CommandType::PreConnect).await;
+        // Same positional parameters, order and "unknown" defaults as the 4.0 actor,
+        // so existing preconnect scripts keep working.
+        let args = [
+            msg.user.as_str(),
+            msg.protocol.as_str(),
+            msg.ip.as_deref().unwrap_or("unknown"),
+            msg.hostname.as_deref().unwrap_or("unknown"),
+            msg.udsuser.as_deref().unwrap_or("unknown"),
+        ];
+        computer::process_command(&platform, computer::CommandType::PreConnect, &args).await;
     }
     Ok(())
 }
@@ -80,5 +88,69 @@ mod tests {
         // No calls here, only redirects messages to wsclient
         log::info!("calls: {:?}", calls.dump());
         assert!(calls.count_calls("operations::ensure_user_can_rdp(") == 3);
+    }
+
+    // Scripts written for the 4.0 actor read these positional parameters, in this order.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_preconnect_command_receives_connection_parameters() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let dir = std::env::temp_dir().join(format!("udsactor-preconnect-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("preconnect.sh");
+        let output = dir.join("args.txt");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\necho \"$@\" > '{}'\n", output.display()),
+        )
+        .unwrap();
+
+        let server_info = mock::mock_server_info().await;
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        platform.config().write().await.pre_command = Some(format!("/bin/sh {}", script.display()));
+
+        let wsclient_to_workers = server_info.from_ws.clone();
+        let _handle = tokio::spawn(async move {
+            worker(server_info, platform).await.unwrap();
+        });
+        while wsclient_to_workers.receiver_count() == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        let send = |ip: Option<&str>, hostname: Option<&str>, udsuser: Option<&str>| {
+            wsclient_to_workers
+                .send(RpcEnvelope {
+                    id: None,
+                    msg: RpcMessage::PreConnect(PreConnect {
+                        user: "jdoe".into(),
+                        protocol: "nx".into(),
+                        ip: ip.map(Into::into),
+                        hostname: hostname.map(Into::into),
+                        udsuser: udsuser.map(Into::into),
+                    }),
+                })
+                .unwrap();
+        };
+        let read_args = || async {
+            for _ in 0..40 {
+                if let Ok(content) = std::fs::read_to_string(&output)
+                    && !content.is_empty()
+                {
+                    return content.trim().to_string();
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            String::new()
+        };
+
+        send(Some("10.0.0.25"), Some("laptop-01"), Some("jdoe@corp"));
+        assert_eq!(read_args().await, "jdoe nx 10.0.0.25 laptop-01 jdoe@corp");
+
+        std::fs::remove_file(&output).unwrap();
+        send(None, None, None);
+        assert_eq!(read_args().await, "jdoe nx unknown unknown unknown");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
