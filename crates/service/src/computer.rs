@@ -147,7 +147,11 @@ impl Display for CommandType {
 }
 
 // Returns true if a command was executed, Ok(false) if no command was pending
-pub async fn process_command(platform: &platform::Platform, command_type: CommandType) -> bool {
+pub async fn process_command(
+    platform: &platform::Platform,
+    command_type: CommandType,
+    args: &[&str],
+) -> bool {
     // Note that if already initialized, runonce has already been executed and cleared
     let cfg = platform.config(); // Avoid drop while writing
     let mut cfg_guard = cfg.write().await;
@@ -160,7 +164,7 @@ pub async fn process_command(platform: &platform::Platform, command_type: Comman
         log::info!("{} script pending, executing: {}", command_type, run_cmd);
         let mut success = false;
         if let Err(e) =
-            common::run_command(command_type.to_string().as_str(), run_cmd.as_str(), &[]).await
+            common::run_command(command_type.to_string().as_str(), run_cmd.as_str(), args).await
         {
             log::error!(
                 "Failed to execute {} script {}: {}",
