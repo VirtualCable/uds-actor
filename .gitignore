@@ -8,4 +8,5 @@ opencode.jsonc
 AGENTS.md
 /.agents
 # Added by code-review-graph
-.code-review-graph/
+/.code-review-graph/
+/graphify-out
