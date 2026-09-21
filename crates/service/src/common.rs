@@ -65,69 +65,71 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         "{:?} actor not initialized, initializing with broker",
         actor_type
     );
-    if let Ok(response) = broker_api_guard.initialize(interfaces.as_slice()).await {
-        // If token on response is none, this is not a managed host,continue until next request
-        if response.token.is_none() {
-            log::error!(
-                "{:?} actor initialization did not return a token, cannot continue login",
-                actor_type
-            );
+    let response = broker_api_guard
+        .initialize(interfaces.as_slice())
+        .await
+        .map_err(|e| anyhow::anyhow!("{:?} actor initialization failed: {:?}", actor_type, e))?;
+    // If token on response is none, this is not a managed host,continue until next request
+    if response.token.is_none() {
+        log::error!(
+            "{:?} actor initialization did not return a token, cannot continue login",
+            actor_type
+        );
+        return Err(anyhow::anyhow!(
+            "{:?} actor initialization did not return a token",
+            actor_type
+        ));
+    }
+
+    // If master token is present on response, and is different of current, update it
+    // but if actor_type is managed, master_token must be cleared
+    if actor_type == shared::config::ActorType::Unmanaged
+        && let Some(master_token) = response.master_token
+        && cfg_guard.master_token.as_ref() != Some(&master_token)
+    {
+        log::info!("Master token updated from broker");
+        cfg_guard.master_token = Some(master_token);
+    }
+
+    if actor_type == shared::config::ActorType::Managed {
+        // On managed, master_token must be cleared so subsequent restarts
+        // authenticate with the per-deployment `own_token` rather than the
+        // deployment-wide master token.
+        if cfg_guard.master_token.take().is_some() {
+            log::info!("Cleared master token on managed actor");
+        }
+    }
+    cfg_guard.own_token = response.token;
+    cfg_guard.config.unique_id = response.unique_id;
+    cfg_guard.config.os = response.os;
+
+    // Update stored config.
+    // Note that in fact, on unmanaged, we do not need to store own_token or unique_id,
+    // On managed, it's needed, but we store it anyway on both for simplicity,
+    // because it's volatile, but we do it anyway for simplicity as it really does not harm
+    let mut saver = platform.config_storage();
+    if let Err(e) = saver.save_config(&cfg_guard) {
+        log::error!("Failed to save updated config with new master_token: {}", e);
+        // If type is managed, we cannot continue without saving the config beceuse
+        // it contains the token
+        if actor_type == shared::config::ActorType::Managed {
             return Err(anyhow::anyhow!(
-                "{:?} actor initialization did not return a token",
-                actor_type
+                "Failed to save updated config with new master_token: {}",
+                e
             ));
         }
+        // Continue anyway, we have the token in our in-memory config
+    }
+    // Note: right here we are storing all de config, including that one not needed for in fact
 
-        // If master token is present on response, and is different of current, update it
-        // but if actor_type is managed, master_token must be cleared
-        if actor_type == shared::config::ActorType::Unmanaged
-            && let Some(master_token) = response.master_token
-            && cfg_guard.master_token.as_ref() != Some(&master_token)
-        {
-            log::info!("Master token updated from broker");
-            cfg_guard.master_token = Some(master_token);
-        }
-
-        if actor_type == shared::config::ActorType::Managed {
-            // On managed, master_token must be cleared so subsequent restarts
-            // authenticate with the per-deployment `own_token` rather than the
-            // deployment-wide master token.
-            if cfg_guard.master_token.take().is_some() {
-                log::info!("Cleared master token on managed actor");
-            }
-        }
-        cfg_guard.own_token = response.token;
-        cfg_guard.config.unique_id = response.unique_id;
-        cfg_guard.config.os = response.os;
-
-        // Update stored config.
-        // Note that in fact, on unmanaged, we do not need to store own_token or unique_id,
-        // On managed, it's needed, but we store it anyway on both for simplicity,
-        // because it's volatile, but we do it anyway for simplicity as it really does not harm
-        let mut saver = platform.config_storage();
-        if let Err(e) = saver.save_config(&cfg_guard) {
-            log::error!("Failed to save updated config with new master_token: {}", e);
-            // If type is managed, we cannot continue without saving the config beceuse
-            // it contains the token
-            if actor_type == shared::config::ActorType::Managed {
-                return Err(anyhow::anyhow!(
-                    "Failed to save updated config with new master_token: {}",
-                    e
-                ));
-            }
-            // Continue anyway, we have the token in our in-memory config
-        }
-        // Note: right here we are storing all de config, including that one not needed for in fact
-
-        // Now, set the broker_api token to the new own_token
-        if let Some(own_token) = cfg_guard.own_token.clone() {
-            broker_api_guard.set_token(&own_token);
-            // Wire the log forwarder so service-side tracing events (>= WARN by
-            // default) get pushed to the broker via POST actor/v3/log.
-            // Only LogType::Service forwards (see LogForwardLayer::for_type); the
-            // service's own log_type is hard-coded here.
-            shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
-        }
+    // Now, set the broker_api token to the new own_token
+    if let Some(own_token) = cfg_guard.own_token.clone() {
+        broker_api_guard.set_token(&own_token);
+        // Wire the log forwarder so service-side tracing events (>= WARN by
+        // default) get pushed to the broker via POST actor/v3/log.
+        // Only LogType::Service forwards (see LogForwardLayer::for_type); the
+        // service's own log_type is hard-coded here.
+        shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
     }
     Ok(())
 }
@@ -228,6 +230,19 @@ mod tests {
         assert!(result.is_ok());
         // Inspect dummy broker_api
         log::info!("calls: {:?}", calls.dump());
+    }
+
+    #[tokio::test]
+    async fn test_initialize_propagates_broker_error() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let mocked_platform = mock::mock_platform().await;
+        let platform = mocked_platform.platform.clone();
+        platform.config().write().await.master_token = Some("mastertoken".into());
+        mocked_platform.broker_api.write().await.init_error = Some("broker refused".into());
+
+        let result = initialize(&platform).await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
