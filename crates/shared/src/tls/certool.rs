@@ -8,7 +8,7 @@ use crate::log;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
-use pkcs8::EncryptedPrivateKeyInfo;
+use pkcs8::EncryptedPrivateKeyInfoOwned;
 use pkcs8::der::Decode;
 use rustls_pki_types::pem::PemObject;
 
@@ -27,7 +27,7 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
     let private_key: PrivateKeyDer<'static> = match cert_info.password {
         Some(ref pass) if !pass.is_empty() => {
             let pem_block = pem::parse(key_pem.as_slice())?;
-            let epki = EncryptedPrivateKeyInfo::<String>::from_der(pem_block.contents())
+            let epki = EncryptedPrivateKeyInfoOwned::from_der(pem_block.contents())
                 .map_err(|e| anyhow::anyhow!("Failed to parse encrypted private key: {:?}", e))?;
             let doc = epki.decrypt(pass).map_err(|e| {
                 log::info!("Invalid TLS certificate info: {:?}", err_cert_info);
