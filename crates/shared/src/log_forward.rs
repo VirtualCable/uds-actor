@@ -64,6 +64,30 @@ static FLOOD_PACK: AtomicU64 = AtomicU64::new(0);
 const MAX_PER_WINDOW: u32 = 60;
 const WINDOW_SECS: u64 = 60;
 
+/// Targets that are never forwarded to the broker:
+/// - transport crates (hyper/h2/reqwest/rustls/tungstenite emit several
+///   lines per HTTP request and would eat the flood quota);
+/// - our own broker API path: forwarding it re-logs the log POST itself,
+///   creating a feedback loop that only the flood guard would cut.
+const NO_FORWARD_TARGETS: &[&str] = &[
+    "hyper",
+    "hyper_util",
+    "h2",
+    "reqwest",
+    "rustls",
+    "tokio_tungstenite",
+    "tungstenite",
+    "tower",
+    "zbus",
+    "shared::broker::api",
+];
+
+fn is_forwardable_target(target: &str) -> bool {
+    !NO_FORWARD_TARGETS
+        .iter()
+        .any(|t| target == *t || target.starts_with(&format!("{t}::")))
+}
+
 /// Install the broker reference. Called once by the service after the
 /// platform is ready. Subsequent calls are no-ops.
 pub fn set_log_forwarder(api: std::sync::Arc<tokio::sync::RwLock<dyn BrokerApi>>) {
@@ -142,7 +166,9 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        self.enabled && *metadata.level() <= crate::log::get_active_log_level()
+        self.enabled
+            && *metadata.level() <= crate::log::get_active_log_level()
+            && is_forwardable_target(metadata.target())
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
@@ -221,6 +247,25 @@ impl tracing::field::Visit for MessageVisitor {
 mod tests {
     use super::*;
     use crate::log::parse_level;
+
+    #[test]
+    fn noisy_targets_are_not_forwarded() {
+        for t in [
+            "hyper",
+            "hyper::client",
+            "hyper_util::client::legacy",
+            "h2::codec",
+            "reqwest::connect",
+            "tokio_tungstenite",
+            "shared::broker::api",
+            "shared::broker::api::types",
+        ] {
+            assert!(!is_forwardable_target(t), "{t} must not be forwarded");
+        }
+        for t in ["service::common", "shared::log", "udsactor_service"] {
+            assert!(is_forwardable_target(t), "{t} must be forwarded");
+        }
+    }
 
     #[test]
     fn parse_levels() {

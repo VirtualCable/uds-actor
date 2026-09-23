@@ -125,8 +125,9 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
     // Now, set the broker_api token to the new own_token
     if let Some(own_token) = cfg_guard.own_token.clone() {
         broker_api_guard.set_token(&own_token);
-        // Wire the log forwarder so service-side tracing events (>= WARN by
-        // default) get pushed to the broker via POST actor/v3/log.
+        // Wire the log forwarder so service-side tracing events (at the
+        // configured log level, excluding noisy transport targets) get
+        // pushed to the broker via POST actor/v3/log.
         // Only LogType::Service forwards (see LogForwardLayer::for_type); the
         // service's own log_type is hard-coded here.
         shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());

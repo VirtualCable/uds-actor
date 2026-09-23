@@ -8,7 +8,6 @@ use crate::{log, sync::OnceSignal};
 
 use super::session::current_session_id;
 
-#[allow(dead_code)]
 pub async fn start_session_watch_task(stop: OnceSignal) -> Result<()> {
     let connection = Connection::system().await?;
 
@@ -30,8 +29,10 @@ pub async fn start_session_watch_task(stop: OnceSignal) -> Result<()> {
     // SessionRemoved signal
     // Note that all sessions are monitored, not just the current one
     // For testing, we can open another VT, or ssh session and close it
-    // Unfortunately, this is not valid for xrdp if our app runs inside the xrdp session
-    // because the session kills our process directly without going through login1
+    // This works with xrdp too (pam_systemd registers a logind session):
+    // our client process is not killed when the X server dies because it
+    // holds no X connection (the GUI lives in the gui-helper process), so
+    // logind is a reliable logout source here.
     let mut session_removed_signal = proxy_manager.receive_signal("SessionRemoved").await?;
     tokio::spawn(async move {
         log::debug!("Listening for SessionRemoved signals");
