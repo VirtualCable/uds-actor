@@ -1,17 +1,32 @@
 use anyhow::Result;
 
-use futures_util::StreamExt;
 use zbus::proxy::Builder;
-use zbus::{Connection, Proxy, zvariant::ObjectPath};
+use zbus::{Connection, Proxy};
 
 use crate::{log, sync::OnceSignal};
 
 use super::session::current_session_id;
 
+// We cannot rely on the SessionRemoved signal: logind only emits it once the
+// session scope is empty, and our own client process lives inside that scope
+// (distros ship KillUserProcesses=no), so the signal would never arrive.
+// Neither can we rely on signals: xrdp kills the session leader and leaves
+// the rest of the scope alone. So we poll once per second:
+//   - the session State property: "closing" (or the session object being
+//     gone) means logout;
+//   - the session Leader pid: when it dies, the session is ending
+//     (xrdp-sesman terminates it exactly at session close).
+// None of this touches X, so an abrupt X server death cannot kill us first.
 pub async fn start_session_watch_task(stop: OnceSignal) -> Result<()> {
+    let session_id = current_session_id()?;
+    if session_id.is_empty() {
+        log::warn!("No current session ID found, cannot monitor session state");
+        return Ok(());
+    }
+
     let connection = Connection::system().await?;
 
-    // Manager proxy
+    // Manager proxy, only to resolve our session's object path
     let proxy_manager: Proxy<'_> = Builder::new(&connection)
         .destination("org.freedesktop.login1")?
         .path("/org/freedesktop/login1")?
@@ -19,36 +34,82 @@ pub async fn start_session_watch_task(stop: OnceSignal) -> Result<()> {
         .build()
         .await?;
 
-    let session_id = current_session_id()?;
-    if session_id.is_empty() {
-        log::warn!("No current session ID found, cannot monitor session signals");
-        return Ok(());
-    }
-    log::debug!("Current session ID: {}", session_id);
+    let msg = proxy_manager
+        .call_method("GetSession", &session_id.as_str())
+        .await?;
+    let body = msg.body();
+    let session_path: zbus::zvariant::OwnedObjectPath = body.deserialize()?;
 
-    // SessionRemoved signal
-    // Note that all sessions are monitored, not just the current one
-    // For testing, we can open another VT, or ssh session and close it
-    // This works with xrdp too (pam_systemd registers a logind session):
-    // our client process is not killed when the X server dies because it
-    // holds no X connection (the GUI lives in the gui-helper process), so
-    // logind is a reliable logout source here.
-    let mut session_removed_signal = proxy_manager.receive_signal("SessionRemoved").await?;
+    let proxy_session: Proxy<'_> = Builder::new(&connection)
+        .destination("org.freedesktop.login1")?
+        .path(session_path)?
+        .interface("org.freedesktop.login1.Session")?
+        .build()
+        .await?;
+
+    let leader_pid: u32 = proxy_session.get_property("Leader").await.unwrap_or(0);
+
+    log::info!(
+        "Watching logind session {} (leader pid {}) for logout",
+        session_id,
+        leader_pid
+    );
+
     tokio::spawn(async move {
-        log::debug!("Listening for SessionRemoved signals");
-        while let Some(msg) = session_removed_signal.next().await {
-            log::debug!("SessionRemoved signal received: {:?}", msg);
-            if let Ok((id, _path)) = msg.body().deserialize::<(String, ObjectPath)>() {
-                log::debug!("SessionRemoved: id={} path={}", id, _path);
-                if id == session_id {
-                    log::info!("Current session {} has been removed, stopping monitor", id);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = stop.wait() => return,
+            }
+
+            if stop.is_set() {
+                return;
+            }
+
+            // Session state: "closing" means logout is in progress; an error
+            // means the session object no longer exists (already removed).
+            match proxy_session.get_property::<String>("State").await {
+                Ok(state) if state == "closing" => {
+                    log::info!("Session {} is closing, notifying logout", session_id);
                     stop.set();
+                    return;
                 }
+                Ok(_) => {}
+                Err(e) => {
+                    log::info!(
+                        "Session {} no longer exists ({}), notifying logout",
+                        session_id,
+                        e
+                    );
+                    stop.set();
+                    return;
+                }
+            }
+
+            // Leader process: xrdp terminates it exactly at session close.
+            if leader_pid != 0 && !process_alive(leader_pid) {
+                log::info!(
+                    "Session {} leader (pid {}) is gone, notifying logout",
+                    session_id,
+                    leader_pid
+                );
+                stop.set();
+                return;
             }
         }
     });
 
     Ok(())
+}
+
+fn process_alive(pid: u32) -> bool {
+    // kill(pid, 0): 0 = alive, EPERM = alive but owned by someone else,
+    // ESRCH = gone.
+    if unsafe { libc::kill(pid as libc::pid_t, 0) } == 0 {
+        return true;
+    }
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 #[cfg(test)]
@@ -66,5 +127,12 @@ mod tests {
 
         // Wait for a while to see if any signals are received
         stop.wait_timeout(std::time::Duration::from_secs(30)).await.unwrap();
+    }
+
+    #[test]
+    fn test_process_alive() {
+        assert!(process_alive(std::process::id()));
+        // Pid 0x7FFFFFFF should not exist
+        assert!(!process_alive(0x7FFFFFFF));
     }
 }
