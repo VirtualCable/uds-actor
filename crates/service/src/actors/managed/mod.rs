@@ -86,6 +86,50 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             }
             ActorOsAction::Rename => {
                 log::info!("OS action requested: Rename to '{}'", os_data.name);
+
+                // Win/Linux random-password OS managers send the new password
+                // in the `custom` payload. Apply it before renaming so the change
+                // is in place by the time the broker hands the credential over
+                // to the transport.
+                if let Some(custom) = os_data.custom.as_ref() {
+                    if let Some(new_password) =
+                        custom.get("new_password").and_then(|v| v.as_str())
+                    {
+                        let username = custom
+                            .get("username")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        if username.is_empty() {
+                            log::warn!(
+                                "Rename carries a new_password but no username; \
+                                 skipping password change to avoid NetUserChangePassword \
+                                 with an empty user"
+                            );
+                        } else {
+                            let old_password = custom
+                                .get("password")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            log::info!(
+                                "Changing password for user '{}' as requested by OS manager",
+                                username
+                            );
+                            if let Err(e) = platform
+                                .system()
+                                .change_user_password(username, old_password, new_password)
+                            {
+                                log::error!(
+                                    "change_user_password for '{}' failed: {}. \
+                                     Broker will now hold a password that does not match \
+                                     the one on the machine.",
+                                    username,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+
                 if crate::computer::rename_computer(&platform, os_data.name.as_str()).await? {
                     // Reboot to apply changes
                     log::info!("Rebooting system to apply rename");
