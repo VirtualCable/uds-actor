@@ -43,7 +43,7 @@ use windows::{
                 NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME,
                 NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers,
                 NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus,
-                NetUserChangePassword,
+                NetUserSetInfo, USER_INFO_1003,
             },
         },
         Networking::WinSock::AF_INET,
@@ -404,33 +404,36 @@ impl System for WindowsOperations {
     fn change_user_password(
         &self,
         user: &str,
-        old_password: &str,
+        _old_password: &str,
         new_password: &str,
     ) -> Result<()> {
         unsafe {
             let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
-            let old_w =
-                U16CString::from_str(old_password).context("invalid old password UTF-16")?;
-            let new_w =
+            let mut new_w =
                 U16CString::from_str(new_password).context("invalid new password UTF-16")?;
 
-            let res = NetUserChangePassword(
-                PCWSTR::null(), // NULL for local machine
+            // NetUserChangePassword with a NULL domain resolves the caller's logon
+            // domain, which is not the local SAM when running as SYSTEM on a
+            // workgroup machine (error 2221/1351). Resetting through NetUserSetInfo
+            // on the local machine needs neither the old password nor that lookup.
+            let info = USER_INFO_1003 {
+                usri1003_password: PWSTR(new_w.as_mut_ptr()),
+            };
+
+            let res = NetUserSetInfo(
+                PCWSTR::null(),
                 PCWSTR(user_w.as_ptr()),
-                PCWSTR(old_w.as_ptr()),
-                PCWSTR(new_w.as_ptr()),
+                1003,
+                &info as *const USER_INFO_1003 as *const u8,
+                None,
             );
 
             if res == 0 {
                 Ok(())
             } else {
                 let detail = Self::format_net_error(res);
-                log::error!(
-                    "NetUserChangePassword for user '{}' failed: {}",
-                    user,
-                    detail
-                );
-                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", detail))
+                log::error!("NetUserSetInfo for user '{}' failed: {}", user, detail);
+                Err(anyhow::anyhow!("NetUserSetInfo failed: {}", detail))
             }
         }
     }
