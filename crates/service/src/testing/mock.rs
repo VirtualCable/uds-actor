@@ -17,6 +17,8 @@ pub struct MockedPlatform {
     pub platform: Platform,
     pub calls: Calls,
     pub broker_api: Arc<tokio::sync::RwLock<BrokerApiMock>>,
+    // Concrete mock kept so tests can flip its error-injection flags.
+    pub operations: Arc<OperationsMock>,
 }
 
 pub async fn mock_platform() -> MockedPlatform {
@@ -40,13 +42,14 @@ pub async fn mock_platform() -> MockedPlatform {
 
     let platform = crate::platform::Platform::new_with_params(
         Some(config),
-        Some(operations),
+        Some(operations.clone()),
         Some(broker_api.clone()),
     );
     MockedPlatform {
         platform,
         calls,
         broker_api,
+        operations,
     }
 }
 

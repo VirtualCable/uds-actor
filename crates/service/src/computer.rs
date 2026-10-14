@@ -91,6 +91,7 @@ pub async fn join_domain(
         ou: custom
             .get("ou")
             .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_string()),
         client_software: custom
             .get("client_software")

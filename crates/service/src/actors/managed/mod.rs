@@ -1,8 +1,25 @@
 use anyhow::Result;
 
-use shared::{config::ActorOsAction, log, ws::server};
+use shared::{broker::api::types::LogLevel, config::ActorOsAction, log, ws::server};
 
 use crate::{common, platform, workers};
+
+/// Report a fatal OS-config error to both the local log and the broker.
+///
+/// During the OS-config phase (rename/join domain) the actor has no local
+/// websocket client yet, so failures never reach the admin "Registros" panel
+/// and the service just keeps restarting. The broker token/secret are already
+/// set at this point (initialize() has run), so we can POST /log here.
+/// Best-effort: if the broker call fails, we keep the original error anyway.
+async fn report_fatal(platform: &platform::Platform, message: &str) {
+    log::error!("{}", message);
+    let _ = platform
+        .broker_api()
+        .write()
+        .await
+        .log(LogLevel::Error, message)
+        .await;
+}
 
 pub async fn run(platform: platform::Platform) -> Result<()> {
     log::info!("Managed service starting");
@@ -130,32 +147,51 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                     }
                 }
 
-                if crate::computer::rename_computer(&platform, os_data.name.as_str()).await? {
-                    // Reboot to apply changes
-                    log::info!("Rebooting system to apply rename");
-                    platform.system().reboot(None)?;
-                    return Ok(()); // We can exit here, system is rebooting
+                match crate::computer::rename_computer(&platform, os_data.name.as_str()).await {
+                    Ok(true) => {
+                        // Reboot to apply changes
+                        log::info!("Rebooting system to apply rename");
+                        platform.system().reboot(None)?;
+                        return Ok(()); // We can exit here, system is rebooting
+                    }
+                    Ok(false) => {} // Already has the correct name, skips reboot
+                    Err(e) => {
+                        // Surface the failure on the admin panel before returning, otherwise
+                        // the service just restarts with an empty "Registros" panel.
+                        let msg = format!("Rename to '{}' failed: {}", os_data.name, e);
+                        report_fatal(&platform, &msg).await;
+                        return Err(anyhow::anyhow!(msg));
+                    }
                 }
-                // Already has the correct name, skips reboot
             }
             ActorOsAction::JoinDomain => {
                 log::info!(
                     "OS action requested: Join domain with name '{}'",
                     os_data.name
                 );
-                if crate::computer::join_domain(
+                match crate::computer::join_domain(
                     &platform,
                     os_data.name.as_str(),
                     os_data.custom.clone(),
                 )
-                .await?
+                .await
                 {
-                    // Reboot to apply changes
-                    log::info!("Rebooting system to apply domain join");
-                    platform.system().reboot(None)?;
-                    return Ok(()); // We can exit here, system is rebooting
+                    Ok(true) => {
+                        // Reboot to apply changes
+                        log::info!("Rebooting system to apply domain join");
+                        platform.system().reboot(None)?;
+                        return Ok(()); // We can exit here, system is rebooting
+                    }
+                    Ok(false) => {} // Already has the correct name and domain, skips reboot
+                    Err(e) => {
+                        // Same reasoning as rename: a failed NetJoinDomain (e.g. Win32 error 2,
+                        // ERROR_FILE_NOT_FOUND -> DC/OU not found) should reach the admin panel
+                        // instead of a silent restart.
+                        let msg = format!("Domain join for '{}' failed: {}", os_data.name, e);
+                        report_fatal(&platform, &msg).await;
+                        return Err(anyhow::anyhow!(msg));
+                    }
                 }
-                // Already has the correct name and domain, skips reboot
             }
         }
     } else {
