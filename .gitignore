@@ -4,3 +4,11 @@
 *_enterprise*
 .DS_Store
 IGNORABLE*
+opencode.jsonc
+AGENTS.md
+/.agents
+# Added by code-review-graph
+/.code-review-graph/
+/graphify-out
+/.kilo
+/.vscode

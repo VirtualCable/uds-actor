@@ -43,7 +43,7 @@ use windows::{
                 NETSETUP_DOMAIN_JOIN_IF_JOINED, NETSETUP_JOIN_DOMAIN, NETSETUP_JOIN_WITH_NEW_NAME,
                 NetApiBufferFree, NetGetJoinInformation, NetJoinDomain, NetLocalGroupAddMembers,
                 NetLocalGroupGetMembers, NetSetupDomainName, NetSetupUnknownStatus,
-                NetUserChangePassword,
+                NetUserSetInfo, USER_INFO_1003,
             },
         },
         Networking::WinSock::AF_INET,
@@ -117,10 +117,13 @@ impl WindowsOperations {
             }
             let lp_domain =
                 U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
-            let lp_ou = match options.ou.clone() {
-                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
-                None => None,
-            };
+            // Same NULL-on-empty rule as in `join_domain` (see comment there).
+            let lp_ou = options
+                .ou
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| U16CString::from_str(s).context("failed to convert OU to UTF-16"))
+                .transpose()?;
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
             let lp_password = U16CString::from_str(options.password.clone())
@@ -331,10 +334,15 @@ impl System for WindowsOperations {
             // Convert to utf16
             let lp_domain =
                 U16CString::from_str(domain).context("failed to convert domain to UTF-16")?;
-            let lp_ou = match options.ou.clone() {
-                Some(s) => Some(U16CString::from_str(s).context("failed to convert OU to UTF-16")?),
-                None => None,
-            };
+            // The server may emit `ou = ""` to mean "default Computers container"
+            // (None). NetJoinDomain rejects an empty string with ERROR_FILE_NOT_FOUND,
+            // so we must convert empty -> NULL on the Rust side.
+            let lp_ou = options
+                .ou
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| U16CString::from_str(s).context("failed to convert OU to UTF-16"))
+                .transpose()?;
             let lp_account = U16CString::from_str(&account_str)
                 .context("failed to convert account to UTF-16")?;
             let lp_password = U16CString::from_str(options.password.clone())
@@ -399,33 +407,36 @@ impl System for WindowsOperations {
     fn change_user_password(
         &self,
         user: &str,
-        old_password: &str,
+        _old_password: &str,
         new_password: &str,
     ) -> Result<()> {
         unsafe {
             let user_w = U16CString::from_str(user).context("invalid user UTF-16")?;
-            let old_w =
-                U16CString::from_str(old_password).context("invalid old password UTF-16")?;
-            let new_w =
+            let mut new_w =
                 U16CString::from_str(new_password).context("invalid new password UTF-16")?;
 
-            let res = NetUserChangePassword(
-                PCWSTR::null(), // NULL for local machine
+            // NetUserChangePassword with a NULL domain resolves the caller's logon
+            // domain, which is not the local SAM when running as SYSTEM on a
+            // workgroup machine (error 2221/1351). Resetting through NetUserSetInfo
+            // on the local machine needs neither the old password nor that lookup.
+            let info = USER_INFO_1003 {
+                usri1003_password: PWSTR(new_w.as_mut_ptr()),
+            };
+
+            let res = NetUserSetInfo(
+                PCWSTR::null(),
                 PCWSTR(user_w.as_ptr()),
-                PCWSTR(old_w.as_ptr()),
-                PCWSTR(new_w.as_ptr()),
+                1003,
+                &info as *const USER_INFO_1003 as *const u8,
+                None,
             );
 
             if res == 0 {
                 Ok(())
             } else {
                 let detail = Self::format_net_error(res);
-                log::error!(
-                    "NetUserChangePassword for user '{}' failed: {}",
-                    user,
-                    detail
-                );
-                Err(anyhow::anyhow!("NetUserChangePassword failed: {}", detail))
+                log::error!("NetUserSetInfo for user '{}' failed: {}", user, detail);
+                Err(anyhow::anyhow!("NetUserSetInfo failed: {}", detail))
             }
         }
     }
@@ -437,6 +448,7 @@ impl System for WindowsOperations {
 
         let current_domain = match self.get_domain_name()? {
             None => {
+                // Not joined to any domain: full join required.
                 log::info!(
                     "Not joined to any domain, performing full join to '{}'",
                     options.domain
@@ -444,19 +456,16 @@ impl System for WindowsOperations {
                 self.join_domain(options)?;
                 return Ok(true);
             }
-            Some(other) if !other.eq_ignore_ascii_case(&options.domain) => {
-                log::info!(
-                    "Currently joined to '{}', requested '{}', performing full join",
-                    other,
-                    options.domain
-                );
-                self.join_domain(options)?;
-                return Ok(true);
-            }
             Some(current) => {
+                // Already joined to *some* domain. The broker's domain name is
+                // treated as immutable: if it ever changed, the existing
+                // machine account would be invalid anyway, so the operator
+                // must redeploy. We never auto-rejoin in this branch — we just
+                // verify the secure channel trust with the DC.
                 log::info!(
-                    "Already joined to '{}', probing secure channel trust",
-                    current
+                    "Already joined to '{}', probing secure channel trust (requested domain '{}')",
+                    current,
+                    options.domain
                 );
                 current
             }

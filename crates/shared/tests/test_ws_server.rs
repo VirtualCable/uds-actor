@@ -58,6 +58,18 @@ async fn get_request(url: &str) -> Result<String> {
     Ok(body)
 }
 
+// Broker-facing envelope: every public endpoint answers
+// {"result": ..., "error": ...} (3.x/4.0 contract).
+#[derive(serde::Deserialize)]
+struct ApiResponse<T> {
+    result: Option<T>,
+    error: Option<String>,
+}
+
+fn parse_api_response<T: serde::de::DeserializeOwned>(body: &str) -> ApiResponse<T> {
+    serde_json::from_str(body).unwrap_or_else(|_| panic!("Error on response:\n{body}"))
+}
+
 async fn post_request<U: serde::Serialize>(url: &str, json: &U) -> Result<String> {
     let client = Client::builder()
         .use_rustls_tls()
@@ -114,10 +126,9 @@ async fn test_get_screenshot() {
     .await
     .unwrap();
 
-    let result: ScreenshotResponse = serde_json::from_str::<ScreenshotResponse>(&body)
-        .unwrap_or_else(|_| panic!("Error on response:\n{body}"));
-
-    assert_eq!(result.result, "fake_base64_image");
+    let result = parse_api_response::<String>(&body);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("fake_base64_image"));
 
     server_task.abort();
 }
@@ -154,7 +165,9 @@ async fn test_get_uuid() {
         .await
         .unwrap();
 
-    assert_eq!(result, "fake-uuid-1234");
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("fake-uuid-1234"));
 
     server_task.abort();
 }
@@ -189,7 +202,9 @@ async fn test_post_logout() {
     )
     .await
     .unwrap();
-    assert_eq!(result, "ok");
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("ok"));
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
@@ -218,7 +233,9 @@ pub async fn test_post_message() {
     )
     .await
     .unwrap();
-    assert_eq!(result, "ok");
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("ok"));
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
@@ -251,7 +268,9 @@ pub async fn test_post_script() {
     .await
     .unwrap();
 
-    assert_eq!(result, "ok");
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("ok"));
 
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
@@ -287,7 +306,9 @@ pub async fn test_post_pre_connect() {
     .await
     .unwrap();
 
-    assert_eq!(result, "ok");
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("ok"));
     // Execute in a timeout to avoid hanging forever
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         let res = wait_message_arrival::<PreConnect>(&mut rx, None).await;
@@ -295,6 +316,44 @@ pub async fn test_post_pre_connect() {
     })
     .await
     .unwrap(); // Fail if timeout
+
+    server_task.abort();
+}
+
+// The 3.x/4.0 broker calls /preConnect (camelCase); the route must accept
+// that spelling, and the 5.0 broker payload carries extra fields
+// (udsuser_uuid, userservice_uuid, service_type) that must be ignored.
+#[tokio::test]
+pub async fn test_post_pre_connect_camelcase_route() {
+    let (server_info, server_task, port) = create_test_server_task("-secret-").await;
+    let mut rx = server_info.from_ws.subscribe();
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    let result = post_request(
+        &format!("https://localhost:{}/actor/-secret-/preConnect", port),
+        &serde_json::json!({
+            "user": "testuser",
+            "protocol": "rdp",
+            "ip": "127.0.0.1",
+            "hostname": "localhost",
+            "udsuser": "udsuser",
+            "udsuser_uuid": "some-uuid",
+            "userservice_uuid": "other-uuid",
+            "service_type": "rdp",
+        }),
+    )
+    .await
+    .unwrap();
+
+    let result = parse_api_response::<String>(&result);
+    assert_eq!(result.error, None);
+    assert_eq!(result.result.as_deref(), Some("ok"));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let res = wait_message_arrival::<PreConnect>(&mut rx, None).await;
+        assert!(res.is_some());
+    })
+    .await
+    .unwrap();
 
     server_task.abort();
 }

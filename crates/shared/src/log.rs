@@ -38,11 +38,51 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
 
+use crate::log_forward::LogForwardLayer;
+
+#[cfg(target_os = "windows")]
+use crate::windows::eventlog::EventLogLayer;
+
 // Reexport to avoid using crate names for tracing
 pub use tracing::{debug, error, info, trace, warn};
 
 static LOGGER_INIT: OnceLock<()> = OnceLock::new();
 static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
+static ACTIVE_LOG_LEVEL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(3); // Default Info (3)
+
+pub fn get_active_log_level() -> tracing::Level {
+    match ACTIVE_LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => tracing::Level::ERROR,
+        2 => tracing::Level::WARN,
+        3 => tracing::Level::INFO,
+        4 => tracing::Level::DEBUG,
+        5 => tracing::Level::TRACE,
+        _ => tracing::Level::INFO,
+    }
+}
+
+pub fn parse_level(s: &str) -> Option<tracing::Level> {
+    match s.to_lowercase().as_str() {
+        "trace" => Some(tracing::Level::TRACE),
+        "debug" => Some(tracing::Level::DEBUG),
+        "info" => Some(tracing::Level::INFO),
+        "warn" | "warning" => Some(tracing::Level::WARN),
+        "error" => Some(tracing::Level::ERROR),
+        _ => None,
+    }
+}
+
+fn set_active_level_from_str(level: &str) {
+    let level_num = match level.to_lowercase().as_str() {
+        "error" => 1,
+        "warn" | "warning" => 2,
+        "info" => 3,
+        "debug" => 4,
+        "trace" => 5,
+        _ => 3,
+    };
+    ACTIVE_LOG_LEVEL.store(level_num, std::sync::atomic::Ordering::Relaxed);
+}
 
 struct RotatingWriter {
     path: PathBuf,
@@ -115,7 +155,7 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum LogType {
     Client,
     Service,
@@ -194,7 +234,7 @@ fn default_log_dir(log_type: &LogType) -> String {
         //   - LocalSystem (service) => C:\Windows\Temp
         //   - User (client)        => %USERPROFILE%\AppData\Local\Temp
         let _ = log_type; // not used on Windows; suppress unused-variable warning
-        return std::env::temp_dir().to_string_lossy().into_owned();
+        std::env::temp_dir().to_string_lossy().into_owned()
     }
 
     #[cfg(target_family = "unix")]
@@ -276,12 +316,14 @@ pub fn setup_logging(level: &str, log_type: LogType) {
     }
 
     LOGGER_INIT.get_or_init(|| {
+        set_active_level_from_str(&level);
         let env_filter = EnvFilter::new(level.clone());
         let (reload_layer, handle) = reload::Layer::<EnvFilter, Registry>::new(env_filter);
 
         let _ = RELOAD_HANDLE.set(handle);
 
         let main_layer = fmt::layer()
+            .with_timer(LocalTimer)
             .with_writer(RotatingWriter {
                 path: std::path::Path::new(&log_path).join(log_name),
                 max_size: 16 * 1024 * 1024, // 16 MB
@@ -293,23 +335,62 @@ pub fn setup_logging(level: &str, log_type: LogType) {
             .with_thread_ids(level == "debug" || level == "trace")
             .with_filter(reload_layer);
 
-        #[cfg(debug_assertions)]
-        let main_layer = main_layer.and_then(
-            fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_ansi(true)
-                .with_target(true)
-                .with_level(true)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_line_number(true)
-                .with_filter(EnvFilter::new("debug")),
+        // Stderr layer: emits colored, line-numbered output to stderr.
+        // Useful under systemd / launchd, which capture stderr into the
+        // journal / log show. Enabled for service and client (both run as
+        // long-lived processes). Config is intentionally excluded because
+        // it's a one-shot GUI tool.
+        //
+        // On debug builds we force-enable it and bump verbosity. On release
+        // it's also enabled by default; disable with
+        // UDSACTOR_<TYPE>_STDERR_DISABLE=true.
+        let stderr_disable_key = format!(
+            "UDSACTOR_{}_STDERR_DISABLE",
+            log_type.to_string().to_uppercase()
         );
+        let stderr_enabled = matches!(log_type, LogType::Service | LogType::Client)
+            && std::env::var(&stderr_disable_key)
+                .ok()
+                .map(|v| !matches!(v.to_lowercase().as_str(), "true" | "1" | "yes" | "on"))
+                .unwrap_or(true);
 
-        tracing_subscriber::registry()
-            .with(main_layer)
-            .try_init()
-            .ok();
+let stderr_level = if !stderr_enabled {
+    // Effectively disable: filter out everything.
+    "off"
+} else if cfg!(debug_assertions) {
+    "debug"
+} else {
+    // On release, match the file log level for consistency.
+    level.as_str()
+};
+
+// Stderr layer: always added, controlled by EnvFilter so the type stays
+// uniform across the conditional branch above.
+let main_layer = main_layer.and_then(
+    fmt::layer()
+        .with_timer(LocalTimer)
+        .with_writer(std::io::stderr)
+        .with_ansi(true)
+        .with_target(true)
+        .with_level(true)
+        .with_thread_ids(true)
+        .with_file(cfg!(debug_assertions))
+        .with_line_number(cfg!(debug_assertions))
+        .with_filter(EnvFilter::new(stderr_level)),
+);
+
+// Optional forwarder: only `LogType::Service` actually forwards
+// (see `LogForwardLayer::for_type`); for everything else this returns
+// a layer whose `enabled()` is false, which is a no-op.
+let main_layer = main_layer.and_then(LogForwardLayer::for_type(&log_type));
+
+#[cfg(target_os = "windows")]
+let main_layer = main_layer.and_then(EventLogLayer::for_type(&log_type));
+
+tracing_subscriber::registry()
+    .with(main_layer)
+    .try_init()
+    .ok();
 
         // Setup panic hook, not if testing
         if log_type != LogType::Tests {
@@ -319,6 +400,15 @@ pub fn setup_logging(level: &str, log_type: LogType) {
 }
 
 pub fn set_log_level(level: &str) {
+    // If an environment variable is setting the log level explicitly, it has precedence.
+    if std::env::var("UDSACTOR_SERVICE_LOG_LEVEL").is_ok()
+        || std::env::var("UDSACTOR_CLIENT_LOG_LEVEL").is_ok()
+        || std::env::var("UDSACTOR_CONFIG_LOG_LEVEL").is_ok()
+    {
+        return;
+    }
+
+    set_active_level_from_str(level);
     // Note: Changing log level at runtime is not directly supported by tracing_subscriber.
     // This is a workaround by re-initializing the subscriber with the new level.
     if let Some(handle) = RELOAD_HANDLE.get() {
@@ -328,6 +418,15 @@ pub fn set_log_level(level: &str) {
         }
     } else {
         eprintln!("Logger not initialized yet");
+    }
+}
+
+struct LocalTimer;
+
+impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+        let now = chrono::Local::now();
+        write!(w, "{}", now.to_rfc3339_opts(chrono::SecondsFormat::Micros, false))
     }
 }
 
@@ -391,5 +490,10 @@ mod tests {
         // Check if log file has been rotated
         let meta = fs::metadata(&log_file).unwrap();
         assert!(meta.len() < 16 * 1024 * 1024); // Current log file should be less than 16MB
+    }
+
+    #[test]
+    fn test_tracing_level_order() {
+        assert!(tracing::Level::ERROR < tracing::Level::WARN);
     }
 }

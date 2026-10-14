@@ -233,6 +233,7 @@ pub struct ClientInfo {
 
 // Log levels, must match server ones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "u32", try_from = "u32")]
 pub enum LogLevel {
     Other = 10000,
     Debug = 20000,
@@ -252,6 +253,20 @@ impl From<u8> for LogLevel {
             3 => LogLevel::Error,
             4 => LogLevel::Fatal,
             _ => LogLevel::Other,
+        }
+    }
+}
+
+/// Map `tracing::Level` to our server-side `LogLevel`. Used by the log
+/// forwarder in `crates/shared/src/log_forward.rs`.
+impl From<tracing::Level> for LogLevel {
+    fn from(level: tracing::Level) -> Self {
+        match level {
+            tracing::Level::TRACE => LogLevel::Debug,
+            tracing::Level::DEBUG => LogLevel::Debug,
+            tracing::Level::INFO => LogLevel::Info,
+            tracing::Level::WARN => LogLevel::Warn,
+            tracing::Level::ERROR => LogLevel::Error,
         }
     }
 }

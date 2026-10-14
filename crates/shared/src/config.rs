@@ -79,15 +79,6 @@ pub struct ActorConfiguration {
     // Additional configuration data from server
     pub config: ActorDataConfiguration,
     pub data: Option<serde_json::Value>,
-
-    // Runtime-only flag indicating that the broker initialize REST has been
-    // successfully invoked during this process lifetime. NOT persisted (serde skip):
-    // every time the actor service starts, this resets to false, ensuring that
-    // the broker initialization is re-evaluated (and so are os_data-driven
-    // actions such as JoinDomain, including after restoring a snapshot where the
-    // machine account trust may have expired).
-    #[serde(default, skip)]
-    pub is_initialized: bool,
 }
 
 impl Default for ActorConfiguration {
@@ -105,18 +96,19 @@ impl Default for ActorConfiguration {
             log_level: 50000, // ERROR
             config: ActorDataConfiguration::default(),
             data: None,
-            is_initialized: false,
         }
     }
 }
 
 impl ActorConfiguration {
     pub fn token(&self) -> String {
-        // Own token has precedence over master token
-        if let Some(token) = self.own_token.clone() {
+        // Master token has precedence over master token
+        if let Some(token) = self.master_token.clone()
+            && !token.is_empty()
+        {
             token
         } else {
-            self.master_token.as_deref().unwrap_or("").to_string()
+            self.own_token.as_deref().unwrap_or("").to_string()
         }
     }
 
@@ -173,7 +165,6 @@ mod tests {
             log_level: 3,
             config: ActorDataConfiguration::default(),
             data: None,
-            is_initialized: false,
         }
     }
 

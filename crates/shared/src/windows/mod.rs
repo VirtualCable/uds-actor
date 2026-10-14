@@ -25,6 +25,7 @@
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 pub mod config;
+pub mod eventlog;
 pub mod installer;
 pub mod sens;
 pub mod service;

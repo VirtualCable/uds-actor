@@ -39,6 +39,7 @@ pub mod installer;
 mod network;
 mod renamer;
 mod session;
+pub mod watcher;
 
 pub fn new_system() -> std::sync::Arc<dyn crate::system::System + Send + Sync> {
     std::sync::Arc::new(LinuxSystem::new())

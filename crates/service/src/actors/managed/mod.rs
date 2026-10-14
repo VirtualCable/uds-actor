@@ -30,17 +30,57 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     log::debug!("Platform initialized with config: {:?}", platform.config());
 
     // force time sync on managed startup
+    #[cfg(test)]
     if let Err(e) = platform.system().force_time_sync() {
         log::warn!("Failed to force time sync on startup: {}", e);
     }
 
-    // Call initialize with broker if not already initialized in this process.
-    // Note: `is_initialized` is a runtime-only flag (serde-skipped on the config),
-    // so it resets to false on every service restart, ensuring the broker
-    // initialize REST is re-evaluated every time the actor starts (including
-    // after restoring a snapshot where the domain trust may have expired).
-    if !platform.config().read().await.is_initialized
-        && let Err(e) = crate::common::initialize(&platform).await
+    #[cfg(not(test))]
+    tokio::spawn({
+        let platform = platform.clone();
+        async move {
+            let start_time = std::time::Instant::now();
+            let mut attempt = 1;
+            let max_duration = std::time::Duration::from_secs(120);
+            let interval = std::time::Duration::from_secs(10);
+            let stop = platform.get_stop();
+
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {}
+                    _ = stop.wait() => {
+                        log::debug!("Time sync task stopped during wait");
+                        return;
+                    }
+                }
+
+                log::debug!("Attempting time sync (attempt {})", attempt);
+                match platform.system().force_time_sync() {
+                    Ok(()) => {
+                        log::info!("Time sync successful");
+                        break;
+                    }
+                    Err(e) => {
+                        if start_time.elapsed() >= max_duration {
+                            log::warn!("Failed to force time sync after retrying for 120 seconds: {}", e);
+                            break;
+                        }
+                        attempt += 1;
+                    }
+                }
+            }
+        }
+    });
+
+// Initialize broker on every start. The initialize REST call is
+ // re-evaluated every time the service starts, including after restoring
+ // a snapshot where the domain trust expired.
+ // Note: `common::initialize` also wires the log forwarder with the
+ // updated `own_token` after the broker handshake, so subsequent service
+ // log events are forwarded to the broker with the correct per-deployment
+ // token (not the master token).
+
+    if let Err(e) = crate::common::initialize(&platform).await
     {
         log::error!("Failed to initialize managed actor with broker: {}", e);
         return Err(anyhow::anyhow!(
@@ -49,7 +89,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce).await {
+    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce, &[]).await
+    {
         // If runonce was executed, exit
         log::info!("Exiting after runonce execution as requested");
         return Ok(());
@@ -62,6 +103,50 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
             }
             ActorOsAction::Rename => {
                 log::info!("OS action requested: Rename to '{}'", os_data.name);
+
+                // Win/Linux random-password OS managers send the new password
+                // in the `custom` payload. Apply it before renaming so the change
+                // is in place by the time the broker hands the credential over
+                // to the transport.
+                if let Some(custom) = os_data.custom.as_ref() {
+                    if let Some(new_password) =
+                        custom.get("new_password").and_then(|v| v.as_str())
+                    {
+                        let username = custom
+                            .get("username")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        if username.is_empty() {
+                            log::warn!(
+                                "Rename carries a new_password but no username; \
+                                 skipping password change to avoid NetUserChangePassword \
+                                 with an empty user"
+                            );
+                        } else {
+                            let old_password = custom
+                                .get("password")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            log::info!(
+                                "Changing password for user '{}' as requested by OS manager",
+                                username
+                            );
+                            if let Err(e) = platform
+                                .system()
+                                .change_user_password(username, old_password, new_password)
+                            {
+                                log::error!(
+                                    "change_user_password for '{}' failed: {}. \
+                                     Broker will now hold a password that does not match \
+                                     the one on the machine.",
+                                    username,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+
                 match crate::computer::rename_computer(&platform, os_data.name.as_str()).await {
                     Ok(true) => {
                         // Reboot to apply changes
@@ -113,9 +198,12 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         log::debug!("No OS data action requested");
     }
 
+    log::debug!("Starting post config commands");
     // Post-config command will run, but no reboot will be done after it
-    crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig).await;
+    crate::computer::process_command(&platform, crate::computer::CommandType::PostConfig, &[])
+        .await;
 
+    log::debug!("Sending ready to broker");
     // Notify ready to broker, will return TLS certs
     // Note: The server is started after this, as we need the certs to start it
     // Is not expected to receive any calls before server is started (and will not)
@@ -160,6 +248,8 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     )
     .await?;
 
+    log::info!("Webserver/Websocket server started");
+
     // create the ip watcher task
     // Will simply stop the service if ip changes
     // Allowing the system to restart it cleanly
@@ -172,8 +262,12 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         }
     });
 
+    log::debug!("Starting workers");
+
     // Create workers for requests, wsclient communication, etc.
     workers::create_workers(server_info.clone(), platform.clone()).await;
+
+    log::debug!("Workers started, waiting for stop signal");
 
     // Simply wait here until stop is signaled
     platform.get_stop().wait().await;

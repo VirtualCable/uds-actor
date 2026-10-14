@@ -9,7 +9,7 @@ use std::{
 
 use shared::{
     config::ActorType,
-    installer, log,
+    consts, installer, log,
     service::{AsyncService, AsyncServiceTrait},
     sync::OnceSignal,
     tls,
@@ -37,31 +37,44 @@ fn main() {
 
     if args.len() > 1 {
         println!("Service installer options detected: {}", args[1]);
-        match args[1].as_str() {
+        let failed = match args[1].as_str() {
             "--install" => {
-                if let Err(e) = installer::register(
-                    "UDSActorService",
-                    "UDS Actor Service",
-                    "UDS Actor Management Service",
+                remove_legacy_services();
+                match installer::register(
+                    consts::SERVICE_NAME,
+                    consts::SERVICE_DISPLAY_NAME,
+                    consts::SERVICE_DESCRIPTION,
                 ) {
-                    eprintln!("Failed to install service: {}", e);
-                } else {
-                    println!("Service installed successfully.");
+                    Ok(()) => {
+                        println!("Service installed successfully.");
+                        false
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to install service: {}", e);
+                        true
+                    }
                 }
             }
             "--uninstall" => {
-                if let Err(e) = installer::unregister("UDSActorService") {
-                    eprintln!("Failed to uninstall service: {}", e);
-                } else {
-                    println!("Service uninstalled successfully.");
+                remove_legacy_services();
+                match installer::unregister(consts::SERVICE_NAME) {
+                    Ok(()) => {
+                        println!("Service uninstalled successfully.");
+                        false
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to uninstall service: {}", e);
+                        true
+                    }
                 }
             }
             _ => {
                 eprintln!("Unknown option: {}", args[1]);
                 eprintln!("Usage: {} [--install|--uninstall]", args[0]);
+                true
             }
-        }
-        std::process::exit(1);
+        };
+        std::process::exit(if failed { 1 } else { 0 });
     }
 
     // Setup logging
@@ -89,6 +102,14 @@ fn main() {
     }
 }
 
+fn remove_legacy_services() {
+    for name in consts::LEGACY_SERVICE_NAMES {
+        if let Err(e) = installer::unregister(name) {
+            eprintln!("Could not remove legacy service {}: {}", name, e);
+        }
+    }
+}
+
 // Real "main" async logic of the service
 async fn async_main(platform: platform::Platform) -> Result<()> {
     log::info!("Service main async logic started");
@@ -111,14 +132,27 @@ async fn async_main(platform: platform::Platform) -> Result<()> {
         ));
     }
 
-    if cfg.actor_type == ActorType::Unmanaged {
+    let err = if cfg.actor_type == ActorType::Unmanaged {
         log::info!("Starting in Unmanaged mode");
-        actors::unmanaged::run(platform.clone()).await?;
+        actors::unmanaged::run(platform.clone()).await
     } else {
         log::info!("Starting in Managed mode");
-        actors::managed::run(platform.clone()).await?;
+        actors::managed::run(platform.clone()).await
+    };
+
+    if let Err(e) = err {
+        log::error!("Service main async logic exited with error: {}", e);
+    } else {
+        log::info!("Service main async logic exited");
     }
-    log::info!("Service main async logic exiting");
+
+    // Release the Windows EventLog handle, if any. No-op on non-Windows
+    // and on services where the layer was disabled. The OS reclaims the
+    // handle on process exit anyway, but being explicit avoids leaking
+    // a stale handle in long-lived services that are restart-managed.
+    #[cfg(target_os = "windows")]
+    shared::windows::eventlog::shutdown();
+
     Ok(())
 }
 

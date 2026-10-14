@@ -51,6 +51,18 @@ impl Platform {
         self.broker_api.clone()
     }
 
+    /// Returns the **same** `Arc<RwLock<dyn BrokerApi>>` returned by
+    /// `broker_api()`. The log forwarder holds its own `Arc` clone and
+    /// takes the read lock briefly when forwarding an event. Because the
+    /// forwarder only fires on `WARN`/`ERROR` (≤ a few per minute even
+    /// under load, capped by the flood guard), the extra lock contention
+    /// is negligible compared to the cost of a broker round-trip.
+    pub fn broker_api_for_forwarder(
+        &self,
+    ) -> Arc<tokio::sync::RwLock<dyn shared::broker::api::BrokerApi>> {
+        self.broker_api.clone()
+    }
+
     pub fn config(&self) -> Arc<tokio::sync::RwLock<shared::config::ActorConfiguration>> {
         self.config.clone()
     }
