@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use windows::{Win32::System::Services::*, core::*};
+use windows::{Win32::Foundation::*, Win32::System::Services::*, core::*};
 
 use crate::log;
 
@@ -84,34 +84,70 @@ pub fn register(name: &str, display_name: &str, description: &str) -> Result<()>
     }
 }
 
+const STOP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub fn unregister(name: &str) -> Result<()> {
-    let name = widestring::U16CString::from_str_truncate(name);
+    log::info!("Unregistering service: {}", name);
+
+    let name_w = widestring::U16CString::from_str_truncate(name);
 
     unsafe {
         let scm = OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS)?;
-        let service = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_ALL_ACCESS)?;
+        let service = match OpenServiceW(scm, PCWSTR(name_w.as_ptr()), SERVICE_ALL_ACCESS) {
+            Ok(service) => service,
+            Err(err) => {
+                let _ = CloseServiceHandle(scm);
+                return if err.code() == ERROR_SERVICE_DOES_NOT_EXIST.to_hresult() {
+                    log::info!("Service {} is not registered, nothing to remove", name);
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("Failed to open service {}: {}", name, err))
+                };
+            }
+        };
 
         let mut status: SERVICE_STATUS = std::mem::zeroed();
-        ControlService(service, SERVICE_CONTROL_STOP, &mut status)?;
-
-        loop {
-            let mut buf = [0u8; std::mem::size_of::<SERVICE_STATUS_PROCESS>()];
-            let mut needed = 0u32;
-
-            QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, Some(&mut buf), &mut needed)?;
-
-            let query: SERVICE_STATUS_PROCESS = std::ptr::read(buf.as_ptr() as *const _);
-            if query.dwCurrentState == SERVICE_STOPPED {
-                break;
+        if let Err(err) = ControlService(service, SERVICE_CONTROL_STOP, &mut status) {
+            // An already stopped service reports ERROR_SERVICE_NOT_ACTIVE, and a service
+            // that refuses to stop still has to be deleted, so neither aborts the removal
+            if err.code() != ERROR_SERVICE_NOT_ACTIVE.to_hresult() {
+                log::warn!("Could not stop service {}: {}", name, err);
             }
-            std::thread::sleep(std::time::Duration::from_millis(500));
         }
 
-        DeleteService(service)?;
+        wait_until_stopped(service, STOP_TIMEOUT);
 
-        CloseServiceHandle(service)?;
-        CloseServiceHandle(scm)?;
+        let deleted = DeleteService(service)
+            .map_err(|err| anyhow::anyhow!("Failed to delete service {}: {}", name, err));
+
+        let _ = CloseServiceHandle(service);
+        let _ = CloseServiceHandle(scm);
+
+        deleted
+    }
+}
+
+unsafe fn wait_until_stopped(service: SC_HANDLE, timeout: std::time::Duration) {
+    let deadline = std::time::Instant::now() + timeout;
+
+    while std::time::Instant::now() < deadline {
+        let mut buf = [0u8; std::mem::size_of::<SERVICE_STATUS_PROCESS>()];
+        let mut needed = 0u32;
+
+        let queried = unsafe {
+            QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, Some(&mut buf), &mut needed)
+        };
+        if queried.is_err() {
+            return;
+        }
+
+        let status: SERVICE_STATUS_PROCESS = unsafe { std::ptr::read(buf.as_ptr() as *const _) };
+        if status.dwCurrentState == SERVICE_STOPPED {
+            return;
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
-    Ok(())
+    log::warn!("Timed out waiting for the service to stop, deleting it anyway");
 }

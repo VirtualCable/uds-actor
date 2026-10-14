@@ -37,7 +37,6 @@ pub fn bnt_save_clicked(ui: &AppWindow) {
             ..Default::default()
         },
         data: None,
-        is_initialized: false,
     };
 
     let mut config_storage = config::new_config_storage();

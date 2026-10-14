@@ -9,7 +9,54 @@ pub struct UnixSessionManager {
 impl UnixSessionManager {
     pub async fn new(stop: OnceSignal) -> Self {
         log::debug!("************* Creating UnixSessionManager ***********");
+
+        // Session-end detection. Note: nothing here may touch X — the X
+        // server can die abruptly at session close and any X connection
+        // would kill us before cleanup (that's why the GUI lives in the
+        // gui-helper process). Signals and logind do not depend on X.
+        spawn_signal_handlers(stop.clone());
+
+        // On Linux, also watch logind: when our session is removed
+        // (xrdp session closed, user slice stopped, ...) we get
+        // SessionRemoved via D-Bus and can notify the logout cleanly.
+        #[cfg(target_os = "linux")]
+        {
+            let stop = stop.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    shared::unix::linux::watcher::start_session_watch_task(stop).await
+                {
+                    log::warn!("Could not start logind session watcher: {}", e);
+                }
+            });
+        }
+
         Self { stop }
+    }
+}
+
+// SIGTERM/SIGINT/SIGHUP: sent when the session leader dies, the user slice
+// is stopped, or the process is terminated manually. Each one sets stop so
+// the main loop performs the broker logout before exiting.
+fn spawn_signal_handlers(stop: OnceSignal) {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    for (kind, name) in [
+        (SignalKind::terminate(), "SIGTERM"),
+        (SignalKind::interrupt(), "SIGINT"),
+        (SignalKind::hangup(), "SIGHUP"),
+    ] {
+        match signal(kind) {
+            Ok(mut sig) => {
+                let stop = stop.clone();
+                tokio::spawn(async move {
+                    sig.recv().await;
+                    log::info!("Received {}, notifying session stop", name);
+                    stop.set();
+                });
+            }
+            Err(e) => log::warn!("Could not install {} handler: {}", name, e),
+        }
     }
 }
 

@@ -26,6 +26,7 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use crate::platform;
 use shared::log;
+use shared::ws::types::{LogRequest, LogLevel, RpcEnvelope, RpcMessage};
 
 pub async fn task(
     max_idle: Option<u64>,
@@ -101,8 +102,28 @@ pub async fn task(
 
         // If we reach max idle, stop session
         if remaining.as_secs() == 0 {
-            let message = format!("idle of {}s reached", max_idle.as_secs());
+            let message = format!(
+                "Session closed due to inactivity. Idle time: {}s (max allowed: {}s)",
+                idle.as_secs(),
+                max_idle.as_secs()
+            );
             log::info!("{}", message);
+
+            // Send a log to the broker (via service) so it's recorded server-side.
+            // The service's logger worker forwards any LogRequest received over WS to the broker.
+            // We don't care about the result here; best-effort delivery is enough.
+            let _ = platform
+                .ws_client()
+                .to_ws
+                .send(RpcEnvelope {
+                    id: None,
+                    msg: RpcMessage::LogRequest(LogRequest {
+                        level: LogLevel::Info,
+                        message: message.clone(),
+                    }),
+                })
+                .await;
+
             // Ensure all windows are closed
             platform.dismiss_user_notifications().await.ok();
 

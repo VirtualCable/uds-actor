@@ -108,7 +108,7 @@ pub struct UdsBrokerApi {
     client: Client,
     api_url: String,
     secret: Option<String>,
-    token: Option<String>,
+    token: String,
     actor_type: crate::config::ActorType,
     custom_headers: reqwest::header::HeaderMap,
     // For retries
@@ -153,7 +153,7 @@ impl UdsBrokerApi {
             api_url,
             client,
             secret,
-            token: Some(cfg.token().clone()),
+            token: cfg.token(),
             actor_type,
             custom_headers: reqwest::header::HeaderMap::new(),
             retries: 3,
@@ -286,7 +286,10 @@ impl UdsBrokerApi {
 
     pub fn get_token(&self) -> Result<String, types::RestError> {
         let token = self.token.clone();
-        token.ok_or_else(|| types::RestError::Other("No token set".to_string()))
+        if token.is_empty() {
+            return Err(types::RestError::Other("No token set".to_string()));
+        }
+        Ok(token)
     }
 
     pub fn actor_type(&self) -> crate::config::ActorType {
@@ -307,7 +310,7 @@ impl BrokerApi for UdsBrokerApi {
     // on unmanaged, this is on every call, and managed on first call only
     // because master_token will be replaced by own_token
     fn set_token(&mut self, token: &str) {
-        self.token = Some(token.to_string());
+        self.token = token.to_string();
     }
 
     fn clear_headers(&mut self) {
