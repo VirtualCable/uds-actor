@@ -75,6 +75,7 @@ pub struct OperationsMock {
     // existing happy-path tests are unaffected.
     pub fail_rename: Arc<AtomicBool>,
     pub fail_join_domain: Arc<AtomicBool>,
+    pub fail_ensure_user_can_rdp: Arc<AtomicBool>,
 }
 
 impl OperationsMock {
@@ -83,6 +84,7 @@ impl OperationsMock {
             calls,
             fail_rename: Arc::new(AtomicBool::new(false)),
             fail_join_domain: Arc::new(AtomicBool::new(false)),
+            fail_ensure_user_can_rdp: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -242,6 +244,9 @@ impl System for OperationsMock {
     fn ensure_user_can_rdp(&self, user: &str) -> anyhow::Result<()> {
         self.calls
             .push(format!("operations::ensure_user_can_rdp({})", user));
+        if self.fail_ensure_user_can_rdp.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("Injected ensure_user_can_rdp failure"));
+        }
         Ok(())
     }
 

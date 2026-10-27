@@ -927,6 +927,12 @@ impl System for WindowsOperations {
                         ));
                     }
                 }
+            } else {
+                return Err(anyhow::anyhow!(
+                    "NetLocalGroupGetMembers for '{}' failed: {}",
+                    group_name,
+                    Self::format_net_error(status)
+                ));
             }
 
             Ok(())
