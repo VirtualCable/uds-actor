@@ -18,7 +18,7 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
         let msg = env.msg;
         if msg.protocol.to_lowercase() == "rdp" {
             if let Err(e) = platform.system().ensure_user_can_rdp(&msg.user) {
-                log::error!("Failed to ensure user can RDP: {}", e);
+                log::error!("Failed to ensure user '{}' can RDP: {}", msg.user, e);
             } else {
                 log::info!("Ensured user can RDP: {}", msg.user);
             }
@@ -151,6 +151,89 @@ mod tests {
         send(None, None, None);
         assert_eq!(read_args().await, "jdoe nx unknown unknown unknown");
 
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    async fn spawn_worker(
+        mocked_platform: &mock::MockedPlatform,
+    ) -> tokio::sync::broadcast::Sender<RpcEnvelope<RpcMessage>> {
+        let server_info = mock::mock_server_info().await;
+        let platform = mocked_platform.platform.clone();
+        let wsclient_to_workers = server_info.from_ws.clone();
+        tokio::spawn(async move {
+            worker(server_info, platform).await.unwrap();
+        });
+        while wsclient_to_workers.receiver_count() == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        wsclient_to_workers
+    }
+
+    fn preconnect(user: &str, protocol: &str) -> RpcEnvelope<RpcMessage> {
+        RpcEnvelope {
+            id: None,
+            msg: RpcMessage::PreConnect(PreConnect {
+                user: user.into(),
+                protocol: protocol.into(),
+                ip: None,
+                hostname: None,
+                udsuser: None,
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_preconnect_only_rdp_touches_group_membership() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let mocked_platform = mock::mock_platform().await;
+        let calls = mocked_platform.calls.clone();
+        let wsclient_to_workers = spawn_worker(&mocked_platform).await;
+
+        wsclient_to_workers.send(preconnect("jdoe", "nx")).unwrap();
+        wsclient_to_workers.send(preconnect("jdoe", "x2go")).unwrap();
+        wsclient_to_workers.send(preconnect("jdoe", "RDP")).unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        assert_eq!(calls.count_calls("operations::ensure_user_can_rdp("), 1);
+        assert!(calls.contains_prefix("operations::ensure_user_can_rdp(jdoe)"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_preconnect_script_still_runs_when_group_membership_fails() {
+        log::setup_logging("debug", shared::log::LogType::Tests);
+        let dir = std::env::temp_dir().join(format!("udsactor-preconnect-fail-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("preconnect.sh");
+        let output = dir.join("args.txt");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\necho \"$@\" > '{}'\n", output.display()),
+        )
+        .unwrap();
+
+        let mocked_platform = mock::mock_platform().await;
+        let calls = mocked_platform.calls.clone();
+        mocked_platform
+            .operations
+            .fail_ensure_user_can_rdp
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        mocked_platform.platform.config().write().await.pre_command =
+            Some(format!("/bin/sh {}", script.display()));
+        let wsclient_to_workers = spawn_worker(&mocked_platform).await;
+
+        wsclient_to_workers.send(preconnect("jdoe", "rdp")).unwrap();
+        let mut content = String::new();
+        for _ in 0..40 {
+            content = std::fs::read_to_string(&output).unwrap_or_default();
+            if !content.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        assert_eq!(calls.count_calls("operations::ensure_user_can_rdp("), 1);
+        assert_eq!(content.trim(), "jdoe rdp unknown unknown unknown");
         std::fs::remove_dir_all(&dir).ok();
     }
 }
