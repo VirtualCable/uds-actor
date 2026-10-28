@@ -62,7 +62,10 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                     }
                     Err(e) => {
                         if start_time.elapsed() >= max_duration {
-                            log::warn!("Failed to force time sync after retrying for 120 seconds: {}", e);
+                            log::warn!(
+                                "Failed to force time sync after retrying for 120 seconds: {}",
+                                e
+                            );
                             break;
                         }
                         attempt += 1;
@@ -72,16 +75,15 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
         }
     });
 
-// Initialize broker on every start. The initialize REST call is
- // re-evaluated every time the service starts, including after restoring
- // a snapshot where the domain trust expired.
- // Note: `common::initialize` also wires the log forwarder with the
- // updated `own_token` after the broker handshake, so subsequent service
- // log events are forwarded to the broker with the correct per-deployment
- // token (not the master token).
+    // Initialize broker on every start. The initialize REST call is
+    // re-evaluated every time the service starts, including after restoring
+    // a snapshot where the domain trust expired.
+    // Note: `common::initialize` also wires the log forwarder with the
+    // updated `own_token` after the broker handshake, so subsequent service
+    // log events are forwarded to the broker with the correct per-deployment
+    // token (not the master token).
 
-    if let Err(e) = crate::common::initialize(&platform).await
-    {
+    if let Err(e) = crate::common::initialize(&platform).await {
         log::error!("Failed to initialize managed actor with broker: {}", e);
         return Err(anyhow::anyhow!(
             "Failed to initialize managed actor with broker: {}",
@@ -108,41 +110,40 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                 // in the `custom` payload. Apply it before renaming so the change
                 // is in place by the time the broker hands the credential over
                 // to the transport.
-                if let Some(custom) = os_data.custom.as_ref() {
-                    if let Some(new_password) =
-                        custom.get("new_password").and_then(|v| v.as_str())
-                    {
-                        let username = custom
-                            .get("username")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        if username.is_empty() {
-                            log::warn!(
-                                "Rename carries a new_password but no username; \
+                if let Some(custom) = os_data.custom.as_ref()
+                    && let Some(new_password) = custom.get("new_password").and_then(|v| v.as_str())
+                {
+                    let username = custom
+                        .get("username")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if username.is_empty() {
+                        log::warn!(
+                            "Rename carries a new_password but no username; \
                                  skipping password change to avoid NetUserChangePassword \
                                  with an empty user"
-                            );
-                        } else {
-                            let old_password = custom
-                                .get("password")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
-                            log::info!(
-                                "Changing password for user '{}' as requested by OS manager",
-                                username
-                            );
-                            if let Err(e) = platform
-                                .system()
-                                .change_user_password(username, old_password, new_password)
-                            {
-                                log::error!(
-                                    "change_user_password for '{}' failed: {}. \
+                        );
+                    } else {
+                        let old_password = custom
+                            .get("password")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        log::info!(
+                            "Changing password for user '{}' as requested by OS manager",
+                            username
+                        );
+                        if let Err(e) = platform.system().change_user_password(
+                            username,
+                            old_password,
+                            new_password,
+                        ) {
+                            log::error!(
+                                "change_user_password for '{}' failed: {}. \
                                      Broker will now hold a password that does not match \
                                      the one on the machine.",
-                                    username,
-                                    e
-                                );
-                            }
+                                username,
+                                e
+                            );
                         }
                     }
                 }
