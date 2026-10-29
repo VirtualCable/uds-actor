@@ -3,6 +3,8 @@ use tokio::process::Command;
 use anyhow::{Context, Result};
 
 use shared::{
+    broker::api::types::RestError,
+    config::{ActorConfiguration, ActorType},
     log,
     utils::network::{network_interfaces_changed, network_interfaces_in_subnet},
 };
@@ -44,8 +46,25 @@ pub async fn wait_for_readyness(platform: &platform::Platform) -> Result<()> {
     Ok(())
 }
 
+fn is_access_denied(error_body: &str) -> bool {
+    error_body.contains("Access denied")
+}
+
+fn can_resume_with_stored_config(cfg: &ActorConfiguration) -> bool {
+    cfg.actor_type == ActorType::Managed
+        && cfg.master_token.as_deref().unwrap_or_default().is_empty()
+        && !cfg.own_token.as_deref().unwrap_or_default().is_empty()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Initialization {
+    FromBroker,
+    // Broker refused the stored own_token; running with the configuration of a previous initialize
+    ResumedFromStoredConfig,
+}
+
 // Invokes initialization and updates config accordingly
-pub async fn initialize(platform: &platform::Platform) -> Result<()> {
+pub async fn initialize(platform: &platform::Platform) -> Result<Initialization> {
     let cfg_guard = platform.config();
     let actor_type = cfg_guard.read().await.actor_type.clone();
 
@@ -65,10 +84,34 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         "{:?} actor not initialized, initializing with broker",
         actor_type
     );
-    let response = broker_api_guard
-        .initialize(interfaces.as_slice())
-        .await
-        .map_err(|e| anyhow::anyhow!("{:?} actor initialization failed: {:?}", actor_type, e))?;
+    let response = match broker_api_guard.initialize(interfaces.as_slice()).await {
+        Ok(response) => response,
+        Err(RestError::Other(e))
+            if is_access_denied(&e) && can_resume_with_stored_config(&cfg_guard) =>
+        {
+            // 4.x brokers only accept the registration (master) token on initialize, so
+            // the own_token a managed actor presents after its first boot is refused.
+            // The 4.x actor never re-initialized once it had an own_token; resume the
+            // same way, with the configuration stored by the first initialize.
+            log::warn!(
+                "Broker refused initialize with the stored own_token ({}); \
+                 continuing with the stored configuration",
+                e
+            );
+            if let Some(own_token) = cfg_guard.own_token.clone() {
+                broker_api_guard.set_token(&own_token);
+            }
+            shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
+            return Ok(Initialization::ResumedFromStoredConfig);
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "{:?} actor initialization failed: {:?}",
+                actor_type,
+                e
+            ));
+        }
+    };
     // If token on response is none, this is not a managed host,continue until next request
     if response.token.is_none() {
         log::error!(
@@ -132,7 +175,7 @@ pub async fn initialize(platform: &platform::Platform) -> Result<()> {
         // service's own log_type is hard-coded here.
         shared::log_forward::set_log_forwarder(platform.broker_api_for_forwarder());
     }
-    Ok(())
+    Ok(Initialization::FromBroker)
 }
 
 // Watch for interface ip changes

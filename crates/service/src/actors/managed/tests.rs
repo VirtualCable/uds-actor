@@ -37,6 +37,88 @@ async fn test_managed_stops_when_initialize_fails() -> Result<()> {
 
 #[tokio::test]
 #[serial_test::serial(server)]
+async fn test_managed_resumes_when_broker_refuses_own_token() -> Result<()> {
+    let mut test_setup = TestSetup::new(run).await;
+    {
+        let config = test_setup.platform.config();
+        let mut cfg = config.write().await;
+        cfg.master_token = None;
+        cfg.own_token = Some("stored_own_token".into());
+        cfg.config.os = Some(shared::config::ActorOsConfiguration {
+            action: shared::config::ActorOsAction::Rename,
+            name: "stored_name".into(),
+            custom: Some(json!({
+                "username": "user",
+                "password": "old",
+                "new_password": "new",
+            })),
+        });
+    }
+    test_setup.broker_api.write().await.init_error = Some("Access denied".into());
+    test_setup.notify.notify_one();
+
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
+    assert!(
+        test_setup
+            .calls
+            .count_calls("broker_api::set_token(stored_own_token)")
+            >= 1
+    );
+    assert!(test_setup.calls.count_calls("operations::rename_computer") == 0);
+    test_setup
+        .calls
+        .assert_not_called("operations::change_user_password");
+    assert!(test_setup.calls.count_calls("broker_api::ready") == 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
+async fn test_managed_stops_on_other_broker_errors_with_own_token() -> Result<()> {
+    let mut test_setup = TestSetup::new(run).await;
+    {
+        let config = test_setup.platform.config();
+        let mut cfg = config.write().await;
+        cfg.master_token = None;
+        cfg.own_token = Some("stored_own_token".into());
+    }
+    test_setup.broker_api.write().await.init_error = Some("Internal Server Error".into());
+    test_setup.notify.notify_one();
+
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
+    assert!(test_setup.calls.count_calls("broker_api::ready") == 0);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
+async fn test_managed_stops_when_broker_refuses_master_token() -> Result<()> {
+    let mut test_setup = TestSetup::new(run).await;
+    {
+        let config = test_setup.platform.config();
+        let mut cfg = config.write().await;
+        cfg.master_token = Some("master_token".into());
+        cfg.own_token = Some("stale_own_token".into());
+    }
+    test_setup.broker_api.write().await.init_error = Some("Access denied".into());
+    test_setup.notify.notify_one();
+
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    assert!(test_setup.calls.count_calls("broker_api::initialize") == 1);
+    assert!(test_setup.calls.count_calls("broker_api::ready") == 0);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
 async fn test_managed_rename_should_rename() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
     // Setup the retun value for initialize

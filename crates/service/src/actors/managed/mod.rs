@@ -83,22 +83,35 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     // log events are forwarded to the broker with the correct per-deployment
     // token (not the master token).
 
-    if let Err(e) = crate::common::initialize(&platform).await {
-        log::error!("Failed to initialize managed actor with broker: {}", e);
-        return Err(anyhow::anyhow!(
-            "Failed to initialize managed actor with broker: {}",
-            e
-        ));
+    let initialization = match crate::common::initialize(&platform).await {
+        Ok(initialization) => initialization,
+        Err(e) => {
+            log::error!("Failed to initialize managed actor with broker: {}", e);
+            return Err(anyhow::anyhow!(
+                "Failed to initialize managed actor with broker: {}",
+                e
+            ));
+        }
+    };
+    // The stored OS actions were already applied on the boot that initialized with the
+    // broker. If the broker really rejects this machine, ready() fails without having
+    // renamed, re-joined or changed passwords again.
+    let configure = initialization == crate::common::Initialization::FromBroker;
+    if !configure {
+        log::info!("Resumed from stored config, skipping run-once and OS actions");
     }
 
-    if crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce, &[]).await
+    if configure
+        && crate::computer::process_command(&platform, crate::computer::CommandType::RunOnce, &[])
+            .await
     {
         // If runonce was executed, exit
         log::info!("Exiting after runonce execution as requested");
         return Ok(());
     }
 
-    if let Some(os_data) = platform.config().read().await.config.os.clone() {
+    let stored_os_data = platform.config().read().await.config.os.clone();
+    if let Some(os_data) = stored_os_data.filter(|_| configure) {
         match os_data.action {
             ActorOsAction::None => {
                 log::debug!("No OS action requested");
