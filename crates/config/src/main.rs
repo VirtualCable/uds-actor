@@ -23,6 +23,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
+Author: Janier Rodríguez, jrodriguez at virtualcable dot es
 */
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -161,4 +162,30 @@ async fn main() {
     callbacks::uds_server_changed(&ui, auths.clone());
 
     ui.run().unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use i_slint_backend_testing::{AccessibleRole, ElementHandle};
+    use slint::platform::PointerEventButton;
+
+    fn about_widget_count(window: &AppWindow) -> usize {
+        ElementHandle::find_by_element_type_name(window, "AboutSlint").count()
+    }
+
+    #[test]
+    fn about_tab_shows_slint_attribution() {
+        i_slint_backend_testing::init_no_event_loop();
+        let window = AppWindow::new().unwrap();
+        window.show().unwrap();
+        let about_tab = ElementHandle::find_by_accessible_label(&window, "About")
+            .find(|element| element.accessible_role() == Some(AccessibleRole::Tab))
+            .expect("About tab not found");
+        assert_eq!(about_widget_count(&window), 0);
+
+        about_tab.mock_single_click(PointerEventButton::Left);
+
+        assert_eq!(about_widget_count(&window), 1);
+    }
 }

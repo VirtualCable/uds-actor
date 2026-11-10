@@ -6104,6 +6104,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "builder",
+ "i-slint-backend-testing",
  "reqwest",
  "rfd",
  "shared",
