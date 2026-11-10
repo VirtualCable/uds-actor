@@ -1971,6 +1971,7 @@ name = "gui-helper"
 version = "0.1.0"
 dependencies = [
  "builder",
+ "i-slint-backend-testing",
  "slint",
  "slint-build",
  "tokio",
@@ -6138,6 +6139,7 @@ version = "5.0.0"
 dependencies = [
  "anyhow",
  "builder",
+ "i-slint-backend-testing",
  "reqwest",
  "rfd",
  "shared",

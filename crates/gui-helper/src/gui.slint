@@ -1,14 +1,14 @@
-import { Button, VerticalBox, HorizontalBox, AboutSlint } from "std-widgets.slint";
+import { Button, VerticalBox, AboutSlint } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
     title: root.title_text;
     min-width: 400px;
     min-height: 150px;
-
+    
     in-out property <string> title_text: "Message";
     in-out property <string> message_text: "";
     property <bool> show_about: false;
-
+    
     callback ok_clicked();
 
     VerticalBox {
@@ -33,19 +33,14 @@ export component AppWindow inherits Window {
             }
         }
 
-        // The Slint royalty-free license requires visible attribution in the
-        // application UI (AboutSlint widget in a dialog reachable from the
-        // top level, license §2a). This helper has no navigation, so the
-        // attribution shows in a toggleable section.
         Text {
             text: "About";
             color: #0055aa;
             font-size: 11px;
             horizontal-alignment: center;
 
-            TouchArea {
+            about-link := TouchArea {
                 width: 80px;
-                height: self.preferred-height;
                 clicked => { root.show_about = !root.show_about; }
             }
         }
