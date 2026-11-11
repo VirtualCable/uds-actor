@@ -1,4 +1,4 @@
-import { Button, VerticalBox } from "std-widgets.slint";
+import { Button, VerticalBox, AboutSlint } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
     title: root.title_text;
@@ -7,6 +7,7 @@ export component AppWindow inherits Window {
     
     in-out property <string> title_text: "Message";
     in-out property <string> message_text: "";
+    property <bool> show_about: false;
     
     callback ok_clicked();
 
@@ -30,6 +31,21 @@ export component AppWindow inherits Window {
                 height: 30px;
                 clicked => { root.ok_clicked(); }
             }
+        }
+
+        Text {
+            text: "About";
+            color: #0055aa;
+            font-size: 11px;
+            horizontal-alignment: center;
+
+            about-link := TouchArea {
+                width: 80px;
+                clicked => { root.show_about = !root.show_about; }
+            }
+        }
+        if root.show_about: AboutSlint {
+            height: 120px;
         }
     }
 }

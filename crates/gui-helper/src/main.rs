@@ -23,6 +23,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
+Author: Janier Rodríguez, jrodriguez at virtualcable dot es
 */
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
@@ -107,6 +108,29 @@ fn show_messagebox(title: &str, message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use i_slint_backend_testing::ElementHandle;
+    use slint::platform::PointerEventButton;
+
+    fn about_widget_count(window: &AppWindow) -> usize {
+        ElementHandle::find_by_element_type_name(window, "AboutSlint").count()
+    }
+
+    #[test]
+    fn about_link_toggles_slint_attribution() {
+        i_slint_backend_testing::init_no_event_loop();
+        let window = AppWindow::new().unwrap();
+        window.show().unwrap();
+        let about_link = ElementHandle::find_by_element_id(&window, "AppWindow::about-link")
+            .next()
+            .expect("About link not found");
+        assert_eq!(about_widget_count(&window), 0);
+
+        about_link.mock_single_click(PointerEventButton::Left);
+        assert_eq!(about_widget_count(&window), 1);
+
+        about_link.mock_single_click(PointerEventButton::Left);
+        assert_eq!(about_widget_count(&window), 0);
+    }
 
     #[test]
     #[ignore = "Requires GUI interaction"]

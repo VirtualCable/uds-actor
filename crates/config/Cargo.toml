@@ -17,6 +17,9 @@ rfd = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 
+[dev-dependencies]
+i-slint-backend-testing = { workspace = true }
+
 [build-dependencies]
 builder = { path = "../builder" }
 slint-build = { workspace = true }
