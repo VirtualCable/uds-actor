@@ -1,7 +1,9 @@
 // Copyright (c) 2025 Virtual Cable S.L.U.
 // All rights reserved.
+//
 // Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
+//
 //    * Redistributions of source code must retain the above copyright notice,
 //      this list of conditions and the following disclaimer.
 //    * Redistributions in binary form must reproduce the above copyright notice,
@@ -24,15 +26,16 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 Author: Janier Rodríguez, jrodriguez at virtualcable dot es
+Author: Andres Schumann, aschumann at virtualcable dot es
 */
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
-use slint::Timer;
-use std::rc::Rc;
+use eframe::egui::{self, Ui, ViewportCommand};
+use gui_kit::{logo, theme, widgets};
+use std::time::Duration;
 
 const SIGNAL_FILE: &str = "uds-actor-gui-close-all";
-
-slint::include_modules!();
+const SIGNAL_POLL: Duration = Duration::from_millis(500);
 
 /*
 This binary exists to solve a very specific problem:
@@ -53,11 +56,9 @@ Communication is minimal:
 - This binary checks for that file periodically and exits if found.
 */
 #[tokio::main]
-async fn main() {
-    // Get title and message from args
+async fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
-        // program name, command, title, message
         eprintln!("Usage: gui-helper [message-dialog] <title> <message>");
         std::process::exit(1);
     }
@@ -67,78 +68,123 @@ async fn main() {
         eprintln!("Unknown command: {}", command);
         std::process::exit(1);
     }
-    let title = args[2].clone();
-    let message = args[3].clone();
 
-    show_messagebox(&title, &message);
+    show_messagebox(args[2].clone(), args[3].clone())
 }
 
-fn show_messagebox(title: &str, message: &str) {
-    let ui = AppWindow::new().unwrap();
+fn show_messagebox(title: String, message: String) -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title(title.clone())
+            .with_inner_size([420.0, 200.0])
+            .with_min_inner_size([400.0, 150.0])
+            .with_icon(logo::window_icon()),
+        ..Default::default()
+    };
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(move |cc| {
+            theme::apply(&cc.egui_ctx);
+            Ok(Box::new(MessageApp::new(message)))
+        }),
+    )
+}
 
-    ui.set_title_text(title.into());
-    ui.set_message_text(message.into());
+struct MessageApp {
+    message: String,
+    show_about: bool,
+}
 
-    let ui_handle = ui.as_weak();
-    ui.on_ok_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            ui.hide().unwrap();
+impl MessageApp {
+    fn new(message: String) -> Self {
+        Self {
+            message,
+            show_about: false,
         }
-    });
+    }
 
-    let timer = Rc::new(Timer::default());
-    let ui_handle2 = ui.as_weak();
-    timer.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_millis(500),
-        move || {
-            let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
-            if signal_file.exists() {
-                let _ = std::fs::remove_file(&signal_file);
-                if let Some(ui) = ui_handle2.upgrade() {
-                    ui.hide().unwrap();
-                }
+    fn body(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        ui.vertical_centered(|ui| {
+            ui.label(egui::RichText::new(&self.message).size(14.0));
+        });
+
+        ui.vertical_centered(|ui| {
+            if ui.add(widgets::primary_button("OK", 100.0)).clicked() {
+                ctx.send_viewport_cmd(ViewportCommand::Close);
             }
-        },
-    );
+            let about_link = ui.link(egui::RichText::new("About").size(11.0).color(theme::ACCENT));
+            if about_link.clicked() {
+                self.show_about = !self.show_about;
+            }
+            if self.show_about {
+                widgets::about(ui, "UDS Actor Client", shared::consts::VERSION);
+            }
+        });
+    }
 
-    ui.run().unwrap();
+    fn signal_requested_close(&self) -> bool {
+        let signal_file = std::env::temp_dir().join(SIGNAL_FILE);
+        if signal_file.exists() {
+            let _ = std::fs::remove_file(&signal_file);
+            return true;
+        }
+        false
+    }
+}
+
+impl eframe::App for MessageApp {
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        theme::apply(ui.ctx());
+        ui.ctx().request_repaint_after(SIGNAL_POLL);
+        if self.signal_requested_close() {
+            ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+        }
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme::panel_margin()))
+            .show(ui, |ui| self.body(ui));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use i_slint_backend_testing::ElementHandle;
-    use slint::platform::PointerEventButton;
+    use egui_kittest::{Harness, kittest::Queryable};
 
-    fn about_widget_count(window: &AppWindow) -> usize {
-        ElementHandle::find_by_element_type_name(window, "AboutSlint").count()
+    fn harness() -> Harness<'static, MessageApp> {
+        let app = MessageApp::new("Test message".to_string());
+        Harness::new_ui_state(|ui, app: &mut MessageApp| app.body(ui), app)
     }
 
     #[test]
-    fn about_link_toggles_slint_attribution() {
-        i_slint_backend_testing::init_no_event_loop();
-        let window = AppWindow::new().unwrap();
-        window.show().unwrap();
-        let about_link = ElementHandle::find_by_element_id(&window, "AppWindow::about-link")
-            .next()
-            .expect("About link not found");
-        assert_eq!(about_widget_count(&window), 0);
+    fn about_link_toggles_the_product_panel() {
+        let mut harness = harness();
+        assert!(
+            harness
+                .query_by_label("Copyright (c) Virtual Cable S.L.U.")
+                .is_none()
+        );
 
-        about_link.mock_single_click(PointerEventButton::Left);
-        assert_eq!(about_widget_count(&window), 1);
+        harness.get_by_label("About").click();
+        harness.run();
+        harness.get_by_label("Copyright (c) Virtual Cable S.L.U.");
 
-        about_link.mock_single_click(PointerEventButton::Left);
-        assert_eq!(about_widget_count(&window), 0);
+        harness.get_by_label("About").click();
+        harness.run();
+        assert!(
+            harness
+                .query_by_label("Copyright (c) Virtual Cable S.L.U.")
+                .is_none()
+        );
     }
 
     #[test]
     #[ignore = "Requires GUI interaction"]
     fn test_message_dialog() {
-        // Setup arguments and environment
         let title = "Test Title";
         let message = "This is a test message to verify that the message dialog works correctly.\n\
                        It should handle multiple lines and proper word wrapping.";
-        show_messagebox(title, message);
+        let _ = show_messagebox(title.to_string(), message.to_string());
     }
 }

@@ -24,26 +24,23 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 Author: Janier Rodríguez, jrodriguez at virtualcable dot es
+Author: Andres Schumann, aschumann at virtualcable dot es
 */
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use slint::ComponentHandle;
-use std::sync::{Arc, Mutex};
+use eframe::egui;
+use shared::log;
 
+mod app;
 mod callbacks;
 mod regcfg;
 
-use shared::log;
-
-slint::include_modules!();
-
 #[tokio::main]
-async fn main() {
+async fn main() -> eframe::Result {
     log::setup_logging("debug", shared::log::LogType::Config);
 
     let operations = shared::system::new_system();
 
-    // On debug builds, skip the admin check
     #[cfg(not(debug_assertions))]
     {
         if operations.check_permissions().is_err() {
@@ -56,136 +53,27 @@ async fn main() {
         }
     }
 
-    // Our auths list, on Arc to share between threads
-    let auths = Arc::new(Mutex::new(
-        Vec::<shared::broker::api::types::Authenticator>::new(),
-    ));
-
-    let ui = AppWindow::new().unwrap();
-
-    // Set some defaults
-    ui.set_active_authenticator(0);
-
-    // Callbacks
-    let ui_handle = ui.as_weak();
-    let saved_auths = auths.clone();
-    ui.on_host_changed(move |host| {
-        if let Some(ui) = ui_handle.upgrade() {
-            log::debug!("Using UDS Server: {}", host);
-            callbacks::uds_server_changed(&ui, saved_auths.clone());
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    let saved_auths = auths.clone();
-    let ops = operations.clone();
-    ui.on_register_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            // Fail if we can't get at least one network interface
-            let interface = match ops.get_first_network_interface() {
-                Ok(iface) => iface,
-                Err(e) => {
-                    log::error!("No network interfaces found: {}", e);
-                    let _ = rfd::MessageDialog::new()
-                        .set_level(rfd::MessageLevel::Error)
-                        .set_title("Network Error")
-                        .set_description("No network interfaces found, cannot continue")
-                        .show();
-                    return;
-                }
-            };
-            callbacks::btn_register_clicked(&ui, saved_auths.clone(), ops.clone(), &interface);
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_test_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            callbacks::btn_test_clicked(&ui);
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_close_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            log::debug!("Close button clicked, quitting");
-            ui.hide().unwrap();
-        }
-    });
-
-    // Browse callbacks
-    let ui_handle = ui.as_weak();
-    ui.on_browse_preconnect_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file()
-        {
-            ui.set_preconnect_cmd(path.to_string_lossy().to_string().into());
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_browse_runonce_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file()
-        {
-            ui.set_runonce_cmd(path.to_string_lossy().to_string().into());
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_browse_postconfig_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade()
-            && let Some(path) = rfd::FileDialog::new().pick_file()
-        {
-            ui.set_postconfig_cmd(path.to_string_lossy().to_string().into());
-        }
-    });
-
-    // Validate ciphers (pure callback)
-    ui.on_validate_ciphers(|ciphers| {
-        if ciphers.is_empty() {
-            return true;
-        }
-        // Simple check: split by colon and ensure no empty parts
-        for part in ciphers.split(':') {
-            if part.trim().is_empty() {
-                return false;
-            }
-        }
-        true
-    });
-
-    // Fill the fields from existing config
-    regcfg::fill_window_fields(&ui);
-
-    // Trigger initial auth query
-    callbacks::uds_server_changed(&ui, auths.clone());
-
-    ui.run().unwrap();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use i_slint_backend_testing::{AccessibleRole, ElementHandle};
-    use slint::platform::PointerEventButton;
-
-    fn about_widget_count(window: &AppWindow) -> usize {
-        ElementHandle::find_by_element_type_name(window, "AboutSlint").count()
-    }
-
-    #[test]
-    fn about_tab_shows_slint_attribution() {
-        i_slint_backend_testing::init_no_event_loop();
-        let window = AppWindow::new().unwrap();
-        window.show().unwrap();
-        let about_tab = ElementHandle::find_by_accessible_label(&window, "About")
-            .find(|element| element.accessible_role() == Some(AccessibleRole::Tab))
-            .expect("About tab not found");
-        assert_eq!(about_widget_count(&window), 0);
-
-        about_tab.mock_single_click(PointerEventButton::Left);
-
-        assert_eq!(about_widget_count(&window), 1);
-    }
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("UDS Actor Configuration")
+            .with_inner_size([520.0, 560.0])
+            .with_min_inner_size([500.0, 520.0])
+            .with_icon(gui_kit::logo::window_icon()),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "UDS Actor Configuration",
+        options,
+        Box::new(move |cc| {
+            gui_kit::theme::apply(&cc.egui_ctx);
+            let mut fields = app::Fields::default();
+            let test_enabled = regcfg::fill_fields(&mut fields);
+            Ok(Box::new(app::ConfigApp::new(
+                &cc.egui_ctx,
+                operations,
+                fields,
+                test_enabled,
+            )))
+        }),
+    )
 }

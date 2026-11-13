@@ -1,7 +1,9 @@
 // Copyright (c) 2025 Virtual Cable S.L.U.
 // All rights reserved.
+//
 // Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
+//
 //    * Redistributions of source code must retain the above copyright notice,
 //      this list of conditions and the following disclaimer.
 //    * Redistributions in binary form must reproduce the above copyright notice,
@@ -24,23 +26,21 @@
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
 Author: Janier Rodríguez, jrodriguez at virtualcable dot es
+Author: Andres Schumann, aschumann at virtualcable dot es
 */
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
-use slint::ComponentHandle;
+use eframe::egui;
+use shared::log;
 
+mod app;
 mod callbacks;
 mod regcfg;
 
-use shared::log;
-
-slint::include_modules!();
-
 #[tokio::main]
-async fn main() {
+async fn main() -> eframe::Result {
     log::setup_logging("debug", shared::log::LogType::Config);
 
-    // On debug builds, skip the admin check
     #[cfg(not(debug_assertions))]
     {
         let operations = shared::system::new_system();
@@ -54,74 +54,26 @@ async fn main() {
         }
     }
 
-    let ui = AppWindow::new().unwrap();
-
-    // Set some defaults
-
-    // Callbacks
-    let ui_handle = ui.as_weak();
-    ui.on_save_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            callbacks::bnt_save_clicked(&ui);
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_test_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            callbacks::btn_test_clicked(&ui);
-        }
-    });
-
-    let ui_handle = ui.as_weak();
-    ui.on_close_clicked(move || {
-        if let Some(ui) = ui_handle.upgrade() {
-            log::debug!("Close button clicked, quitting");
-            ui.hide().unwrap();
-        }
-    });
-
-    // Validate ciphers
-    ui.on_validate_ciphers(|ciphers| {
-        if ciphers.is_empty() {
-            return true;
-        }
-        for part in ciphers.split(':') {
-            if part.trim().is_empty() {
-                return false;
-            }
-        }
-        true
-    });
-
-    // Fill the fields from existing config
-    regcfg::fill_window_fields(&ui);
-
-    ui.run().unwrap();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use i_slint_backend_testing::{AccessibleRole, ElementHandle};
-    use slint::platform::PointerEventButton;
-
-    fn about_widget_count(window: &AppWindow) -> usize {
-        ElementHandle::find_by_element_type_name(window, "AboutSlint").count()
-    }
-
-    #[test]
-    fn about_tab_shows_slint_attribution() {
-        i_slint_backend_testing::init_no_event_loop();
-        let window = AppWindow::new().unwrap();
-        window.show().unwrap();
-        let about_tab = ElementHandle::find_by_accessible_label(&window, "About")
-            .find(|element| element.accessible_role() == Some(AccessibleRole::Tab))
-            .expect("About tab not found");
-        assert_eq!(about_widget_count(&window), 0);
-
-        about_tab.mock_single_click(PointerEventButton::Left);
-
-        assert_eq!(about_widget_count(&window), 1);
-    }
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("UDS Actor Unmanaged Configuration")
+            .with_inner_size([520.0, 540.0])
+            .with_min_inner_size([500.0, 480.0])
+            .with_icon(gui_kit::logo::window_icon()),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "UDS Actor Unmanaged Configuration",
+        options,
+        Box::new(|cc| {
+            gui_kit::theme::apply(&cc.egui_ctx);
+            let mut fields = app::Fields::default();
+            let test_enabled = regcfg::fill_fields(&mut fields);
+            Ok(Box::new(app::ConfigApp::new(
+                &cc.egui_ctx,
+                fields,
+                test_enabled,
+            )))
+        }),
+    )
 }
