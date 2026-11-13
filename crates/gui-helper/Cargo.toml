@@ -8,12 +8,13 @@ license = "BSD-3-Clause"
 
 [dependencies]
 # Gui
-slint = { workspace = true }
+eframe.workspace = true
+gui-kit.workspace = true
+shared = { path = "../shared" }
 tokio = { workspace = true }
 
 [dev-dependencies]
-i-slint-backend-testing = { workspace = true }
+egui_kittest.workspace = true
 
 [build-dependencies]
 builder = { path = "../builder" }
-slint-build = { workspace = true }

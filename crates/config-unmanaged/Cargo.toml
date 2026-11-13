@@ -11,15 +11,15 @@ shared = { path = "../shared" }
 anyhow = { workspace = true }
 
 # Gui
-slint = { workspace = true }
+eframe.workspace = true
+gui-kit.workspace = true
 rfd = { workspace = true }
 
 reqwest = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-i-slint-backend-testing = { workspace = true }
+egui_kittest.workspace = true
 
 [build-dependencies]
 builder = { path = "../builder" }
-slint-build = { workspace = true }

@@ -25,12 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*!
 Author: Adolfo Gómez, dkmaster at dkmon dot com
+Author: Andres Schumann, aschumann at virtualcable dot es
 */
 fn main() {
-    // Element lookup by type in i-slint-backend-testing needs the debug info.
-    let is_debug_build = std::env::var("PROFILE").as_deref() == Ok("debug");
-    let config = slint_build::CompilerConfiguration::new().with_debug_info(is_debug_build);
-    slint_build::compile_with_config("src/config.slint", config).unwrap();
     #[cfg(windows)]
     builder::build_windows(builder::BuildInfo {
         product_name: "UDS Actor Config",
