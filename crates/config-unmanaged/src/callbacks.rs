@@ -20,6 +20,14 @@ pub fn save_unmanaged(
     log_level: types::LogLevel,
     ciphers: &str,
 ) -> Result<(), String> {
+    // Fail closed at save time: a non-empty net restriction must be a parseable
+    // CIDR network. Storing free text would silently neuter the restriction at
+    // runtime (malformed values match no interface now), so surface it here.
+    if !shared::system::NetworkInterface::is_valid_subnet(net) {
+        return Err(format!(
+            "Invalid net restriction '{net}': expected a CIDR network like 192.168.1.0/24"
+        ));
+    }
     let final_cfg = config::ActorConfiguration {
         broker_url: format!("https://{}/uds/rest/", host),
         verify_ssl,
@@ -69,7 +77,8 @@ pub fn test_connection(cfg: config::ActorConfiguration) -> Result<String, String
 
 #[cfg(test)]
 mod tests {
-    use super::ciphers_look_valid;
+    use super::{ciphers_look_valid, save_unmanaged};
+    use shared::broker::api::types::LogLevel;
 
     #[test]
     fn empty_or_well_formed_cipher_lists_are_valid() {
@@ -85,5 +94,23 @@ mod tests {
             "ECDHE-RSA-AES128-GCM-SHA256::ECDHE-RSA-AES256-GCM-SHA384"
         ));
         assert!(!ciphers_look_valid(":ECDHE-RSA-AES128-GCM-SHA256"));
+    }
+
+    #[test]
+    fn save_rejects_malformed_net_before_touching_storage() {
+        // Fail closed at save time (restrict-net): free text must be surfaced as
+        // an error, not stored as a restriction that matches nothing at runtime.
+        // The invalid path returns before any disk access, so this is hermetic.
+        let res = save_unmanaged(
+            "broker.example.com",
+            true,
+            "dummy-token",
+            "not-a-subnet", // not a CIDR network at all
+            LogLevel::Info,
+            "",
+        );
+        assert!(res.is_err(), "free text must not be accepted as net");
+        let msg = res.err().unwrap();
+        assert!(msg.contains("not-a-subnet"), "error should quote the value: {msg}");
     }
 }

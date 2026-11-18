@@ -17,11 +17,15 @@ pub async fn network_interfaces_in_subnet(
     Ok(ips)
 }
 
+/// Diff the current in-subnet interfaces against `known`.
+/// Returns `Some(interfaces)` on any real change — including the interface set
+/// becoming EMPTY (all in-subnet interfaces gone), which a plain empty-Vec
+/// sentinel could not express — and `None` when nothing changed.
 pub async fn network_interfaces_changed(
     operations: Arc<dyn System>,
     known: &[NetworkInterface],
     subnet: Option<&str>,
-) -> Result<Vec<NetworkInterface>> {
+) -> Result<Option<Vec<NetworkInterface>>> {
     let current = network_interfaces_in_subnet(operations, subnet).await?;
 
     // Compare by name across BOTH sets. A length early-return was wrong (equal
@@ -32,17 +36,17 @@ pub async fn network_interfaces_changed(
         removed.retain(|k| k.name != iface.name);
         if let Some(k) = known.iter().find(|k| k.name == iface.name) {
             if k.mac != iface.mac || k.ip_addr != iface.ip_addr {
-                return Ok(current); // Changed mac/ip
+                return Ok(Some(current)); // Changed mac/ip
             }
         } else {
-            return Ok(current); // New interface
+            return Ok(Some(current)); // New interface
         }
     }
     if !removed.is_empty() {
-        return Ok(current); // Removed interface(s)
+        return Ok(Some(current)); // Removed interface(s)
     }
 
-    Ok(Vec::new()) // No changes
+    Ok(None) // No changes
 }
 
 #[cfg(test)]

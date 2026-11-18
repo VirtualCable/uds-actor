@@ -254,10 +254,19 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
     // create the ip watcher task
     // Will simply stop the service if ip changes
     // Allowing the system to restart it cleanly
+    // It watches the SAME subnet as the readiness gate, so losing (or swapping)
+    // an in-subnet interface re-gates readiness instead of latching the old set.
     tokio::spawn({
         let platform = platform.clone();
         async move {
-            if let Err(e) = common::interfaces_watch_task(&platform, None).await {
+            let subnet = platform
+                .config()
+                .read()
+                .await
+                .restrict_net
+                .clone()
+                .filter(|s| !s.trim().is_empty());
+            if let Err(e) = common::interfaces_watch_task(&platform, subnet).await {
                 log::error!("Error in interfaces watch task: {}", e);
             }
         }
