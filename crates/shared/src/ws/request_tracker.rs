@@ -168,12 +168,15 @@ mod tests {
         uniq.sort_unstable();
         uniq.dedup();
         assert_eq!(uniq.len(), ids.len(), "ids must be unique");
+        // Sequentially collected ids must be strictly increasing (the global
+        // counter only ever moves forward). Do NOT assert a delta of 1: the
+        // counter is process-global and concurrent tests consume ids too.
+        assert!(
+            ids.windows(2).all(|w| w[1] > w[0]),
+            "ids must increase monotonically: {ids:?}"
+        );
         // With overwhelming probability (64-bit CSPRNG base) the first id is
         // far from the process start; a sequential implementation would give 1.
-        assert!(
-            ids.windows(2).all(|w| w[1].wrapping_sub(w[0]) == 1),
-            "ids must increase monotonically"
-        );
         assert_ne!(
             ids[0], 1,
             "id sequence must not start at a known deterministic base"
