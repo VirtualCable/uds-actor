@@ -30,7 +30,14 @@ pub fn rustls_config_from_pem(cert_info: CertificateInfo) -> Result<RustlsConfig
             let epki = EncryptedPrivateKeyInfoOwned::from_der(pem_block.contents())
                 .map_err(|e| anyhow::anyhow!("Failed to parse encrypted private key: {:?}", e))?;
             let doc = epki.decrypt(pass).map_err(|e| {
-                log::info!("Invalid TLS certificate info: {:?}", err_cert_info);
+                // Diagnostics only: never render CertificateInfo here (it embeds the
+                // private key and password); log non-secret identifiers instead.
+                log::info!(
+                    "Failed to decrypt private key: key_len={}, cert_len={}, password_present={}",
+                    err_cert_info.key.len(),
+                    err_cert_info.certificate.len(),
+                    err_cert_info.password.is_some()
+                );
                 anyhow::anyhow!(
                     "Failed to decrypt private key with provided password: {:?}",
                     e
@@ -93,5 +100,24 @@ mod tests {
 
         let cfg = rustls_config_from_pem(cert_info);
         assert!(cfg.is_err(), "should fail with wrong password");
+    }
+
+    #[test]
+    fn debug_render_never_leaks_key_or_password() {
+        let mut cert_info = test_certs::test_certinfo_with_pass();
+        let rendered = format!("{:?}", cert_info);
+        assert!(
+            !rendered.contains("PRIVATE KEY"),
+            "private key material leaked through Debug"
+        );
+        assert!(!rendered.contains("REDACTED: 0 bytes"), "key must render as redacted with nonzero length");
+        // Change the password to a known unique marker and assert it never renders.
+        cert_info.password = Some("sup3r-s3cret-marker-xyz".into());
+        let rendered = format!("{:?}", cert_info);
+        assert!(
+            !rendered.contains("sup3r-s3cret-marker-xyz"),
+            "password leaked through Debug"
+        );
+        assert!(rendered.contains("[REDACTED]"), "password should render redacted");
     }
 }
