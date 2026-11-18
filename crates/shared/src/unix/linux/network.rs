@@ -27,14 +27,20 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 use std::io;
 use std::mem;
 use std::net::Ipv4Addr;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_int;
 use std::ptr;
 
-use libc::{self, sockaddr};
+use libc::{self};
 
 use anyhow::Result;
 
 use crate::{log, system::NetworkInterface};
+
+// Compile-time ABI guard: struct ifreq must stay the kernel's size on LP64
+// targets (40 bytes). If the libc export ever drifts, fail the build instead of
+// silently corrupting stack around the ioctl.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<libc::ifreq>() == 40);
 
 /// Returns iterator (Vec) of InterfaceInfo for “valid” interfaces.
 pub fn get_network_info() -> Result<Vec<NetworkInterface>> {
@@ -69,8 +75,7 @@ fn list_interfaces() -> io::Result<Vec<String>> {
     // Similar to Python: allocate a buffer and let SIOCGIFCONF fill it.
     // We will decode names using stride that depends on arch.
     let max_possible = 128; // arbitrary, raise if needed
-    let space = max_possible * 16;
-    let mut names_buf = vec![0u8; space];
+    let mut space = max_possible * 16;
 
     // Prepare ifconf
     #[repr(C)]
@@ -78,18 +83,35 @@ fn list_interfaces() -> io::Result<Vec<String>> {
         ifc_len: c_int,
         ifc_buf: *mut libc::c_void,
     }
-    let mut ifc = IfConf {
-        ifc_len: space as c_int,
-        ifc_buf: names_buf.as_mut_ptr() as *mut libc::c_void,
-    };
 
-    let res = unsafe { libc::ioctl(fd, libc::SIOCGIFCONF, &mut ifc) }; // SIOCGIFCONF
-    if res < 0 {
-        unsafe { libc::close(fd) };
-        return Err(io::Error::last_os_error());
-    }
-    // outbytes
-    let outbytes = ifc.ifc_len as usize;
+    // Grow-and-retry: SIOCGIFCONF silently truncates when the buffer is too
+    // small, and the truncation is otherwise undetectable (the kernel just
+    // reports what it wrote). While the buffer fills to within one entry of
+    // capacity, double it and re-probe.
+    let names_buf = loop {
+        let mut buf = vec![0u8; space];
+        let mut ifc = IfConf {
+            ifc_len: space as c_int,
+            ifc_buf: buf.as_mut_ptr() as *mut libc::c_void,
+        };
+        let res = unsafe { libc::ioctl(fd, libc::SIOCGIFCONF, &mut ifc) }; // SIOCGIFCONF
+        if res < 0 {
+            unsafe { libc::close(fd) };
+            return Err(io::Error::last_os_error());
+        }
+        let written = ifc.ifc_len.max(0) as usize;
+        if written + 40 <= space || space >= (1 << 20) {
+            if written + 40 > space {
+                log::warn!(
+                    "SIOCGIFCONF truncated at {} bytes; interface list may be incomplete",
+                    space
+                );
+            }
+            break (buf, written);
+        }
+        space *= 2; // grow and re-probe
+    };
+    let (names_buf, outbytes) = names_buf;
     let namestr = &names_buf[..outbytes];
 
     let (offset, length) = if cfg!(target_pointer_width = "32") {
@@ -126,13 +148,10 @@ fn get_ipv4_addr(ifname: &str) -> Option<String> {
         return None;
     }
 
-    // Build ifreq
-    #[repr(C)]
-    struct IfReq {
-        ifr_name: [c_char; libc::IFNAMSIZ],
-        ifr_addr: sockaddr, // we'll only read sa_data
-    }
-    let mut ifr: IfReq = unsafe { mem::zeroed() };
+    // Use the kernel-ABI-sized struct from libc (ifr_name[16] + the full ifru
+    // union). The previous hand-rolled 32-byte stand-in made the kernel's
+    // 40-byte struct ifreq copy run 8 bytes past the local allocation.
+    let mut ifr: libc::ifreq = unsafe { mem::zeroed() };
     // copy name
     let name_bytes = ifname.as_bytes();
     let len = name_bytes.len().min(libc::IFNAMSIZ - 1);
@@ -146,25 +165,21 @@ fn get_ipv4_addr(ifname: &str) -> Option<String> {
     }
 
     // ioctl SIOCGIFADDR
-    let res = unsafe { libc::ioctl(sock, 0x8915, &mut ifr) }; // SIOCGIFADDR
+    let res = unsafe {
+        libc::ioctl(
+            sock,
+            0x8915,
+            &mut ifr as *mut libc::ifreq as *mut libc::c_void,
+        )
+    }; // SIOCGIFADDR
     if res < 0 {
         unsafe { libc::close(sock) };
         return None;
     }
 
-    // Extract IPv4 from sa_data (offset differs; standard is bytes 2..6).
-    let data = unsafe {
-        std::slice::from_raw_parts(
-            &ifr.ifr_addr.sa_data as *const _ as *const u8,
-            mem::size_of_val(&ifr.ifr_addr.sa_data),
-        )
-    };
-    if data.len() < 6 {
-        unsafe { libc::close(sock) };
-        return None;
-    }
-    // sa_data: first 2 bytes are port family padding, next 4 are IPv4
-    let octets = [data[2], data[3], data[4], data[5]];
+    // Extract IPv4 from sa_data (standard is bytes 2..6: first 2 are address-family padding).
+    let sa_data = unsafe { ifr.ifr_ifru.ifru_addr.sa_data };
+    let octets = [sa_data[2] as u8, sa_data[3] as u8, sa_data[4] as u8, sa_data[5] as u8];
     let ip = Ipv4Addr::from(octets).to_string();
 
     unsafe { libc::close(sock) };
@@ -179,13 +194,9 @@ fn get_mac_addr(ifname: &str) -> Option<String> {
         return None;
     }
 
-    // Build ifreq with union field; we only need name and hwaddr bytes.
-    #[repr(C)]
-    struct IfReqHw {
-        ifr_name: [c_char; libc::IFNAMSIZ],
-        ifr_hwaddr: sockaddr, // sa_data[0..6] are MAC for ARPHRD_ETHER
-    }
-    let mut ifr: IfReqHw = unsafe { mem::zeroed() };
+    // Kernel-ABI struct ifreq (see get_ipv4_addr): the MAC is in the union's
+    // ifru_hwaddr.sa_data[0..6] for ARPHRD_ETHER.
+    let mut ifr: libc::ifreq = unsafe { mem::zeroed() };
 
     // copy name
     let name_bytes = ifname.as_bytes();
@@ -200,26 +211,28 @@ fn get_mac_addr(ifname: &str) -> Option<String> {
     }
 
     // ioctl SIOCGIFHWADDR
-    let res = unsafe { libc::ioctl(sock, 0x8927, &mut ifr) }; // SIOCGIFHWADDR
+    let res = unsafe {
+        libc::ioctl(
+            sock,
+            0x8927,
+            &mut ifr as *mut libc::ifreq as *mut libc::c_void,
+        )
+    }; // SIOCGIFHWADDR
     if res < 0 {
         unsafe { libc::close(sock) };
         return None;
     }
 
     // Extract MAC from sa_data[0..6]
-    let data = unsafe {
-        std::slice::from_raw_parts(
-            &ifr.ifr_hwaddr.sa_data as *const _ as *const u8,
-            mem::size_of_val(&ifr.ifr_hwaddr.sa_data),
-        )
-    };
-    if data.len() < 6 {
-        unsafe { libc::close(sock) };
-        return None;
-    }
+    let sa_data = unsafe { ifr.ifr_ifru.ifru_hwaddr.sa_data };
     let mac = format!(
         "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-        data[0], data[1], data[2], data[3], data[4], data[5]
+        sa_data[0] as u8,
+        sa_data[1] as u8,
+        sa_data[2] as u8,
+        sa_data[3] as u8,
+        sa_data[4] as u8,
+        sa_data[5] as u8
     );
 
     unsafe { libc::close(sock) };
