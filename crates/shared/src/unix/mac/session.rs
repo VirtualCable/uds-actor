@@ -29,8 +29,10 @@ use anyhow::Result;
 /// Logouts the user with dbus or loginctl
 pub(super) fn logout() -> Result<()> {
     // TODO: Implement macOS logout
+    // Must report Err, not Ok: an unimplemented logout is not a successful one,
+    // and callers gate the broker session-end claim on this result.
     crate::log::warn!("logout is not implemented for macOS");
-    Ok(())
+    anyhow::bail!("logout is not implemented for macOS")
 }
 
 #[cfg(test)]
@@ -39,10 +41,12 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "This will logout the user running the test, so ignore by default"]
-    fn test_logout() {
+    fn test_logout_reports_not_implemented() {
         crate::log::setup_logging("debug", crate::log::LogType::Tests);
         let res = logout();
-        assert!(res.is_ok());
+        assert!(
+            res.is_err(),
+            "unimplemented macOS logout must not report success"
+        );
     }
 }

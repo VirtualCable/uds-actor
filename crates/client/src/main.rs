@@ -43,6 +43,12 @@ mod windows;
 // Tasks
 mod tasks;
 
+// Recorded when logoff enforcement fails (forced or idle), so the session-end
+// claim sent to the broker at shutdown reflects the real termination result
+// instead of silently reporting success for a session that is still alive.
+pub static LOGOFF_FAILED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     // Setup logging
@@ -101,8 +107,14 @@ async fn run(platform: platform::Platform) {
         shared::log::warn!("Some tasks did not shut down in time, aborting...");
     }
 
-    // Send logout
-    if let Err(e) = platform.ws_requester().logout(reason.as_deref()).await {
+    // Send logout. If enforcement failed (loginctl error, unimplemented platform),
+    // do not claim a clean session-end to the broker accounting: the session may
+    // still be alive there.
+    if LOGOFF_FAILED.load(std::sync::atomic::Ordering::SeqCst) {
+        shared::log::error!(
+            "Logoff enforcement failed; suppressing session-end claim to broker accounting"
+        );
+    } else if let Err(e) = platform.ws_requester().logout(reason.as_deref()).await {
         shared::log::error!("Logout failed: {}", e);
     } else {
         shared::log::info!("Logout successful");

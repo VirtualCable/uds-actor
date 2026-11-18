@@ -32,10 +32,16 @@ use crate::log;
 
 /// Fallback: invokes `loginctl terminate-session <id>`
 fn fallback_loginctl(session_id: &str) -> Result<()> {
-    Command::new("loginctl")
+    let status = Command::new("loginctl")
         .arg("terminate-session")
         .arg(session_id)
         .status()?;
+    // The exit status must be honored: a failed terminate-session still lets the
+    // client shut down, and reporting success here would make the broker believe
+    // the session ended when it did not.
+    if !status.success() {
+        anyhow::bail!("loginctl terminate-session failed for session {session_id:?}");
+    }
     Ok(())
 }
 
@@ -43,6 +49,9 @@ fn fallback_loginctl(session_id: &str) -> Result<()> {
 pub(super) fn logout() -> Result<()> {
     crate::log::debug!("Attempting to log out current session");
     let session_id = current_session_id()?;
+    if session_id.is_empty() {
+        anyhow::bail!("Cannot log off: no current session ID");
+    }
     fallback_loginctl(&session_id)
 }
 
@@ -97,5 +106,19 @@ mod tests {
         let id = current_session_id().unwrap();
         crate::log::info!("Current session ID: {}", id);
         assert!(!id.is_empty());
+    }
+
+    #[test]
+    #[ignore = "requires loginctl (systemd) on PATH; run single-purpose on a real host"]
+    fn fallback_loginctl_reports_failure_status() {
+        crate::log::setup_logging("debug", crate::log::LogType::Tests);
+        // A session id that cannot exist: loginctl exits non-zero, and the sink
+        // must surface that as Err instead of a silent Ok (regression for
+        // session-logoff-unverified-termination-silent-success).
+        let res = fallback_loginctl("9999-nonexistent-session");
+        assert!(
+            res.is_err(),
+            "non-zero loginctl exit status must be reported as failure"
+        );
     }
 }

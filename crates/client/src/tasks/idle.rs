@@ -132,7 +132,25 @@ pub async fn task(
             session_manager.stop().await;
 
             // Use logoff in case of idle, should fire stop process
-            operations.logoff().ok();
+            if let Err(e) = operations.logoff() {
+                log::error!("Idle-enforcement logoff failed: {e:#}");
+                // Record the enforcement failure so main() will not emit a
+                // clean session-end claim while the session is still alive.
+                crate::LOGOFF_FAILED.store(true, std::sync::atomic::Ordering::SeqCst);
+                // Forward the failure to the broker (service's logger worker
+                // forwards LogRequest).
+                let _ = platform
+                    .ws_client()
+                    .to_ws
+                    .send(RpcEnvelope {
+                        id: None,
+                        msg: RpcMessage::LogRequest(LogRequest {
+                            level: LogLevel::Error,
+                            message: format!("Idle-enforcement logoff failed: {e:#}"),
+                        }),
+                    })
+                    .await;
+            }
 
             return Ok(Some(message)); // Message to include on logout reason
         }
