@@ -31,7 +31,7 @@ use crate::{
     sync::OnceSignal,
     tls::{CertificateInfo, certool},
     ws::{
-        request_tracker::RequestTracker,
+        request_tracker::{RequestTracker, spawn_cleanup_task},
         types::{Close, Ping, Pong, RpcEnvelope, RpcMessage},
     },
 };
@@ -241,7 +241,18 @@ pub async fn websocket_loop(
 
                 match serde_json::to_string(&env) {
                     Ok(txt) => {
-                        if ws_sender.send(Message::Text(txt.into())).await.is_err() {
+                        // Bound the forward: a peer that stops reading (full TCP
+                        // window, hung client) must not stall the whole
+                        // workers->client pipeline forever. On timeout, treat it
+                        // as a stalled peer and drop the slot (aborting Task A
+                        // below releases the workers).
+                        let send = ws_sender.send(Message::Text(txt.into()));
+                        if tokio::time::timeout(std::time::Duration::from_secs(10), send)
+                            .await
+                            .map(|r| r.is_err())
+                            .unwrap_or(true)
+                        {
+                            log::warn!("Dropping stalled WebSocket client (send timed out)");
                             break;
                         }
                     }
@@ -362,6 +373,9 @@ pub async fn start_server(
     let (to_ws, from_workers) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
     let (from_ws, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
+    // Expire timed-out pending requests (and notify their waiters) while the
+    // server runs; the task stops with the server's stop signal.
+    spawn_cleanup_task(tracker.clone(), stop.clone());
 
     // Armar ServerInfo
     let info = ServerStartInfo {

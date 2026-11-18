@@ -14,10 +14,18 @@ use crate::{
     ws::types::{RequestId, RpcError, RpcMessage},
 };
 
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+// Ids issued by next_id() are correlation handles for the internal RPC tracker:
+// a peer connected to /ws that can *guess* a pending id could resolve somebody
+// else's request (e.g. forge a ScreenshotResponse for an id the broker waits
+// on). A deterministic per-process sequence makes that trivial, so the base is
+// drawn once from the CSPRNG; ids stay monotonically increasing (collision-free
+// within a process) but are not predictable from outside.
+static ID_BASE: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
 fn next_id() -> u64 {
-    NEXT_ID.fetch_add(1, Ordering::Relaxed)
+    let base = *ID_BASE.get_or_init(|| rand::random::<u64>() | 1);
+    base.wrapping_add(NEXT_ID.fetch_add(1, Ordering::Relaxed))
 }
 
 /// Represents a pending request waiting for a response.
@@ -134,14 +142,93 @@ impl Default for RequestTracker {
     }
 }
 
-/// Example background task that periodically calls cleanup.
-/// For now it runs in an infinite loop; But we will implement it elsewhere.
-/// Just an example of usage.
-pub fn spawn_cleanup_task(tracker: RequestTracker) {
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ws::types::RpcError;
+
+    fn ok_msg(tag: &str) -> RpcMessage {
+        RpcMessage::Error(RpcError {
+            code: 200,
+            message: tag.to_string(),
+        })
+    }
+
+    #[tokio::test]
+    async fn ids_are_unique_and_not_a_small_sequence() {
+        // Regression for ws-rpc-tracker-id-only-correlation: ids must not be a
+        // predictable 1,2,3... sequence (a local /ws peer guessing pending ids
+        // could resolve other sessions' requests).
+        let mut ids = Vec::new();
+        for _ in 0..8 {
+            let (_rx, id) = RequestTracker::new().register().await;
+            ids.push(id);
+        }
+        let mut uniq = ids.clone();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert_eq!(uniq.len(), ids.len(), "ids must be unique");
+        // With overwhelming probability (64-bit CSPRNG base) the first id is
+        // far from the process start; a sequential implementation would give 1.
+        assert!(
+            ids.windows(2).all(|w| w[1].wrapping_sub(w[0]) == 1),
+            "ids must increase monotonically"
+        );
+        assert_ne!(
+            ids[0], 1,
+            "id sequence must not start at a known deterministic base"
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_ok_delivers_and_removes_entry() {
+        let tracker = RequestTracker::new();
+        let (rx, id) = tracker.register().await;
+        tracker.resolve_ok(id, ok_msg("payload")).await.unwrap();
+        match rx.await.unwrap() {
+            RpcMessage::Error(e) => assert_eq!(e.message, "payload"),
+            other => panic!("expected the resolved payload, got {other:?}"),
+        }
+        // Second resolve of the same id must fail (entry was removed).
+        assert!(tracker.resolve_ok(id, ok_msg("again")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn cleanup_expires_pending_with_timeout_error() {
+        let tracker = RequestTracker::new().with_timeout(std::time::Duration::from_millis(10));
+        let (rx, _id) = tracker.register().await;
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        tracker.cleanup().await;
+        match rx.await {
+            Ok(RpcMessage::Error(e)) => {
+                assert_eq!(e.code, 408, "expired requests must resolve with 408");
+                assert_eq!(e.message, "timeout");
+            }
+            other => panic!("expected 408 timeout error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn deregister_removes_entry() {
+        let tracker = RequestTracker::new();
+        let (_rx, id) = tracker.register().await;
+        tracker.deregister(id).await;
+        assert!(tracker.resolve_ok(id, ok_msg("late")).await.is_err());
+    }
+}
+
+/// Background task that periodically calls cleanup, so timed-out requests do
+/// not accumulate in the pending map for the process lifetime. It exits when
+/// the server's stop signal fires, keeping the task lifecycle tied to the WS
+/// server that owns the tracker.
+pub fn spawn_cleanup_task(tracker: RequestTracker, stop: crate::sync::OnceSignal) {
     tokio::spawn(async move {
         loop {
+            tokio::select! {
+                _ = stop.wait() => break,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+            }
             tracker.cleanup().await;
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     });
 }
