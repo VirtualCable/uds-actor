@@ -46,6 +46,15 @@ pub struct NetworkInterface {
 }
 
 impl NetworkInterface {
+    /// True when `spec` is usable as a subnet filter: empty (no restriction) or a
+    /// parseable CIDR network (ipnetwork requires the prefix, e.g. `10.0.0.0/24`).
+    /// Config-save paths use this to reject malformed restrict_net values with a
+    /// visible error instead of letting them silently disable the restriction.
+    pub fn is_valid_subnet(spec: &str) -> bool {
+        let spec = spec.trim();
+        spec.is_empty() || spec.parse::<ipnetwork::IpNetwork>().is_ok()
+    }
+
     /// Check if this interface's IP is inside the given subnet (IPv4 or IPv6).
     pub fn in_subnet(&self, subnet: Option<&str>) -> bool {
         // If no subnet provided, always valid
@@ -58,9 +67,14 @@ impl NetworkInterface {
             return true;
         }
 
-        // Try to parse subnet
+        // Try to parse subnet. Fail CLOSED: an unparseable restriction must not
+        // be treated as "no filter" (that silently admitted out-of-subnet
+        // interfaces through the readiness gate); drop the interface and shout.
         let Ok(net) = subnet_str.parse::<ipnetwork::IpNetwork>() else {
-            return true; // if subnet invalid, treat as "no filter"
+            crate::log::warn!(
+                "Invalid restrict_net value {subnet_str:?}: no interface can match it (fail-closed)"
+            );
+            return false;
         };
 
         // Try to parse interface IP
@@ -240,6 +254,47 @@ mod tests {
         };
         assert!(iface.in_subnet(Some("192.168.1.0/24")));
         assert!(!iface.in_subnet(Some("192.168.2.0/24")));
+    }
+
+    #[test]
+    fn invalid_subnet_fails_closed() {
+        let iface = NetworkInterface {
+            name: "eth0".to_string(),
+            mac: "00:11:22:33:44:55".to_string(),
+            ip_addr: "192.168.1.10".to_string(),
+        };
+        // Regression for restrict-net-failopen: malformed values used to return
+        // true ("no filter"), silently admitting any interface. Now nothing
+        // matches, which is the fail-closed direction.
+        for bad in ["not-a-network", "10.0.0.0/33", "10.0.0.0//24"] {
+            assert!(!iface.in_subnet(Some(bad)), "{bad} must not match anything");
+        }
+        // A bare address is a valid /32 network (ipnetwork semantics): it filters
+        // to that exact address, so it must not match a different IP.
+        assert!(!iface.in_subnet(Some("10.0.0.0")));
+        let exact = NetworkInterface {
+            name: "eth0".to_string(),
+            mac: "00:11:22:33:44:55".to_string(),
+            ip_addr: "10.0.0.0".to_string(),
+        };
+        assert!(exact.in_subnet(Some("10.0.0.0")), "/32 matches itself");
+        // Empty/None remain valid "no restriction" values.
+        assert!(iface.in_subnet(None));
+        assert!(iface.in_subnet(Some("")));
+        assert!(iface.in_subnet(Some("  ")));
+    }
+
+    #[test]
+    fn is_valid_subnet_accepts_only_usable_values() {
+        assert!(NetworkInterface::is_valid_subnet(""));
+        assert!(NetworkInterface::is_valid_subnet("192.168.1.0/24"));
+        assert!(NetworkInterface::is_valid_subnet("fd00::/64"));
+        assert!(
+            NetworkInterface::is_valid_subnet("10.0.0.0"),
+            "bare address is a valid /32"
+        );
+        assert!(!NetworkInterface::is_valid_subnet("garbage"));
+        assert!(!NetworkInterface::is_valid_subnet("10.0.0.0/33"));
     }
 
     #[test]

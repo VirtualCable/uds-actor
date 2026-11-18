@@ -154,24 +154,21 @@ pub async fn interfaces_watch_task(
 
     let stop = platform.get_stop();
     loop {
-        if let Ok(interfaces) = network_interfaces_changed(
+        if let Ok(Some(interfaces)) = network_interfaces_changed(
             platform.system(),
             known_interfaces.as_slice(),
             subnet.as_deref(),
         )
         .await
-            && !interfaces.is_empty()
         {
             platform
                 .get_restart_flag()
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             log::warn!(
-                "Network interfaces changed (IP change, new interface, etc), stopping service to allow restart"
+                "Network interfaces changed (now {} in-subnet interface(s)), stopping service to allow restart",
+                interfaces.len()
             );
-            // Set restart flag and stop (restart will be handled by main service loop)
-            platform
-                .get_restart_flag()
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+            // Stop (restart will be handled by main service loop)
             stop.set(); // Signal stop
             break;
         }

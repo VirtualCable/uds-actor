@@ -102,6 +102,15 @@ impl crate::system::System for LinuxSystem {
         _old_password: &str,
         new_password: &str,
     ) -> Result<()> {
+        // chpasswd reads one "user:password" pair per stdin line: reject any value that
+        // could turn this single invocation into additional credential pairs or shift
+        // the field split (LF/CR/NUL in values, colon in the user field).
+        if user.is_empty()
+            || user.chars().any(|c| matches!(c, ':' | '\n' | '\r' | '\0'))
+            || new_password.chars().any(|c| matches!(c, '\n' | '\r' | '\0'))
+        {
+            return Err(anyhow::anyhow!("invalid characters in user or password"));
+        }
         // chpasswd expects "user:new_password" in stdin
         let input = format!("{}:{}\n", user, new_password);
 

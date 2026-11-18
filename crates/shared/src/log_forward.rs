@@ -132,11 +132,17 @@ pub fn is_forwarder_set() -> bool {
 pub struct LogForwardLayer {
     /// Whether forwarding is enabled at all (env var `*_FORWARD_LOGS=false`).
     enabled: bool,
+    /// Minimum level that is forwarded, independent of the local diagnostic
+    /// `LOG_LEVEL` (env var `*_FORWARD_LEVEL`, documented default `warn`).
+    /// Decoupling the two prevents raising local verbosity from widening what
+    /// leaves the machine toward the broker.
+    forward_threshold: tracing::Level,
 }
 
 impl LogForwardLayer {
     /// Build a layer for the given component type.
-    /// Respects `UDSACTOR_<TYPE>_FORWARD_LOGS=false`.
+    /// Respects `UDSACTOR_<TYPE>_FORWARD_LOGS=false` and
+    /// `UDSACTOR_<TYPE>_FORWARD_LEVEL` (default `warn`).
     ///
     /// **Only `LogType::Service` forwards to the broker.** Client and Config
     /// run in user/admin contexts that are not necessarily authenticated
@@ -145,6 +151,10 @@ impl LogForwardLayer {
     pub fn for_type(log_type: &LogType) -> Self {
         let key = format!(
             "UDSACTOR_{}_FORWARD_LOGS",
+            log_type.to_string().to_uppercase()
+        );
+        let level_key = format!(
+            "UDSACTOR_{}_FORWARD_LEVEL",
             log_type.to_string().to_uppercase()
         );
 
@@ -157,7 +167,28 @@ impl LogForwardLayer {
                 .map(|v| !matches!(v.to_lowercase().as_str(), "false" | "0" | "no" | "off"))
                 .unwrap_or(true);
 
-        Self { enabled }
+        // Documented default is `warn` (notes/env-vars-logging.md §5). This is
+        // an independent gate and deliberately does NOT follow the active local
+        // log level, so a debug/trace LOG_LEVEL cannot exfiltrate verbose (and
+        // potentially secret-bearing) events to the broker.
+        let forward_threshold = std::env::var(&level_key)
+            .ok()
+            .and_then(|v| crate::log::parse_level(&v))
+            .unwrap_or(tracing::Level::WARN);
+
+        Self {
+            enabled,
+            forward_threshold,
+        }
+    }
+
+    /// Whether an event of `level` from `target` should be forwarded, given
+    /// this layer's `enabled` + `forward_threshold`. Kept as a free-standing
+    /// pure method so it is unit-testable without a live tracing subscriber.
+    fn forwards(&self, level: &tracing::Level, target: &str) -> bool {
+        self.enabled
+            && *level <= self.forward_threshold
+            && is_forwardable_target(target)
     }
 }
 
@@ -166,9 +197,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        self.enabled
-            && *metadata.level() <= crate::log::get_active_log_level()
-            && is_forwardable_target(metadata.target())
+        self.forwards(metadata.level(), metadata.target())
     }
 
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
@@ -324,6 +353,46 @@ mod tests {
         }
         // Service is enabled by default (no env override in test process).
         let _layer = LogForwardLayer::for_type(&LogType::Service);
+    }
+
+    #[test]
+    fn forward_threshold_defaults_to_warn_and_is_independent_of_active_level() {
+        // Default (no env override in the test process): the documented `warn`
+        // threshold applies...
+        let layer = LogForwardLayer::for_type(&LogType::Service);
+        assert!(layer.enabled);
+        assert_eq!(layer.forward_threshold, tracing::Level::WARN);
+        // ...and the gate only consults it: error/warn forward, info/debug/trace
+        // never do, even though the active local log level (default info, or
+        // raised to debug/trace by UDSACTOR_*_LOG_LEVEL) would allow them.
+        assert!(layer.forwards(&tracing::Level::ERROR, "service::common"));
+        assert!(layer.forwards(&tracing::Level::WARN, "service::common"));
+        assert!(!layer.forwards(&tracing::Level::INFO, "service::common"));
+        assert!(!layer.forwards(&tracing::Level::DEBUG, "service::common"));
+        assert!(!layer.forwards(&tracing::Level::TRACE, "service::common"));
+        // Noisy targets stay excluded regardless of level.
+        assert!(!layer.forwards(&tracing::Level::ERROR, "hyper::client"));
+        assert!(!layer.forwards(&tracing::Level::ERROR, "shared::broker::api"));
+    }
+
+    #[test]
+    fn forward_threshold_override_forwards_more_but_never_noisier() {
+        // An explicit relaxed threshold (as UDSACTOR_SERVICE_FORWARD_LEVEL=info
+        // would build) forwards info too, but target exclusion still applies.
+        let layer = LogForwardLayer {
+            enabled: true,
+            forward_threshold: tracing::Level::INFO,
+        };
+        assert!(layer.forwards(&tracing::Level::INFO, "service::common"));
+        assert!(layer.forwards(&tracing::Level::WARN, "shared::log"));
+        assert!(!layer.forwards(&tracing::Level::DEBUG, "service::common"));
+        assert!(!layer.forwards(&tracing::Level::INFO, "reqwest::connect"));
+        // Disabled layer forwards nothing at any level.
+        let off = LogForwardLayer {
+            enabled: false,
+            forward_threshold: tracing::Level::TRACE,
+        };
+        assert!(!off.forwards(&tracing::Level::ERROR, "service::common"));
     }
 
     // The flood guard uses a *global* AtomicU64 (intentionally, so it

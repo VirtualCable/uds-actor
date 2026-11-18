@@ -40,13 +40,40 @@ pub enum ActorOsAction {
 }
 
 // To keep compat with older versions, we accept empty json as our default
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+// NOTE: Debug is implemented manually (not derived) so secret-bearing values inside
+// `custom` (e.g. password, new_password) can never reach any log sink.
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct ActorOsConfiguration {
     #[serde(default)]
     pub action: ActorOsAction, // Default is None
     #[serde(default)]
     pub name: String, // Default is empty
     pub custom: Option<serde_json::Value>, // custom data depends on action
+}
+
+impl std::fmt::Debug for ActorOsConfiguration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted_custom = self.custom.as_ref().map(|v| match v {
+            serde_json::Value::Object(map) => serde_json::Value::Object(
+                map.iter()
+                    .map(|(k, val)| {
+                        let masked = if k.to_lowercase().contains("password") {
+                            serde_json::Value::String("[REDACTED]".to_string())
+                        } else {
+                            val.clone()
+                        };
+                        (k.clone(), masked)
+                    })
+                    .collect::<serde_json::Map<String, serde_json::Value>>(),
+            ),
+            other => other.clone(),
+        });
+        f.debug_struct("ActorOsConfiguration")
+            .field("action", &self.action)
+            .field("name", &self.name)
+            .field("custom", &redacted_custom)
+            .finish()
+    }
 }
 
 impl Deref for ActorOsConfiguration {
@@ -64,7 +91,9 @@ pub struct ActorDataConfiguration {
     pub ssl_ciphers: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+// NOTE: Debug is implemented manually (not derived) so master_token/own_token/data
+// can never reach any log sink through a {:?} render (mirrors JoinDomainOptions).
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ActorConfiguration {
     pub broker_url: String,
     pub verify_ssl: bool,
@@ -79,6 +108,46 @@ pub struct ActorConfiguration {
     // Additional configuration data from server
     pub config: ActorDataConfiguration,
     pub data: Option<serde_json::Value>,
+}
+
+// Diagnostic-friendly masking for high-entropy values (broker tokens): keep the first
+// and last 4 chars so the same token can be correlated across logs, but only when the
+// value is longer than 8 chars — at 8 or fewer the preview would leak a large share of
+// the entropy (defensive against malformed/malicious short submissions), so those are
+// fully redacted. Uses char boundaries, never byte slices, to stay UTF-8 safe.
+fn token_preview(value: &str) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    if chars.len() <= 8 {
+        return "[REDACTED]".to_string();
+    }
+    let head: String = chars[..4].iter().collect();
+    let tail: String = chars[chars.len() - 4..].iter().collect();
+    format!("{head}…{tail}")
+}
+
+impl std::fmt::Debug for ActorConfiguration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActorConfiguration")
+            .field("broker_url", &self.broker_url)
+            .field("verify_ssl", &self.verify_ssl)
+            .field("actor_type", &self.actor_type)
+            .field(
+                "master_token",
+                &self.master_token.as_deref().map(token_preview),
+            )
+            .field(
+                "own_token",
+                &self.own_token.as_deref().map(token_preview),
+            )
+            .field("restrict_net", &self.restrict_net)
+            .field("pre_command", &self.pre_command)
+            .field("runonce_command", &self.runonce_command)
+            .field("post_command", &self.post_command)
+            .field("log_level", &self.log_level)
+            .field("config", &self.config)
+            .field("data", &self.data.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
 }
 
 impl Default for ActorConfiguration {
@@ -167,6 +236,58 @@ mod tests {
             data: None,
         }
     }
+
+    #[test]
+    fn test_debug_render_redacts_secrets() {
+        let mut cfg = get_test_config();
+        cfg.own_token = Some("own456".to_string());
+        cfg.data = Some(serde_json::json!({"secret": "data-secret-value"}));
+        cfg.config.os = Some(ActorOsConfiguration {
+            action: ActorOsAction::Rename,
+            name: "test-pc".to_string(),
+            custom: Some(serde_json::json!({
+                "username": "join-account",
+                "password": "join-password-value",
+                "new_password": "new-password-value"
+            })),
+        });
+
+        let rendered = format!("{:?}", cfg);
+        assert!(!rendered.contains("master123"), "master_token leaked through Debug");
+        assert!(!rendered.contains("own456"), "own_token leaked through Debug");
+        assert!(!rendered.contains("data-secret-value"), "data leaked through Debug");
+        assert!(
+            !rendered.contains("join-password-value"),
+            "os.custom password leaked through Debug"
+        );
+        assert!(
+            !rendered.contains("new-password-value"),
+            "os.custom new_password leaked through Debug"
+        );
+        assert!(rendered.contains("test-pc"), "non-secret fields should render");
+        assert!(rendered.contains("join-account"), "non-secret custom keys should render");
+        assert!(rendered.contains("[REDACTED]"), "redaction markers should be present");
+    }
+
+    #[test]
+    fn test_token_preview_boundaries() {
+        // Short tokens (<= 8 chars) are fully redacted: a preview would leak too much
+        // of the entropy (defensive against maliciously short submissions).
+        assert_eq!(token_preview("12345678"), "[REDACTED]");
+        // Just over the boundary: first 4 + last 4 visible, the middle never is.
+        let nine = "abcdefghi";
+        let p = token_preview(nine);
+        assert!(p.starts_with("abcd") && p.ends_with("fghi") && !p.contains("e"));
+        // Realistic long token: preview correlates head/tail, hides the body.
+        let long = "0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(token_preview(long), "0123…4567");
+        // UTF-8 safety: multibyte values are handled on char boundaries.
+        let utf8 = "áéíóúñü€ŧøæåtoken-value-æøåŧ";
+        let p = token_preview(utf8);
+        assert!(p.chars().count() < utf8.chars().count() + 8);
+        assert!(p.contains('…'));
+    }
+
 
     fn compare_configs(a: &ActorConfiguration, b: &ActorConfiguration) -> bool {
         // Compare a.config to b.config (Option<ActorDataConfiguration>)

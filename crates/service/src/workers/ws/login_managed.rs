@@ -72,10 +72,23 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
                 id: env.id,
                 msg: RpcMessage::LoginResponse(response),
             };
-            if let Err(e) = server_info.to_ws.send(response_env).await {
-                log::error!("Failed to send LoginResponse: {}", e);
-            } else {
-                log::debug!("Sent LoginResponse for id {:?}", env.id);
+            // Bound the producer side too: if the WS consumer stops draining
+            // the channel, this worker must not block forever on send.
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                server_info.to_ws.send(response_env),
+            )
+            .await
+            {
+                Err(_elapsed) => {
+                    log::error!("Timeout sending LoginResponse: WS consumer stalled");
+                }
+                Ok(Err(e)) => {
+                    log::error!("Failed to send LoginResponse: {}", e);
+                }
+                Ok(Ok(_)) => {
+                    log::debug!("Sent LoginResponse for id {:?}", env.id);
+                }
             }
         } else {
             log::error!("Login failed for user {}", env.msg.username);

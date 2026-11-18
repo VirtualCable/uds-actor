@@ -49,9 +49,21 @@ impl Configuration for UnixConfig {
         let config_file = get_config_file();
 
         let toml_str = toml::to_string(config)?;
-        // Ensure folder exists or create it
-        std::fs::create_dir_all(std::path::Path::new(&config_file).parent().unwrap())?;
+        // This module only builds on unix (lib.rs gates it), so the fs extension traits
+        // apply unconditionally: ensure folder exists or create it, owner-only (it holds
+        // credential material), and enforce owner-only file mode regardless of umask
+        // (also on pre-existing files).
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let parent = std::path::Path::new(&config_file)
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .recursive(true)
+            .create(&parent)?;
         std::fs::write(&config_file, toml_str)?;
+        std::fs::set_permissions(&config_file, std::fs::Permissions::from_mode(0o600))?;
 
         log::info!("Configuration saved to {}", config_file);
         Ok(())

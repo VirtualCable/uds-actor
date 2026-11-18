@@ -15,7 +15,27 @@ pub async fn worker(platform: platform::Platform) -> Result<()> {
     {
         log::info!("Received logoff request, performing logoff");
         platform.stop().set();
-        platform.system().logoff()?;
+        if let Err(e) = platform.system().logoff() {
+            log::error!("Forced logoff failed: {e:#}");
+            // Record the enforcement failure so main() will not emit a clean
+            // session-end claim to the broker for a session still alive.
+            crate::LOGOFF_FAILED.store(true, std::sync::atomic::Ordering::SeqCst);
+            // Report the failure to the broker log stream (the service's logger
+            // worker forwards LogRequest to the broker).
+            let _ = platform
+                .ws_client()
+                .to_ws
+                .send(shared::ws::types::RpcEnvelope {
+                    id: None,
+                    msg: shared::ws::types::RpcMessage::LogRequest(
+                        shared::ws::types::LogRequest {
+                            level: shared::ws::types::LogLevel::Error,
+                            message: format!("Forced logoff failed: {e:#}"),
+                        },
+                    ),
+                })
+                .await;
+        }
     }
 
     Ok(())
