@@ -34,6 +34,8 @@ use std::{
     path::PathBuf,
     sync::OnceLock,
 };
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
@@ -131,11 +133,17 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
         }
         // Always open in append mode, creating it if it doesn't exist
         // If self.path cannot be opened, try with one in temp dir
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .unwrap_or_else(|e| {
+        let mut opts = OpenOptions::new();
+        opts.create(true).append(true);
+        #[cfg(unix)]
+        opts.mode(0o600); // log files hold diagnostic detail; owner-only by default
+        let file = opts.open(&self.path);
+        // Best-effort: keep pre-existing files owner-only too (no-op on failure)
+        #[cfg(unix)]
+        if file.is_ok() {
+            let _ = fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));
+        }
+        file.unwrap_or_else(|e| {
                 let temp_path = std::env::temp_dir().join("udsactor-fallback.log");
                 if let Some(parent) = temp_path.parent() {
                     let _ = fs::create_dir_all(parent);
@@ -146,11 +154,34 @@ impl<'a> fmt::MakeWriter<'a> for RotatingWriter {
                     e,
                     temp_path.display()
                 );
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&temp_path)
-                    .unwrap_or_else(|e| panic!("Failed to open log file {:?}: {}", temp_path, e))
+                // Fallback lives in a shared world-writable temp dir: refuse to follow
+                // attacker-planted paths (symlinks / non-regular files). If the safe
+                // creation is refused, fall back to an unpredictable per-process name
+                // created exclusively (never follows an existing path).
+                let try_open = |p: &std::path::Path| -> std::io::Result<std::fs::File> {
+                    let mut o = OpenOptions::new();
+                    o.write(true).create_new(true);
+                    #[cfg(unix)]
+                    o.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+                    o.open(p)
+                };
+                try_open(&temp_path).unwrap_or_else(|_| {
+                    eprintln!(
+                        "udsactor: refusing existing path '{}' (not created exclusively)",
+                        temp_path.display()
+                    );
+                    let unique = temp_path.with_extension(format!(
+                        "{}.log",
+                        std::process::id()
+                    ));
+                    try_open(&unique).unwrap_or_else(|e| {
+                        panic!(
+                            "udsactor: failed to open any fallback log ({}): {}",
+                            unique.display(),
+                            e
+                        )
+                    })
+                })
             })
     }
 }
@@ -178,11 +209,35 @@ impl std::fmt::Display for LogType {
 pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
         let temp_log = std::env::temp_dir().join("udsactor-panic.log");
-        let mut f = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&temp_log)
-            .unwrap();
+        // The panic log lives in a shared world-writable temp dir: never follow an
+        // attacker-planted path (symlink / foreign file), and never panic inside the
+        // panic hook (tracing/stderr below already capture the panic message).
+        let open_panic_log = |p: &std::path::Path| -> Option<std::fs::File> {
+            #[cfg(unix)]
+            {
+                if let Ok(md) = std::fs::symlink_metadata(p) {
+                    // Existing path: only append to a regular file owned by the
+                    // current effective user; anything else is refused.
+                    if !md.file_type().is_file() || md.uid() != unsafe { libc::geteuid() } {
+                        return None;
+                    }
+                    return OpenOptions::new().append(true).open(p).ok();
+                }
+                let mut o = OpenOptions::new();
+                o.write(true).create_new(true).mode(0o600).custom_flags(libc::O_NOFOLLOW);
+                o.open(p).ok()
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = p;
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(p)
+                    .ok()
+            }
+        };
+        let mut f = open_panic_log(&temp_log);
 
         // Extraer payload del panic
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
@@ -203,8 +258,10 @@ pub fn setup_panic_hook() {
         // Backtrace
         let bt = Backtrace::capture();
 
-        writeln!(f, "Panic occurred at {}: {}", loc, msg).ok();
-        writeln!(f, "Backtrace:\n{:?}", bt).ok();
+        if let Some(f) = f.as_mut() {
+            writeln!(f, "Panic occurred at {}: {}", loc, msg).ok();
+            writeln!(f, "Backtrace:\n{:?}", bt).ok();
+        }
 
         error!("Guru Meditation (😕): {} at {}", msg, loc);
         error!("Backtrace:\n{:?}", bt);

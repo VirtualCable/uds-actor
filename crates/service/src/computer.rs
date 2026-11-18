@@ -37,9 +37,35 @@ use crate::platform;
 use crate::log;
 
 /// Rename the computer to the specified name.
+/// Accepts only hostname labels that are safe for line-oriented root-owned config
+/// files (/etc/hostname, /etc/hosts, HOSTNAME=): single-line, bounded, and built
+/// from Word characters only — ASCII alphanumerics, hyphen and underscore
+/// (underscore is valid in Windows/NetBIOS names and used across this repo's own
+/// fixtures). Control characters, whitespace and colons are rejected, which is the
+/// injection-proof invariant; strict RFC-1123 DNS labels would also reject the
+/// underscore, breaking legitimate Windows renames.
+fn is_valid_hostname(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 253
+        && name.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+        })
+}
+
 /// Returns Ok(true) if the name was changed and a reboot is required,
 /// Ok(false) if the name was already the current name (no change),
 pub async fn rename_computer(platform: &platform::Platform, name: &str) -> Result<bool> {
+    if !is_valid_hostname(name) {
+        anyhow::bail!(
+            "invalid computer name '{name}': must contain only ASCII letters, digits, '-', '_' and '.' (no control characters or whitespace)"
+        );
+    }
     log::info!("Renaming system to '{}'", name);
     // If the name is already the current name, skip
     let op = platform.system();
@@ -189,4 +215,33 @@ pub async fn process_command(
         return success;
     }
     false
+}
+
+#[cfg(test)]
+mod hostname_validation_tests {
+    use super::is_valid_hostname;
+
+    #[test]
+    fn accepts_windows_compatible_names() {
+        assert!(is_valid_hostname("new_actor_name"));
+        assert!(is_valid_hostname("PC-01.lab.local"));
+        assert!(is_valid_hostname("a"));
+    }
+
+    #[test]
+    fn rejects_injection_shapes() {
+        assert!(!is_valid_hostname(""));
+        assert!(!is_valid_hostname("name\n10.0.0.1 evil"));
+        assert!(!is_valid_hostname("name with spaces"));
+        assert!(!is_valid_hostname("name:colon"));
+        assert!(!is_valid_hostname("name\rtab"));
+    }
+
+    #[test]
+    fn rejects_out_of_bounds_labels() {
+        assert!(!is_valid_hostname(&"a".repeat(254)));
+        assert!(!is_valid_hostname(&format!("{}.local", "a".repeat(64))));
+        assert!(!is_valid_hostname("-leading-hyphen"));
+        assert!(!is_valid_hostname("trailing-."));
+    }
 }
