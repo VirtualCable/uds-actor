@@ -471,6 +471,24 @@ impl System for WindowsOperations {
             }
         };
 
+        // The repair below must target the domain the machine is actually
+        // joined to, never the domain named by the broker: `NetJoinDomain` is
+        // invoked with NETSETUP_DOMAIN_JOIN_IF_JOINED, which permits leaving
+        // the current domain, so honoring a different requested name here
+        // would move the machine into a domain of the broker's choosing.
+        // Machines do not change domain during their lifetime; if the domain
+        // really changed, the operator must re-provision the deployment.
+        let mut repair_options = options.clone();
+        repair_options.domain = current_domain.clone();
+        if !current_domain.eq_ignore_ascii_case(&options.domain) {
+            log::warn!(
+                "Broker requested domain '{}' but the machine is joined to '{}'; \
+                 repairing the trust with the joined domain instead",
+                options.domain,
+                current_domain
+            );
+        }
+
         // TC_QUERY expects `Data` to be a pointer to a `LPWSTR` containing the
         // trusted domain name (not a NULL pointer).
         let domain_w =
@@ -506,7 +524,7 @@ impl System for WindowsOperations {
                 probe_status,
                 probe_status
             );
-            self.rejoin_preserving_account(options)?;
+            self.rejoin_preserving_account(&repair_options)?;
             return Ok(true);
         }
 
@@ -526,7 +544,7 @@ impl System for WindowsOperations {
             connection_status,
             connection_status
         );
-        self.rejoin_preserving_account(options)?;
+        self.rejoin_preserving_account(&repair_options)?;
         Ok(true)
     }
 

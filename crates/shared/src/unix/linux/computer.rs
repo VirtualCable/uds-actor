@@ -215,7 +215,14 @@ pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOption
         e
     })?;
 
-    match current_domain {
+    // Machines do not change realm during their lifetime: the realm is fixed
+    // at deployment time. A mismatch between the joined realm and the
+    // requested one is either a misconfigured deployment or a forged payload
+    // on an unverified channel, so we never join the requested realm;
+    // repairs always target the realm the machine is actually joined to.
+    // If the domain really changed, the operator must re-provision the
+    // deployment.
+    let current = match current_domain {
         None => {
             log::info!(
                 "Not joined to any realm, performing full join to '{}'",
@@ -232,32 +239,24 @@ pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOption
                 })?;
             return Ok(true);
         }
-        Some(current) if !current.eq_ignore_ascii_case(&options.domain) => {
-            log::warn!(
-                "Joined to '{}', but requested '{}'; performing full join \
-                 (machine was enrolled to a different realm)",
-                current,
-                options.domain
-            );
-            join_domain(options)
-                .map_err(|e| {
-                    log::error!(
-                        "Full realm join to '{}' (from '{}') failed: {}",
-                        options.domain,
-                        current,
-                        e
-                    );
-                    e
-                })?;
-            return Ok(true);
-        }
         Some(current) => {
-            log::debug!(
-                "Already joined to '{}', probing machine-account trust",
-                current
-            );
+            if !current.eq_ignore_ascii_case(&options.domain) {
+                log::warn!(
+                    "Joined to '{}', but requested '{}'; refusing to change \
+                     domain membership: repairing trust with '{}' instead",
+                    current,
+                    options.domain,
+                    current
+                );
+            } else {
+                log::debug!(
+                    "Already joined to '{}', probing machine-account trust",
+                    current
+                );
+            }
+            current
         }
-    }
+    };
 
     // 2. We are in the right realm. Try to verify the trust cheaply.
     //
@@ -280,7 +279,7 @@ pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOption
         Ok(out) if out.status.success() => {
             log::info!(
                 "net ads testjoin OK, machine-account trust to '{}' is healthy",
-                options.domain
+                current
             );
             return Ok(false);
         }
@@ -295,7 +294,7 @@ pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOption
                  --- stdout ---\n{}\n\
                  --- stderr ---\n{}",
                 out.status.code(),
-                options.domain,
+                current,
                 String::from_utf8_lossy(&out.stdout).trim(),
                 String::from_utf8_lossy(&out.stderr).trim()
             );
@@ -336,12 +335,16 @@ pub(super) fn ensure_domain_membership(options: &crate::system::JoinDomainOption
     log::debug!(
         "ensure_domain_membership: performing full realm join to '{}' to \
          ensure trust",
-        options.domain
+        current
     );
-    join_domain(options).map_err(|e| {
+    // Repair target is the realm we are actually joined to, never the
+    // requested one (see the membership check above).
+    let mut repair_options = options.clone();
+    repair_options.domain = current.clone();
+    join_domain(&repair_options).map_err(|e| {
         log::error!(
             "Full realm join to '{}' during ensure_domain_membership failed: {}",
-            options.domain,
+            current,
             e
         );
         e
