@@ -48,7 +48,9 @@ impl Configuration for UnixConfig {
 
         let config_file = get_config_file();
 
-        let toml_str = toml::to_string(config)?;
+        // Never persist the broker-supplied OS-manager credentials; they are
+        // consumed from the in-memory configuration only (see common::initialize).
+        let toml_str = toml::to_string(&config.for_storage())?;
         // This module only builds on unix (lib.rs gates it), so the fs extension traits
         // apply unconditionally: ensure folder exists or create it, owner-only (it holds
         // credential material), and enforce owner-only file mode regardless of umask

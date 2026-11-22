@@ -195,6 +195,34 @@ impl ActorConfiguration {
     pub fn ssl_ciphers(&self) -> Option<&str> {
         self.config.ssl_ciphers.as_deref()
     }
+
+    /// Copy of this configuration that is safe to persist.
+    ///
+    /// `config.os.custom` carries credentials the broker supplies for a single
+    /// use during the startup sequence: the domain-join account password, and
+    /// the local account password pair used by the rename action. They are
+    /// consumed from the in-memory configuration and never read back from
+    /// storage, so they must not be written to disk where they would outlive
+    /// the operation that needed them.
+    pub fn for_storage(&self) -> Self {
+        let mut cfg = self.clone();
+        if let Some(os) = cfg.config.os.as_mut()
+            && let Some(custom) = os.custom.as_mut().and_then(|v| v.as_object_mut())
+        {
+            // Same rule as `ActorOsConfiguration`'s Debug masking (any key
+            // containing "password"): what logs treat as secret must not be
+            // more durable than the log sink.
+            let secret_keys: Vec<String> = custom
+                .keys()
+                .filter(|k| k.to_lowercase().contains("password"))
+                .cloned()
+                .collect();
+            for key in secret_keys {
+                custom.remove(&key);
+            }
+        }
+        cfg
+    }
 }
 
 pub trait Configuration: Send + Sync + 'static {
@@ -238,6 +266,58 @@ mod tests {
             config: ActorDataConfiguration::default(),
             data: None,
         }
+    }
+
+    #[test]
+    fn test_for_storage_strips_os_credentials() {
+        let mut cfg = get_test_config();
+        cfg.config.os = Some(ActorOsConfiguration {
+            action: ActorOsAction::Rename,
+            name: "test-pc".to_string(),
+            custom: Some(serde_json::json!({
+                "username": "join-account",
+                "password": "join-password-value",
+                "new_password": "new-password-value",
+                "domain": "corp.example.com"
+            })),
+        });
+
+        let stored = cfg.for_storage();
+        let stored_os = stored.config.os.as_ref().unwrap();
+        let custom = stored_os.custom.as_ref().unwrap();
+        let serialized = toml::to_string(&stored).unwrap();
+
+        // Secrets never reach the persisted form (any key containing "password")
+        assert!(
+            !serialized.contains("join-password-value"),
+            "os.custom password leaked through for_storage"
+        );
+        assert!(
+            !serialized.contains("new-password-value"),
+            "os.custom new_password leaked through for_storage"
+        );
+        assert!(custom.get("password").is_none());
+        assert!(custom.get("new_password").is_none());
+        // Non-secret custom keys and the os action survive
+        assert_eq!(
+            custom.get("username").and_then(|v| v.as_str()),
+            Some("join-account")
+        );
+        assert_eq!(
+            custom.get("domain").and_then(|v| v.as_str()),
+            Some("corp.example.com")
+        );
+        assert_eq!(stored_os.action, ActorOsAction::Rename);
+        // The in-memory original keeps the secrets: the OS action still needs them
+        let original_custom = cfg.config.os.as_ref().unwrap().custom.as_ref().unwrap();
+        assert_eq!(
+            original_custom.get("password").and_then(|v| v.as_str()),
+            Some("join-password-value")
+        );
+        assert_eq!(
+            original_custom.get("new_password").and_then(|v| v.as_str()),
+            Some("new-password-value")
+        );
     }
 
     #[test]

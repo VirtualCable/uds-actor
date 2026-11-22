@@ -168,8 +168,10 @@ impl Configuration for WindowsConfig {
         self.actor_cfg = Some(config.clone());
 
         log::debug!("Saving configuration to registry: {:?}", config);
-        // Serialize config to JSON and encode as base64
-        let json = serde_json::to_vec(config)?;
+        // Serialize config to JSON and encode as base64.
+        // Never persist the broker-supplied OS-manager credentials; they are
+        // consumed from the in-memory configuration only (see common::initialize).
+        let json = serde_json::to_vec(&config.for_storage())?;
         let encoded = STANDARD.encode(json);
 
         unsafe {
