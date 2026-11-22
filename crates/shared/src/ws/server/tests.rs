@@ -148,6 +148,49 @@ async fn test_ws_second_client_rejected() {
 }
 
 #[tokio::test]
+async fn test_ws_peer_flood_drops_connection() {
+    let (server_info, server_task, _, _workers_tx) = create_test_server_task(32436, "-secret-");
+
+    // Wait a moment for the server to start
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let url = format!("wss://localhost:{}/ws", server_info.port);
+    let connector = Connector::Rustls(crate::tls::noverify::client_config());
+    let (mut ws_stream, _resp) = connect_async_tls_with_config(url, None, true, Some(connector))
+        .await
+        .expect("WebSocket handshake failed");
+
+    // 40 small frames back to back: exhausts the 32-frame burst budget. The
+    // server must drop the connection instead of forwarding the flood (a
+    // flood can otherwise make busy workers skip broker directives).
+    for _ in 0..40 {
+        let _ = ws_stream
+            .send(Message::Text(
+                r#"{"id":null,"kind":"Ping","msg":[1,2,3]}"#.into(),
+            ))
+            .await;
+    }
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        futures_util::StreamExt::next(&mut ws_stream),
+    )
+    .await;
+    match result {
+        // Stream ended or errored (connection dropped): expected
+        Ok(None) | Ok(Some(Err(_))) | Ok(Some(Ok(Message::Close(_)))) => {}
+        other => panic!("flooded peer should be dropped, got {other:?}"),
+    }
+
+    server_info.stop.set();
+    tokio::time::timeout(tokio::time::Duration::from_secs(5), server_task)
+        .await
+        .expect("Server did not stop in time")
+        .expect("Server task panicked")
+        .expect("Server returned an error");
+}
+
+#[tokio::test]
 async fn test_ws_rejects_broker_directives_from_client() {
     let (server_info, server_task, mut workers_rx, _workers_tx) =
         create_test_server_task(32434, "-secret-");

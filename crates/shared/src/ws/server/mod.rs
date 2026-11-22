@@ -228,6 +228,16 @@ pub async fn websocket_loop(
         let wsclient_to_workers = from_ws.clone();
         tokio::spawn(async move {
             let mut closed = false;
+            // Per-connection frame budget: peer frames share the broadcast ring
+            // with secret-authenticated broker directives, and a peer that
+            // sends faster than a busy worker consumes makes it skip messages
+            // (Lagged), silently dropping broker commands. The legitimate
+            // client sends a handful of frames per session plus keep-alives
+            // (seconds apart), so a 32-frame burst with 2/s refill is orders of
+            // magnitude above real traffic; exhausting it drops the connection,
+            // which also frees the slot for the legitimate client.
+            let mut peer_tokens: f32 = 32.0;
+            let mut last_refill = std::time::Instant::now();
             while let Some(Ok(msg)) = ws_receiver.next().await {
                 log::debug!("WS client sent message: {:?}", msg);
                 let env = match msg {
@@ -270,6 +280,21 @@ pub async fn websocket_loop(
                     log::debug!("Resolved internal request id {}", id);
                     continue;
                 }
+
+                // Peer frame budget: refill 2/s up to the 32-frame burst.
+                let now = std::time::Instant::now();
+                peer_tokens = (peer_tokens
+                    + now.duration_since(last_refill).as_secs_f32() * 2.0)
+                    .min(32.0);
+                last_refill = now;
+                if peer_tokens < 1.0 {
+                    log_peer_warning(
+                        "WebSocket peer exceeded its frame budget; dropping connection"
+                            .to_string(),
+                    );
+                    break;
+                }
+                peer_tokens -= 1.0;
 
                 // Broker directives must not arrive over this socket: the
                 // service treats everything forwarded here as authorized.

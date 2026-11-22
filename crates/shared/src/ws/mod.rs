@@ -90,8 +90,16 @@ where
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(count)) => {
-                        // Skipping messages
-                        log::warn!("Skipped {} messages", count);
+                        // This receiver fell behind and the messages in the
+                        // skipped window are gone: a control-plane directive
+                        // may have been dropped. Name the worker so it is
+                        // diagnosable instead of a silent skip.
+                        log::error!(
+                            "Worker {} skipped {} messages (lagged); \
+                             control-plane directives may have been lost",
+                            std::any::type_name::<T>(),
+                            count
+                        );
                     }
                     Err(e) => {
                         log::warn!("Broadcast receive error: {e}");
