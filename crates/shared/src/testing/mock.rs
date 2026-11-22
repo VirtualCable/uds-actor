@@ -75,6 +75,11 @@ pub struct OperationsMock {
     // existing happy-path tests are unaffected.
     pub fail_rename: Arc<AtomicBool>,
     pub fail_join_domain: Arc<AtomicBool>,
+    // Domain-membership state for `get_domain_name`. Shared (Arc) for the same
+    // reason as the flags above. Defaults to true (joined to "FakeDomain"),
+    // matching the historical mock behaviour that domain-flow tests rely on;
+    // password-rotation tests flip it to false to emulate workgroup machines.
+    pub joined_domain: Arc<AtomicBool>,
 }
 
 impl OperationsMock {
@@ -83,6 +88,7 @@ impl OperationsMock {
             calls,
             fail_rename: Arc::new(AtomicBool::new(false)),
             fail_join_domain: Arc::new(AtomicBool::new(false)),
+            joined_domain: Arc::new(AtomicBool::new(true)),
         }
     }
 }
@@ -106,7 +112,11 @@ impl System for OperationsMock {
 
     fn get_domain_name(&self) -> anyhow::Result<Option<String>> {
         self.calls.push("operations::get_domain_name()");
-        Ok(Some("FakeDomain".into()))
+        if self.joined_domain.load(Ordering::SeqCst) {
+            Ok(Some("FakeDomain".into()))
+        } else {
+            Ok(None)
+        }
     }
 
     fn rename_computer(&self, new_name: &str) -> anyhow::Result<()> {

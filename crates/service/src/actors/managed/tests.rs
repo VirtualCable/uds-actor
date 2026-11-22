@@ -67,6 +67,11 @@ async fn test_managed_rename_should_rename() -> Result<()> {
 #[serial_test::serial(server)]
 async fn test_managed_rename_with_new_password_changes_password() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
+    // Workgroup machine: password rotation is the workgroup OS manager flow.
+    test_setup
+        .operations
+        .joined_domain
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     let computer_name = "new_actor_name".to_string();
     test_setup.broker_api.write().await.init_response =
         shared::broker::api::types::InitializationResponse {
@@ -102,8 +107,46 @@ async fn test_managed_rename_with_new_password_changes_password() -> Result<()> 
 
 #[tokio::test]
 #[serial_test::serial(server)]
-async fn test_managed_rename_without_new_password_skips_password_change() -> Result<()> {
+async fn test_managed_rename_password_refused_when_domain_joined() -> Result<()> {
     let mut test_setup = TestSetup::new(run).await;
+    // Domain-joined machine: `rename` + new_password is never a legitimate
+    // combination (domain machines are managed via `rename_ad`, which never
+    // sends passwords), so the local password change must be refused. The
+    // rename itself still proceeds.
+    test_setup
+        .operations
+        .joined_domain
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let computer_name = "new_actor_name".to_string();
+    test_setup.broker_api.write().await.init_response =
+        shared::broker::api::types::InitializationResponse {
+            master_token: Some("mastertoken".into()),
+            token: Some("owntoken".into()),
+            unique_id: Some("uniqueid".into()),
+            os: Some(shared::config::ActorOsConfiguration {
+                action: shared::config::ActorOsAction::Rename,
+                name: computer_name.clone(),
+                custom: Some(json!({
+                    "username": "Administrator",
+                    "password": "",
+                    "new_password": "EvilP@ssw0rd!"
+                })),
+            }),
+        };
+    test_setup.notify.notify_one();
+    test_setup.stop_and_wait_task(1).await?;
+
+    log::info!("Calls: {:?}", test_setup.calls.dump());
+    test_setup
+        .calls
+        .assert_not_called("operations::change_user_password");
+    assert!(test_setup.calls.count_calls("operations::rename_computer") == 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(server)]
+async fn test_managed_rename_without_new_password_skips_password_change() -> Result<()> {    let mut test_setup = TestSetup::new(run).await;
     test_setup.broker_api.write().await.init_response =
         shared::broker::api::types::InitializationResponse {
             master_token: Some("mastertoken".into()),

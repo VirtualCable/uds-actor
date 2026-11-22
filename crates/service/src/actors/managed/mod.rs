@@ -124,26 +124,58 @@ pub async fn run(platform: platform::Platform) -> Result<()> {
                                  with an empty user"
                         );
                     } else {
-                        let old_password = custom
-                            .get("password")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        log::info!(
-                            "Changing password for user '{}' as requested by OS manager",
-                            username
-                        );
-                        if let Err(e) = platform.system().change_user_password(
-                            username,
-                            old_password,
-                            new_password,
-                        ) {
-                            log::error!(
-                                "change_user_password for '{}' failed: {}. \
-                                     Broker will now hold a password that does not match \
-                                     the one on the machine.",
-                                username,
-                                e
+                        // Domain-joined machines are managed through the `rename_ad`
+                        // flow, which never rotates local account passwords. A
+                        // `rename` action carrying a password change for a
+                        // domain-joined machine is therefore never legitimate
+                        // (misconfigured deployment, or a forged payload on an
+                        // unverified channel): refuse it. The membership query is
+                        // local (NetGetJoinInformation / `realm list`), so a network
+                        // attacker cannot influence its outcome; if the query fails
+                        // we keep the legacy behaviour rather than break the
+                        // workgroup password-rotation workflow.
+                        let domain_joined = match platform.system().get_domain_name() {
+                            Ok(Some(domain)) => {
+                                log::warn!(
+                                    "Machine is joined to domain '{}'; refusing password \
+                                     change for '{}' (password rotation applies to \
+                                     workgroup machines only)",
+                                    domain, username
+                                );
+                                true
+                            }
+                            Ok(None) => false,
+                            Err(e) => {
+                                log::warn!(
+                                    "Cannot determine domain membership ({}); \
+                                     proceeding with password change",
+                                    e
+                                );
+                                false
+                            }
+                        };
+                        if !domain_joined {
+                            let old_password = custom
+                                .get("password")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            log::info!(
+                                "Changing password for user '{}' as requested by OS manager",
+                                username
                             );
+                            if let Err(e) = platform.system().change_user_password(
+                                username,
+                                old_password,
+                                new_password,
+                            ) {
+                                log::error!(
+                                    "change_user_password for '{}' failed: {}. \
+                                         Broker will now hold a password that does not match \
+                                         the one on the machine.",
+                                    username,
+                                    e
+                                );
+                            }
                         }
                     }
                 }
