@@ -805,6 +805,18 @@ impl System for WindowsOperations {
         }
     }
 
+    /// Ensures `user` can open a Remote Desktop session on THIS machine by
+    /// adding it to the local "Remote Desktop Users" group (S-1-5-32-555).
+    ///
+    /// Execution model, so security reviews don't have to re-derive it:
+    /// this runs ONLY inside the actor service (LocalSystem) and is reached
+    /// ONLY through the secret-authenticated `POST /actor/{secret}/preconnect`
+    /// route — the local `/ws` channel cannot originate a `PreConnect`
+    /// (client-originated message allow-list). The write is a LOCAL SAM
+    /// operation on a machine-local group: no domain modification happens
+    /// here; the domain is only consulted read-only to resolve the name to a
+    /// SID. The subject is named by the broker, which is the source of truth
+    /// for the session's user.
     fn ensure_user_can_rdp(&self, user: &str) -> Result<()> {
         unsafe {
             // Well known SID for "Remote Desktop Users" group

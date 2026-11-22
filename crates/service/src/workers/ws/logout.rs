@@ -43,9 +43,30 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
         wait_message_arrival::<LogoutRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LogoutRequest with id {:?}", env.id);
-        if platform.get_user_info().read().await.is_none() {
+        // The subject of the logout is the session THIS service recorded at
+        // login, never the values in the frame: a /ws peer is any local
+        // process, and the broker authorizes the call with the actor's own
+        // token, so the caller must not choose its subject. The frame acts
+        // only as a trigger (close.rs already works exactly this way).
+        let user_info = platform.get_user_info().read().await.clone();
+        let Some(user) = user_info else {
             log::warn!("Received LogoutRequest but no user is logged in");
             continue;
+        };
+        if user.username != env.msg.username || user.session_type != env.msg.session_type {
+            // Peer-manufacturable anomaly: surface it within its budget.
+            if shared::log_forward::peer_warn_allow() {
+                log::warn!(
+                    "LogoutRequest names '{}' but the recorded session is '{}'; \
+                     logging out the recorded one (possible forced-logout attempt)",
+                    env.msg.username, user.username
+                );
+            } else {
+                log::debug!(
+                    "LogoutRequest identity mismatch (frame '{}', recorded '{}')",
+                    env.msg.username, user.username
+                );
+            }
         }
         let interfaces = platform.system().get_network_info()?;
         if let Err(err) = broker_api
@@ -53,16 +74,16 @@ pub async fn worker(server_info: ServerContext, platform: platform::Platform) ->
             .await
             .logout(
                 interfaces.as_slice(),
-                env.msg.username.as_str(),
-                env.msg.session_type.as_str(),
-                env.msg.session_id.as_str(),
+                user.username.as_str(),
+                user.session_type.as_str(),
+                user.session_id.as_deref().unwrap_or(""),
             )
             .await
         {
-            log::error!("Logout failed for user {}: {:?}", env.msg.username, err);
+            log::error!("Logout failed for user {}: {:?}", user.username, err);
         } else {
             platform.get_user_info().write().await.take(); // Clear user info on logout success
-            log::debug!("Processed LogoutRequest for user {}", env.msg.username);
+            log::debug!("Processed LogoutRequest for user {}", user.username);
         }
     }
 
@@ -130,5 +151,19 @@ mod tests {
         log::info!("calls: {:?}", calls.dump());
 
         assert!(calls.count_calls("broker_api::logout(") == 1);
+        // The subject of the logout is the RECORDED identity (testuser /
+        // testsession / testsessionid), never the frame's values: the frame
+        // only triggers the logout of the session this service recorded.
+        let dumped = calls.dump();
+        assert!(
+            dumped
+                .iter()
+                .any(|c| c.contains("broker_api::logout(") && c.contains("testuser") && c.contains("testsessionid")),
+            "logout must use the recorded identity, got {dumped:?}"
+        );
+        assert!(
+            !dumped.iter().any(|c| c.contains("user0")),
+            "frame-supplied identity must not reach the broker, got {dumped:?}"
+        );
     }
 }
