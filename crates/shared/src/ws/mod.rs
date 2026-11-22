@@ -58,7 +58,7 @@ pub async fn wait_message_arrival<T>(
     stop: Option<OnceSignal>,
 ) -> Option<RpcEnvelope<T>>
 where
-    T: TryFrom<RpcMessage> + Clone,
+    T: rcptraits::MessageVariant + TryFrom<RpcMessage> + Clone,
 {
     log::debug!("Waiting for request of type {}", std::any::type_name::<T>());
     loop {
@@ -76,12 +76,17 @@ where
             msg = rx.recv() => {
                 match msg {
                     Ok(env) => {
-                        // Only return if we can parse the inner message as T
-                        if let Ok(inner) = T::try_from(env.msg.clone()) {
-                            return Some(RpcEnvelope {
-                                id: env.id,
-                                msg: inner,
-                            });
+                        // Test the variant on a borrow first: only pay the
+                        // payload clone when this receiver actually wants the
+                        // message (every other subscriber used to clone the
+                        // whole envelope just to discard it).
+                        if T::accepts(&env.msg) {
+                            if let Ok(inner) = T::try_from(env.msg.clone()) {
+                                return Some(RpcEnvelope {
+                                    id: env.id,
+                                    msg: inner,
+                                });
+                            }
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(count)) => {

@@ -166,6 +166,14 @@ fn is_client_originated(msg: &RpcMessage) -> bool {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerState>) -> Response {
+    // Bound what a peer may send. Every inbound message is cloned once per
+    // subscribed worker and retained in the broadcast ring, so tungstenite's
+    // 64 MiB message / 16 MiB frame defaults let a loopback peer grow this
+    // process's resident set by gigabytes without any credential. The largest
+    // legitimate client-originated message is a session-lifecycle notification
+    // or a log line (a few hundred bytes); both limits are enforced on the
+    // read path only, so our own outbound frames are unaffected.
+    let ws = ws.max_message_size(1 << 20).max_frame_size(1 << 20);
     let ws_active = state.is_ws_active.clone();
     if ws_active.load(Ordering::Relaxed) {
         // ya estaba true → hay cliente activo

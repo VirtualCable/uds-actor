@@ -17,8 +17,21 @@ macro_rules! impl_tryfrom {
                     }
                 }
             }
+
+            impl MessageVariant for $ty {
+                fn accepts(msg: &RpcMessage) -> bool {
+                    matches!(msg, RpcMessage::$variant(_))
+                }
+            }
         )*
     };
+}
+
+/// Variant test without consuming the message: lets `wait_message_arrival`
+/// avoid cloning the whole payload just to find out that the receiving worker
+/// does not handle it (every subscriber used to clone every message).
+pub trait MessageVariant: Sized {
+    fn accepts(msg: &RpcMessage) -> bool;
 }
 
 impl_tryfrom! {
