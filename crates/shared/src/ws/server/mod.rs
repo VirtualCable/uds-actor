@@ -98,6 +98,19 @@ impl Drop for WsActiveGuard {
     }
 }
 
+/// Logs a pre-authentication rejection within the small pre-auth budget
+/// (`log_forward::preauth_warn_allow`, 5/60s): these events can be
+/// manufactured at will by unauthenticated network peers, so beyond the
+/// budget they are logged at debug level (never forwarded) instead of
+/// spending the shared forwarding budget that genuine failures rely on.
+fn log_preauth_rejection(message: String) {
+    if crate::log_forward::preauth_warn_allow() {
+        log::warn!("{}", message);
+    } else {
+        log::debug!("{}", message);
+    }
+}
+
 /// Middleware for verifying the secret in the path
 async fn check_secret_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -111,7 +124,7 @@ async fn check_secret_middleware(
         Some(&"") => {} // Root path, allow
         Some(&"actor") => {
             if segments.get(1).map(|s| s == &state.secret) != Some(true) {
-                log::warn!("Invalid or missing secret in actor request");
+                log_preauth_rejection("Invalid or missing secret in actor request".to_string());
                 return Err(StatusCode::FORBIDDEN);
             }
         }
@@ -119,7 +132,7 @@ async fn check_secret_middleware(
             // Allow /ws from localhost without secret, since it's only used for WebSocket upgrade and we have additional checks there
         }
         Some(_) => {
-            log::warn!("Invalid path: {:?}", segments);
+            log_preauth_rejection(format!("Invalid path: {:?}", segments));
             return Err(StatusCode::NOT_FOUND);
         }
         None => unreachable!("split() always yields at least one element"),
@@ -130,6 +143,26 @@ async fn check_secret_middleware(
         .headers_mut()
         .insert("Actor-Version", HeaderValue::from_static("1.0"));
     Ok(response)
+}
+
+/// Message kinds a local WebSocket client is allowed to originate.
+///
+/// The client asks for login/logout, reports logs and answers server requests;
+/// everything else (`PreConnect`, `LogoffRequest`, `MessageRequest`,
+/// `ScreenshotRequest`, `ScriptExecRequest`, `UUidRequest`) is a *broker ->
+/// service* directive that must only enter through the secret-authenticated
+/// HTTP routes. Id-bearing responses are consumed by the request tracker before
+/// this check, so they are unaffected.
+fn is_client_originated(msg: &RpcMessage) -> bool {
+    matches!(
+        msg,
+        RpcMessage::LoginRequest(_)
+            | RpcMessage::LogoutRequest(_)
+            | RpcMessage::LogRequest(_)
+            | RpcMessage::Ping(_)
+            | RpcMessage::Pong(_)
+            | RpcMessage::Close(_)
+    )
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerState>) -> Response {
@@ -213,6 +246,17 @@ pub async fn websocket_loop(
                     log::debug!("Resolved internal request id {}", id);
                     continue;
                 }
+
+                // Broker directives must not arrive over this socket: the
+                // service treats everything forwarded here as authorized.
+                if !is_client_originated(&env.msg) {
+                    log::warn!(
+                        "Rejecting message not allowed from a WebSocket client: {:?}",
+                        env.msg
+                    );
+                    continue;
+                }
+
                 // Not resolved, forward to workers
 
                 if let Err(e) = wsclient_to_workers.send(env) {

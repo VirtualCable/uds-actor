@@ -97,23 +97,29 @@ pub fn set_log_forwarder(api: std::sync::Arc<tokio::sync::RwLock<dyn BrokerApi>>
 /// Returns true exactly `MAX_PER_WINDOW` times per `WINDOW_SECS`-second
 /// sliding window. After that, returns false until the window slides.
 fn flood_allow(now_unix_secs: u64) -> bool {
-    let now = now_unix_secs;
+    flood_allow_window(&FLOOD_PACK, MAX_PER_WINDOW, now_unix_secs)
+}
+
+/// Shared implementation for every forwarding/verbosity budget: a
+/// `count | window_start` packed atomic, sliding window, CAS-based so
+/// concurrent log events from different threads never block each other.
+fn flood_allow_window(pack: &AtomicU64, max_per_window: u32, now: u64) -> bool {
     loop {
-        let pack = FLOOD_PACK.load(Ordering::Relaxed);
-        let count = pack as u32;
-        let win_start = pack >> 32;
+        let pack_val = pack.load(Ordering::Relaxed);
+        let count = pack_val as u32;
+        let win_start = pack_val >> 32;
 
         let new_pack = if win_start == 0 || now.saturating_sub(win_start) >= WINDOW_SECS {
             // Reset window.
             (now << 32) | 1
-        } else if count < MAX_PER_WINDOW {
+        } else if count < max_per_window {
             (win_start << 32) | (count as u64 + 1)
         } else {
             return false;
         };
 
-        if FLOOD_PACK
-            .compare_exchange(pack, new_pack, Ordering::Relaxed, Ordering::Relaxed)
+        if pack
+            .compare_exchange(pack_val, new_pack, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
             return true;
@@ -122,9 +128,60 @@ fn flood_allow(now_unix_secs: u64) -> bool {
     }
 }
 
+/// Budget for events an unauthenticated network peer can manufacture at will
+/// (pre-authentication rejection warnings): a tiny one, separate from the
+/// shared forwarding budget. Flooding these must never starve the broker
+/// channel that genuine failures rely on; a few per window still reach the
+/// broker so that port-scanning or secret-guessing attempts remain visible.
+pub fn preauth_warn_allow() -> bool {
+    const PREAUTH_MAX_PER_WINDOW: u32 = 5;
+    static PREAUTH_FLOOD_PACK: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    flood_allow_window(&PREAUTH_FLOOD_PACK, PREAUTH_MAX_PER_WINDOW, now)
+}
+
 /// Quick check: is the forwarder wired up?
 pub fn is_forwarder_set() -> bool {
     FORWARD_TARGET.get().is_some()
+}
+
+/// When the forward budget is exhausted, events stop reaching the broker.
+/// Record it: announce to stderr once per window so a *suppressed* broker
+/// channel can be distinguished from a *quiet* one. stderr (not a tracing
+/// event) because logging inside the layer would recurse into itself; the
+/// same channel the module already uses as last-resort for failed forwards.
+static SUPPRESSED_PACK: AtomicU64 = AtomicU64::new(0);
+
+fn record_suppression(now_unix_secs: u64) {
+    loop {
+        let pack = SUPPRESSED_PACK.load(Ordering::Relaxed);
+        let win_start = pack >> 32;
+
+        let new_pack =
+            if win_start == 0 || now_unix_secs.saturating_sub(win_start) >= WINDOW_SECS {
+                (now_unix_secs << 32) | 1 // first suppressed event of a window
+            } else {
+                pack + 1
+            };
+
+        if SUPPRESSED_PACK
+            .compare_exchange(pack, new_pack, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            if new_pack as u32 == 1 {
+                eprintln!(
+                    "udsactor: log forwarding to the broker is suppressed \
+                     (flood budget of {MAX_PER_WINDOW} events / {WINDOW_SECS}s exhausted); \
+                     events keep being written to the local log"
+                );
+            }
+            return;
+        }
+        // CAS failed: another thread updated the pack. Reload and retry.
+    }
 }
 
 /// `tracing_subscriber::Layer` implementation that forwards events whose
@@ -212,6 +269,7 @@ where
             .map(|d| d.as_secs())
             .unwrap_or(0);
         if !flood_allow(now_unix) {
+            record_suppression(now_unix);
             return;
         }
 
@@ -302,6 +360,55 @@ mod tests {
         assert_eq!(parse_level("INFO"), Some(tracing::Level::INFO));
         assert_eq!(parse_level("warning"), Some(tracing::Level::WARN));
         assert_eq!(parse_level("nope"), None);
+    }
+
+    #[test]
+    fn preauth_budget_is_small_and_independent() {
+        // Only this test calls preauth_warn_allow, so its pack state is ours:
+        // of 100 manufactured rejections, exactly the small pre-auth budget
+        // passes — the rest must never reach the shared forward budget.
+        let mut allowed = 0;
+        for _ in 0..100 {
+            if preauth_warn_allow() {
+                allowed += 1;
+            }
+        }
+        assert_eq!(
+            allowed, 5,
+            "pre-auth rejections must be limited to their own small budget"
+        );
+    }
+
+    #[test]
+    fn flood_allow_window_is_per_pack_and_slides() {
+        static PACK: AtomicU64 = AtomicU64::new(0);
+        let now = 1_000_000;
+        let mut allowed = 0;
+        for _ in 0..100 {
+            if flood_allow_window(&PACK, 5, now) {
+                allowed += 1;
+            }
+        }
+        assert_eq!(allowed, 5);
+        // Same window: exhausted.
+        assert!(!flood_allow_window(&PACK, 5, now + 1));
+        // Window slid: allowed again, and packs are independent.
+        assert!(flood_allow_window(&PACK, 5, now + WINDOW_SECS + 1));
+    }
+
+    #[test]
+    fn suppression_is_recorded_once_per_window() {
+        let now = 2_000_000;
+        record_suppression(now); // first of the window -> announce
+        record_suppression(now); // counted, no announce
+        let pack = SUPPRESSED_PACK.load(Ordering::Relaxed);
+        assert_eq!(pack as u32, 2);
+        assert_eq!(pack >> 32, now);
+        // Next window: counter restarts (announce again on this event).
+        record_suppression(now + WINDOW_SECS + 1);
+        let pack = SUPPRESSED_PACK.load(Ordering::Relaxed);
+        assert_eq!(pack as u32, 1);
+        assert_eq!(pack >> 32, now + WINDOW_SECS + 1);
     }
 
     #[test]

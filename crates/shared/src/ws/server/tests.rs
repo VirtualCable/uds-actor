@@ -11,6 +11,8 @@ use crate::log;
 type ServerTaskResult = (
     ServerStartInfo,
     tokio::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+    broadcast::Receiver<RpcEnvelope<RpcMessage>>,
+    mpsc::Sender<RpcEnvelope<RpcMessage>>, // workers→client: caller must hold it or Task B ends and closes the socket
 );
 
 fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
@@ -18,10 +20,11 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
     crate::tls::init_tls(None);
 
     // Create the single channel for workers → WS client
-    let (_, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(100);
+    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(100);
 
-    // Broadcast channel for WS client → workers
-    let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
+    // Broadcast channel for WS client → workers (receiver is returned so tests
+    // can assert what reaches the workers)
+    let (wsclient_to_workers, wsclient_rx) = broadcast::channel::<RpcEnvelope<RpcMessage>>(100);
 
     let tracker = RequestTracker::new();
     let cert_info = crate::testing::test_certs::test_certinfo_with_pass();
@@ -49,12 +52,14 @@ fn create_test_server_task(port: u16, secret: &str) -> ServerTaskResult {
                 })
             }
         }),
+        wsclient_rx,
+        workers_tx,
     )
 }
 
 #[tokio::test]
 async fn test_server_starts_and_stops() {
-    let (server_info, server_task) = create_test_server_task(32500, "-secret-");
+    let (server_info, server_task, _, _workers_tx) = create_test_server_task(32500, "-secret-");
 
     // Wait a bit for server to start
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -72,7 +77,7 @@ async fn test_server_starts_and_stops() {
 
 #[tokio::test]
 async fn test_server_stops_on_ws_client_connected() {
-    let (server_info, server_task) = create_test_server_task(32433, "-secret-");
+    let (server_info, server_task, _, _workers_tx) = create_test_server_task(32433, "-secret-");
 
     // Wait a moment for the server to start
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -101,6 +106,56 @@ async fn test_server_stops_on_ws_client_connected() {
 
     // Wait a moment to ensure the server processes the message
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    server_info.stop.set();
+    // Wait with timeout to avoid hanging tests
+    tokio::time::timeout(tokio::time::Duration::from_secs(5), server_task)
+        .await
+        .expect("Server did not stop in time")
+        .expect("Server task panicked")
+        .expect("Server returned an error");
+}
+
+#[tokio::test]
+async fn test_ws_rejects_broker_directives_from_client() {
+    let (server_info, server_task, mut workers_rx, _workers_tx) =
+        create_test_server_task(32434, "-secret-");
+
+    // Wait a moment for the server to start
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let url = format!("wss://localhost:{}/ws", server_info.port);
+    let connector = Connector::Rustls(crate::tls::noverify::client_config());
+    let (mut ws_stream, _resp) = connect_async_tls_with_config(url, None, true, Some(connector))
+        .await
+        .expect("WebSocket handshake failed");
+
+    // Broker-only directive from a local peer: must NOT reach the workers
+    ws_stream
+        .send(Message::Text(
+            r#"{"id":null,"kind":"PreConnect","msg":{"user":"attacker","protocol":"rdp","ip":null,"hostname":null,"udsuser":null}}"#.into(),
+        ))
+        .await
+        .expect("Failed to send PreConnect");
+
+    // Client-originated message: must reach the workers broadcast
+    ws_stream
+        .send(Message::Text(
+            r#"{"id":null,"kind":"LogRequest","msg":{"level":50000,"message":"from-client"}}"#.into(),
+        ))
+        .await
+        .expect("Failed to send LogRequest");
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let mut saw_log_request = false;
+    while let Ok(env) = workers_rx.try_recv() {
+        match env.msg {
+            RpcMessage::LogRequest(_) => saw_log_request = true,
+            other => panic!("Broker directive reached workers broadcast: {:?}", other),
+        }
+    }
+    assert!(saw_log_request, "client LogRequest did not reach workers");
 
     server_info.stop.set();
     // Wait with timeout to avoid hanging tests
