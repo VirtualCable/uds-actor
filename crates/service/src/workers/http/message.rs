@@ -10,7 +10,11 @@ use crate::platform;
 // Owned ServerInfo and Platform
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.from_ws.subscribe();
-    if let Some(env) =
+    // Relay worker: serve EVERY broker request until the stop signal (the
+    // sibling relays — logoff, preconnect, screenshot, uniqueid — do the
+    // same; a one-shot exit here silently disabled the broker->client
+    // message channel after the first request).
+    while let Some(env) =
         wait_message_arrival::<MessageRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received MessageRequest");

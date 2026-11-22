@@ -66,10 +66,12 @@ pub async fn mock_server_info() -> ServerContext {
 }
 
 pub async fn mock_server_info_with_worker_rx()
--> (ServerContext, broadcast::Receiver<RpcEnvelope<RpcMessage>>) {
-    let (workers_tx, _workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
-    let (wsclient_to_workers, wsclient_to_workers_rx) =
-        broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
+-> (ServerContext, mpsc::Receiver<RpcEnvelope<RpcMessage>>) {
+    // NOTE: the receiver returned is the one of the to_ws mpsc channel, so
+    // tests observe what the worker actually FORWARDS (a from_ws broadcast
+    // receiver would only echo the test's own sends and could never fail).
+    let (workers_tx, workers_rx) = mpsc::channel::<RpcEnvelope<RpcMessage>>(128);
+    let (wsclient_to_workers, _) = broadcast::channel::<RpcEnvelope<RpcMessage>>(128);
     let tracker = RequestTracker::new();
 
     (
@@ -78,6 +80,6 @@ pub async fn mock_server_info_with_worker_rx()
             from_ws: wsclient_to_workers.clone(),
             tracker,
         },
-        wsclient_to_workers_rx,
+        workers_rx,
     )
 }
