@@ -86,15 +86,28 @@ mod tests {
         platform.config().write().await.master_token = Some("mastertoken".into());
 
         let wsclient_to_workers = server_info.from_ws.clone();
+        let tracker = server_info.tracker.clone();
 
         let msg: Arc<RwLock<Vec<RpcEnvelope<RpcMessage>>>> = Arc::new(RwLock::new(Vec::new()));
-        // Subscribe to workers_to_wsclient to verify messages sent
+        // Consume what the worker forwards to the wsclient (to_ws mpsc) and
+        // answer the tracker like the real client does, so the worker can
+        // serve the next request.
         let _handle = tokio::spawn({
             let msg = msg.clone();
             async move {
                 loop {
                     let recv_msg = wsclient_to_workers_rx.recv().await.unwrap();
                     log::info!("Received message from workers_to_wsclient: {:?}", recv_msg);
+                    if let Some(id) = recv_msg.id {
+                        let _ = tracker
+                            .resolve_ok(
+                                id,
+                                RpcMessage::ScreenshotResponse(ScreenshotResponse {
+                                    result: "fake-image".into(),
+                                }),
+                            )
+                            .await;
+                    }
                     msg.write().await.push(recv_msg);
                 }
             }
@@ -110,20 +123,22 @@ mod tests {
         }
         log::info!("wsclient_to_workers has receiver");
 
-        // Send 3 logoff requests
-        for _i in 0..3 {
+        // Send 3 screenshot requests: broker requests always carry an id (the
+        // worker refuses id-less ones) and the worker serves them in sequence,
+        // waiting for each tracked response before the next.
+        for i in 1..=3 {
             let req = RpcEnvelope {
-                id: None,
+                id: Some(i),
                 msg: RpcMessage::ScreenshotRequest(ScreenshotRequest),
             };
             if let Err(e) = wsclient_to_workers.send(req) {
-                log::error!("Failed to send MessageRequest: {}", e);
+                log::error!("Failed to send ScreenshotRequest: {}", e);
             }
         }
         // Wait a bit to let processing happen
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // No calls here, only redirects messages to wsclient
+        // No broker calls here, only forwards to wsclient
         log::info!("calls: {:?}", calls.dump());
         let logged_msgs = msg.read().await;
         log::info!("logged_msgs: {:?}", logged_msgs);
