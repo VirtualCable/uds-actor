@@ -74,6 +74,30 @@ pub fn parse_level(s: &str) -> Option<tracing::Level> {
     }
 }
 
+/// Neutralises control characters in peer-supplied text before it reaches a
+/// log record: a raw newline/carriage return would split one message into
+/// several structurally separate records in downstream audit sinks (broker
+/// log, Windows event log), letting one frame masquerade as several
+/// independent entries. Newline/tab are escaped to their visible form, other
+/// control characters (including ANSI escapes) to `\u{XX}`; ordinary text
+/// passes through untouched.
+pub fn sanitize_log_message(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {
+                use std::fmt::Write;
+                let _ = write!(out, "\\u{{{:04X}}}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 fn set_active_level_from_str(level: &str) {
     let level_num = match level.to_lowercase().as_str() {
         "error" => 1,
@@ -490,6 +514,24 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_log_message_neutralises_control_characters() {
+        // Newlines/carriage returns can never split one message into several
+        // records: they become their visible escaped form.
+        assert_eq!(
+            sanitize_log_message("benign\n2026 [ERROR] forged\r\n"),
+            "benign\\n2026 [ERROR] forged\\r\\n"
+        );
+        // Tab is escaped too (kept readable), other control bytes (NUL, ANSI
+        // escapes, ...) become \u{XX}.
+        assert_eq!(sanitize_log_message("a\tb"), "a\\tb");
+        assert_eq!(sanitize_log_message("a\0b"), "a\\u{0000}b");
+        assert_eq!(sanitize_log_message("\u{1b}[31mred"), "\\u{001B}[31mred");
+        // Ordinary text (and unicode) passes through untouched.
+        assert_eq!(sanitize_log_message("plain text ✓"), "plain text ✓");
+        assert_eq!(sanitize_log_message(""), "");
+    }
 
     #[cfg(target_os = "windows")]
     #[test]

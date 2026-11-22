@@ -244,7 +244,10 @@ where
         let level = *event.metadata().level();
         let mut visitor = MessageVisitor::default();
         event.record(&mut visitor);
-        let message = visitor.0;
+        // The message may embed peer-supplied text (client log lines, raw
+        // frames): neutralise control characters so one event can never become
+        // several separate records in the event log.
+        let message = crate::log::sanitize_log_message(&visitor.0);
         if message.is_empty() {
             return;
         }
