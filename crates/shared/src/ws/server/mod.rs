@@ -80,14 +80,15 @@ impl From<&ServerStartInfo> for ServerState {
     }
 }
 
-// To ensure ws_active is released on drop
+// Releases the ws_active flag on drop. The flag is CLAIMED (set) atomically
+// by the ws handler before the upgrade starts; this guard only releases it,
+// so check-and-set can never interleave between two concurrent upgrades.
 struct WsActiveGuard {
     ws_active: Arc<AtomicBool>,
 }
 
 impl WsActiveGuard {
     fn new(ws_active: Arc<AtomicBool>) -> Self {
-        ws_active.store(true, Ordering::Relaxed);
         WsActiveGuard { ws_active }
     }
 }
@@ -98,13 +99,13 @@ impl Drop for WsActiveGuard {
     }
 }
 
-/// Logs a pre-authentication rejection within the small pre-auth budget
-/// (`log_forward::preauth_warn_allow`, 5/60s): these events can be
-/// manufactured at will by unauthenticated network peers, so beyond the
-/// budget they are logged at debug level (never forwarded) instead of
-/// spending the shared forwarding budget that genuine failures rely on.
-fn log_preauth_rejection(message: String) {
-    if crate::log_forward::preauth_warn_allow() {
+/// Logs a peer-manufacturable warning within the small peer budget
+/// (`log_forward::peer_warn_allow`, 5/60s): these events can be manufactured
+/// at will by unauthenticated peers (network or local), so beyond the budget
+/// they are logged at debug level (never forwarded) instead of spending the
+/// shared forwarding budget that genuine failures rely on.
+fn log_peer_warning(message: String) {
+    if crate::log_forward::peer_warn_allow() {
         log::warn!("{}", message);
     } else {
         log::debug!("{}", message);
@@ -124,7 +125,7 @@ async fn check_secret_middleware(
         Some(&"") => {} // Root path, allow
         Some(&"actor") => {
             if segments.get(1).map(|s| s == &state.secret) != Some(true) {
-                log_preauth_rejection("Invalid or missing secret in actor request".to_string());
+                log_peer_warning("Invalid or missing secret in actor request".to_string());
                 return Err(StatusCode::FORBIDDEN);
             }
         }
@@ -132,7 +133,7 @@ async fn check_secret_middleware(
             // Allow /ws from localhost without secret, since it's only used for WebSocket upgrade and we have additional checks there
         }
         Some(_) => {
-            log_preauth_rejection(format!("Invalid path: {:?}", segments));
+            log_peer_warning(format!("Invalid path: {:?}", segments));
             return Err(StatusCode::NOT_FOUND);
         }
         None => unreachable!("split() always yields at least one element"),
@@ -174,9 +175,15 @@ async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerStat
     // or a log line (a few hundred bytes); both limits are enforced on the
     // read path only, so our own outbound frames are unaffected.
     let ws = ws.max_message_size(1 << 20).max_frame_size(1 << 20);
+
+    // Claim the single client slot atomically: check-and-set must be ONE
+    // operation, otherwise two concurrent upgrades both pass the check and
+    // share the broker message stream between live sockets.
     let ws_active = state.is_ws_active.clone();
-    if ws_active.load(Ordering::Relaxed) {
-        // ya estaba true → hay cliente activo
+    if ws_active
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         log::warn!("WebSocket connection attempt while another is active");
         return (StatusCode::CONFLICT, "Another WebSocket client is active").into_response();
     }
@@ -184,7 +191,16 @@ async fn ws_handler(ws: WebSocketUpgrade, Extension(state): Extension<ServerStat
     let wsclient_to_workers = state.wsclient_to_workers.clone();
     let stop = state.stop.clone();
 
-    ws.on_upgrade(move |socket| {
+    // If the upgrade itself fails the on_upgrade callback never runs, so the
+    // claimed slot must be released here or no client could ever connect again.
+    ws.on_failed_upgrade({
+        let ws_active = ws_active.clone();
+        move |e| {
+            log::warn!("WebSocket upgrade failed: {e}");
+            ws_active.store(false, Ordering::SeqCst);
+        }
+    })
+    .on_upgrade(move |socket| {
         websocket_loop(
             socket,
             state.workers_to_wsclient,

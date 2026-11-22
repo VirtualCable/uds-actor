@@ -38,15 +38,21 @@ use shared::{
 
 use crate::platform;
 
-/// FloodGuard: simple rate limiter (60 logs / 60s)
+/// FloodGuard: simple rate limiter (60 logs / 60s by default)
 pub struct FloodGuard {
+    max_per_window: usize,
     count: usize,
     window_start: Instant,
 }
 
 impl FloodGuard {
     pub fn new() -> Self {
+        Self::with_limit(60)
+    }
+
+    pub fn with_limit(max_per_window: usize) -> Self {
         Self {
+            max_per_window,
             count: 0,
             window_start: Instant::now(),
         }
@@ -58,7 +64,7 @@ impl FloodGuard {
             self.count = 0;
             self.window_start = now;
         }
-        if self.count < 60 {
+        if self.count < self.max_per_window {
             self.count += 1;
             true
         } else {
@@ -204,5 +210,24 @@ mod tests {
         calls.assert_called("broker_api::log(Info, Test log message)");
         calls.assert_called("broker_api::log(Warn, Test log message)");
         calls.assert_called("broker_api::log(Error, Test log message)");
+    }
+
+    #[test]
+    fn flood_guard_with_limit_bounds_and_resets() {
+        let mut guard = FloodGuard::with_limit(3);
+        for _ in 0..3 {
+            assert!(guard.allow(), "first 3 calls must be allowed");
+        }
+        assert!(!guard.allow(), "4th call within the window must be denied");
+        assert!(!guard.allow(), "5th call within the window must be denied");
+        // Simulate a window slide: a fresh guard behaves the same way.
+        let mut guard = FloodGuard::with_limit(3);
+        assert!(guard.allow());
+        // The default (log relay) keeps the historical 60/60s budget.
+        let mut default_guard = FloodGuard::new();
+        for _ in 0..60 {
+            assert!(default_guard.allow());
+        }
+        assert!(!default_guard.allow());
     }
 }

@@ -28,6 +28,9 @@ Author: Adolfo Gómez, dkmaster at dkmon dot com
 */
 use anyhow::Result;
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use shared::{
     broker::api::BrokerApi,
     log,
@@ -40,6 +43,8 @@ use shared::{
 
 use crate::{common, platform};
 
+use super::logger::FloodGuard;
+
 // Login on unmanaged actor is a bit different.
 // On VM Start, we could not "identify" the machine with an user service, because not user service is created yet for this.
 // So, we just wait for a LoginRequest from the wsclient, and then notify correctly to the broker.
@@ -47,10 +52,36 @@ use crate::{common, platform};
 // Also, we will no "save" the token, store it on memoy only, as unmanaged actors are not supposed to be long-lived.
 pub async fn worker(server_info: ServerContext, platform: platform::Platform) -> Result<()> {
     let mut rx = server_info.from_ws.subscribe();
+    // Login relay rate limit: the legitimate flow is one login per session
+    // lifetime, so a generous cap (10/60s) costs nothing while bounding the
+    // broker churn (login + the initialize it triggers) a peer can cause with
+    // repeated (failed) logins.
+    let login_limiter = Arc::new(Mutex::new(FloodGuard::with_limit(10)));
     while let Some(env) =
         wait_message_arrival::<LoginRequest>(&mut rx, Some(platform.get_stop())).await
     {
         log::debug!("Received LoginRequest with id {:?}", env.id);
+        // UDS grants a single remote session per machine: a login while
+        // another session is active must never happen in normal operation
+        // (the session ends with an explicit logout or the channel closing,
+        // both of which clear the recorded user). Ignore it, and surface it
+        // through the peer-manufactured warning budget if it looks like abuse.
+        if platform.get_user_info().read().await.is_some() {
+            if shared::log_forward::peer_warn_allow() {
+                log::warn!(
+                    "LoginRequest for '{}' received while a session is already active; \
+                     ignoring (possible forced-login attempt)",
+                    env.msg.username
+                );
+            } else {
+                log::debug!("LoginRequest ignored: session already active");
+            }
+            continue;
+        }
+        if !login_limiter.lock().await.allow() {
+            log::debug!("LoginRequest dropped: login relay rate limited");
+            continue;
+        }
         let broker_api: std::sync::Arc<tokio::sync::RwLock<dyn BrokerApi>> = platform.broker_api();
 
         let interfaces = platform.system().get_network_info()?;
@@ -123,7 +154,9 @@ mod tests {
         }
         log::info!("wsclient_to_workers has receiver");
 
-        // Send 3 login requests
+        // Send 3 login requests: UDS grants a single remote session per
+        // machine, so the first one wins and the rest are ignored (they
+        // would be a forced-login attempt while a session is active).
         for i in 1..=3 {
             let req = RpcEnvelope {
                 id: None,
@@ -139,8 +172,10 @@ mod tests {
         // Wait a bit to let processing happen
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Inspect dummy broker_api
+        // Inspect dummy broker_api: exactly one initialize + login (the
+        // active session); the surplus logins must not reach the broker.
         log::info!("calls: {:?}", calls.dump());
-        assert!(calls.count_calls("broker_api::initialize(") == 3);
+        assert!(calls.count_calls("broker_api::initialize(") == 1);
+        assert!(calls.count_calls("broker_api::login(") == 1);
     }
 }

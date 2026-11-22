@@ -117,6 +117,37 @@ async fn test_server_stops_on_ws_client_connected() {
 }
 
 #[tokio::test]
+async fn test_ws_second_client_rejected() {
+    let (server_info, server_task, _, _workers_tx) = create_test_server_task(32435, "-secret-");
+
+    // Wait a moment for the server to start
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let url = format!("wss://localhost:{}/ws", server_info.port);
+    let connector = Connector::Rustls(crate::tls::noverify::client_config());
+
+    // First client: claims the single slot.
+    let (_ws1, _resp) = connect_async_tls_with_config(url.clone(), None, true, Some(connector.clone()))
+        .await
+        .expect("first WebSocket handshake failed");
+
+    // Second client while the first is connected: rejected (409 -> handshake error).
+    assert!(
+        connect_async_tls_with_config(url, None, true, Some(connector))
+            .await
+            .is_err(),
+        "a second client must not be able to claim the ws slot"
+    );
+
+    server_info.stop.set();
+    tokio::time::timeout(tokio::time::Duration::from_secs(5), server_task)
+        .await
+        .expect("Server did not stop in time")
+        .expect("Server task panicked")
+        .expect("Server returned an error");
+}
+
+#[tokio::test]
 async fn test_ws_rejects_broker_directives_from_client() {
     let (server_info, server_task, mut workers_rx, _workers_tx) =
         create_test_server_task(32434, "-secret-");

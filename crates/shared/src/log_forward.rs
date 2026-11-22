@@ -128,12 +128,12 @@ fn flood_allow_window(pack: &AtomicU64, max_per_window: u32, now: u64) -> bool {
     }
 }
 
-/// Budget for events an unauthenticated network peer can manufacture at will
-/// (pre-authentication rejection warnings): a tiny one, separate from the
-/// shared forwarding budget. Flooding these must never starve the broker
-/// channel that genuine failures rely on; a few per window still reach the
-/// broker so that port-scanning or secret-guessing attempts remain visible.
-pub fn preauth_warn_allow() -> bool {
+/// Budget for warnings a peer can manufacture at will (pre-authentication
+/// rejections, repeated logins while a session is active): a tiny one,
+/// separate from the shared forwarding budget. Flooding these must never
+/// starve the broker channel that genuine failures rely on; a few per window
+/// still reach the broker so the abuse itself stays visible.
+pub fn peer_warn_allow() -> bool {
     const PREAUTH_MAX_PER_WINDOW: u32 = 5;
     static PREAUTH_FLOOD_PACK: AtomicU64 = AtomicU64::new(0);
     let now = std::time::SystemTime::now()
@@ -363,19 +363,18 @@ mod tests {
     }
 
     #[test]
-    fn preauth_budget_is_small_and_independent() {
-        // Only this test calls preauth_warn_allow, so its pack state is ours:
-        // of 100 manufactured rejections, exactly the small pre-auth budget
-        // passes — the rest must never reach the shared forward budget.
+    fn peer_budget_is_small_and_independent() {
+        // Only this test calls peer_warn_allow, so its pack state is ours:
+        // of 100 manufactured rejections, exactly the small budget passes.
         let mut allowed = 0;
         for _ in 0..100 {
-            if preauth_warn_allow() {
+            if peer_warn_allow() {
                 allowed += 1;
             }
         }
         assert_eq!(
             allowed, 5,
-            "pre-auth rejections must be limited to their own small budget"
+            "peer-manufactured warnings must be limited to their own small budget"
         );
     }
 
