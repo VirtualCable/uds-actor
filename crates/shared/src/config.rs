@@ -154,7 +154,10 @@ impl Default for ActorConfiguration {
     fn default() -> Self {
         Self {
             broker_url: String::new(),
-            verify_ssl: false,
+            // A missing or cleared configuration must never express "do not
+            // validate"; disabling certificate verification is always an
+            // explicit operator choice.
+            verify_ssl: true,
             actor_type: ActorType::default(),
             master_token: None,
             own_token: None,

@@ -11,7 +11,12 @@ pub fn fill_fields(fields: &mut Fields) -> bool {
     log::debug!("Existing config found: {:?}", actor_cfg);
     let has_token = !actor_cfg.token().is_empty();
 
-    fields.verify_ssl = actor_cfg.verify_ssl;
+    // A missing or cleared configuration falls back to `ActorConfiguration::default()`,
+    // which must never silently downgrade TLS validation for the registration that
+    // follows: only adopt the persisted mode when a real configuration exists.
+    if actor_cfg.is_valid() {
+        fields.verify_ssl = actor_cfg.verify_ssl;
+    }
     if !actor_cfg.broker_url.is_empty() {
         fields.server_host = actor_cfg
             .broker_url
